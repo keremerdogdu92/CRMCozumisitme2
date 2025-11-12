@@ -1,0 +1,2 @@
+-- RLS policy placeholder
+-- Part 2: rol bazlı erişim kuralları burada tanımlanacak.

@@ -1,0 +1,2 @@
+-- View definitions placeholder
+-- Part 2: rapor ve dashboard görünümleri burada tanımlanacak.

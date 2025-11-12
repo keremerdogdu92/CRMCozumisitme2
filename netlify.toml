@@ -1,0 +1,11 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[dev]
+  command = "npm run dev"
+  port = 8888
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["supabase/*.sql"]

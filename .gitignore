@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.*
+.DS_Store
+.vscode/
+netlify/functions/*.js
+netlify/functions/*.js.map
+.supabase
+.idea/
+coverage/
