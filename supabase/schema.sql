@@ -1,0 +1,2 @@
+-- Supabase schema placeholder
+-- Part 2: tablo ve ilişkiler burada tanımlanacak.

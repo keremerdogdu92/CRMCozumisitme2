@@ -1,0 +1,2 @@
+-- SQL function placeholder
+-- Part 2: tetikleyici ve fonksiyon tanımları burada yer alacak.
