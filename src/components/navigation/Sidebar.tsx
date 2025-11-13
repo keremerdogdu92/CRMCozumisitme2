@@ -1,6 +1,15 @@
 import { NavLink } from 'react-router-dom';
 import { ReactNode } from 'react';
-import { ClipboardList, Users, FlaskConical, Boxes, CalendarClock, BookUser, Waveform, Calculator } from 'lucide-react';
+import {
+  ClipboardList,
+  Users,
+  FlaskConical,
+  Boxes,
+  CalendarClock,
+  BookUser,
+  Activity,
+  Calculator
+} from 'lucide-react';
 
 interface NavItem {
   path: string;
@@ -15,7 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/inventory', label: 'Stok', icon: <Boxes className="h-5 w-5" /> },
   { path: '/meetings', label: 'Görüşmeler', icon: <CalendarClock className="h-5 w-5" /> },
   { path: '/references', label: 'Referanslar', icon: <BookUser className="h-5 w-5" /> },
-  { path: '/audiogram', label: 'Odyogram', icon: <Waveform className="h-5 w-5" /> },
+  { path: '/audiogram', label: 'Odyogram', icon: <Activity className="h-5 w-5" /> },
   { path: '/profit-calculator', label: 'Kar Hesaplayıcı', icon: <Calculator className="h-5 w-5" /> }
 ];
 
