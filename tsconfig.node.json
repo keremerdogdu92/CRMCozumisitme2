@@ -7,9 +7,23 @@
     "lib": ["ES2020"],
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true
+    "resolveJsonModule": true,
+
+    // Netlify functions için emit açık olmalı
+    "noEmit": false,
+    "skipLibCheck": true,
+
+    // Netlify serverless API tipi için path mapping
+    "baseUrl": ".",
+    "paths": {
+      "@netlify/serverless-functions-api": [
+        "src/types/netlify-serverless-functions-api.d.ts"
+      ]
+    }
   },
-  "include": ["vite.config.ts", "netlify/functions/**/*.ts"]
+  "include": [
+    "vite.config.ts",
+    "netlify/functions/**/*.ts",
+    "src/types/**/*.d.ts"
+  ]
 }

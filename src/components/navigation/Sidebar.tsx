@@ -1,3 +1,5 @@
+// src/components/navigation/Sidebar.tsx
+
 import { NavLink } from 'react-router-dom';
 import { ReactNode } from 'react';
 import {
