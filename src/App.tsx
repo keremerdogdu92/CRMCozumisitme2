@@ -1,41 +1,61 @@
 // src/App.tsx
-import { Outlet, RouterProvider, createBrowserRouter, Navigate } from 'react-router-dom';
-import { Suspense, lazy } from 'react';
+import {
+  Outlet,
+  RouterProvider,
+  createBrowserRouter,
+  Navigate,
+} from 'react-router-dom';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { AppProviders } from './providers/AppProviders';
 import { AppShell } from './components/layout/AppShell';
 import { LoadingScreen } from './components/status/LoadingScreen';
 import { supabaseClient } from './utils/supabaseClient';
-import { useEffect, useState } from 'react';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 
-// ---------------------------
-// Basit Auth Guard Component
-// ---------------------------
-function ProtectedRoute() {
-  const [status, setStatus] = useState<'loading' | 'authed' | 'guest'>('loading');
+/**
+ * ProtectedLayout:
+ * - Supabase session var mı kontrol eder
+ * - Yoksa /login'e yönlendirir
+ * - Varsa AppShell + Suspense + Outlet ile içeriği gösterir
+ */
+function ProtectedLayout() {
+  const [status, setStatus] = useState<'loading' | 'authed' | 'guest'>(
+    'loading'
+  );
 
   useEffect(() => {
     const run = async () => {
       const { data } = await supabaseClient.auth.getSession();
-      if (data.session) setStatus('authed');
-      else setStatus('guest');
+      if (data.session) {
+        setStatus('authed');
+      } else {
+        setStatus('guest');
+      }
     };
-    run();
+
+    void run();
   }, []);
 
-  if (status === 'loading') return <LoadingScreen />;
+  if (status === 'loading') {
+    return <LoadingScreen />;
+  }
 
-  if (status === 'guest') return <Navigate to="/login" replace />;
+  if (status === 'guest') {
+    return <Navigate to="/login" replace />;
+  }
 
-  return <Outlet />;
+  return (
+    <AppShell>
+      <Suspense fallback={<LoadingScreen />}>
+        <Outlet />
+      </Suspense>
+    </AppShell>
+  );
 }
 
-// -----------------------------
-// Router yapılandırması
-// -----------------------------
 const router = createBrowserRouter([
   {
     path: '/login',
@@ -45,85 +65,85 @@ const router = createBrowserRouter([
           <LoginPage />
         </Suspense>
       </AppProviders>
-    )
+    ),
   },
-
   {
     path: '/',
     element: (
       <AppProviders>
-        <ProtectedRoute />
+        <ProtectedLayout />
       </AppProviders>
     ),
     children: [
       {
-        path: '/',
-        element: (
-          <AppShell>
-            <Suspense fallback={<LoadingScreen />}>
-              <DashboardPage />
-            </Suspense>
-          </AppShell>
-        )
+        index: true,
+        element: <DashboardPage />,
       },
       {
         path: 'patients',
         element: (
-          <AppShell>
-            <PlaceholderPage title="Hastalar" description="Hasta yönetimi yakında eklenecek." />
-          </AppShell>
-        )
+          <PlaceholderPage
+            title="Hastalar"
+            description="Hasta yönetimi yakında eklenecek."
+          />
+        ),
       },
       {
         path: 'trials',
         element: (
-          <AppShell>
-            <PlaceholderPage title="Denemeler" description="Deneme modülü yakında eklenecek." />
-          </AppShell>
-        )
+          <PlaceholderPage
+            title="Denemeler"
+            description="Deneme modülü yakında eklenecek."
+          />
+        ),
       },
       {
         path: 'inventory',
         element: (
-          <AppShell>
-            <PlaceholderPage title="Stok" description="Stok yönetimi yakında eklenecek." />
-          </AppShell>
-        )
+          <PlaceholderPage
+            title="Stok"
+            description="Stok yönetimi yakında eklenecek."
+          />
+        ),
       },
       {
         path: 'meetings',
         element: (
-          <AppShell>
-            <PlaceholderPage title="Görüşmeler" description="Görüşme merkezi yakında eklenecek." />
-          </AppShell>
-        )
+          <PlaceholderPage
+            title="Görüşmeler"
+            description="Görüşme merkezi yakında eklenecek."
+          />
+        ),
       },
       {
         path: 'references',
         element: (
-          <AppShell>
-            <PlaceholderPage title="Referanslar" description="Referans yönetimi yakında eklenecek." />
-          </AppShell>
-        )
+          <PlaceholderPage
+            title="Referanslar"
+            description="Referans yönetimi yakında eklenecek."
+          />
+        ),
       },
       {
         path: 'audiogram',
         element: (
-          <AppShell>
-            <PlaceholderPage title="Odyogram" description="Odyogram aracı yakında eklenecek." />
-          </AppShell>
-        )
+          <PlaceholderPage
+            title="Odyogram"
+            description="Odyogram aracı yakında eklenecek."
+          />
+        ),
       },
       {
         path: 'profit-calculator',
         element: (
-          <AppShell>
-            <PlaceholderPage title="Kar Hesaplayıcı" description="Kar hesaplayıcı yakında eklenecek." />
-          </AppShell>
-        )
-      }
-    ]
-  }
+          <PlaceholderPage
+            title="Kar Hesaplayıcı"
+            description="Kar hesaplayıcı yakında eklenecek."
+          />
+        ),
+      },
+    ],
+  },
 ]);
 
 export default function App() {
