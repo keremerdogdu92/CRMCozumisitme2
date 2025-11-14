@@ -1,30 +1,34 @@
 // src/pages/LoginPage.tsx
-import { useState } from "react";
-import { supabaseClient } from "../utils/supabaseClient";
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { supabaseClient } from '../utils/supabaseClient';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
+  const [email, setEmail] = useState('');
+  const [pass, setPass] = useState('');
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
+  const [err, setErr] = useState('');
+  const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setErr("");
+    setErr('');
 
     const { error } = await supabaseClient.auth.signInWithPassword({
       email,
-      password: pass
+      password: pass,
     });
 
     if (error) {
-      setErr("Giriş yapılamadı. Mail veya şifre hatalı.");
-    } else {
-      window.location.href = "/";
+      setErr('Giriş yapılamadı. Mail veya şifre hatalı.');
+      setLoading(false);
+      return;
     }
 
     setLoading(false);
+    // SPA içi yönlendirme
+    navigate('/', { replace: true });
   };
 
   return (
@@ -37,9 +41,7 @@ export default function LoginPage() {
           CRM Giriş
         </h1>
 
-        {err && (
-          <p className="mb-3 text-red-600 text-sm">{err}</p>
-        )}
+        {err && <p className="mb-3 text-red-600 text-sm">{err}</p>}
 
         <label className="block mb-3">
           <span className="text-sm text-gray-600">E-posta</span>
@@ -68,7 +70,7 @@ export default function LoginPage() {
           disabled={loading}
           className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
         >
-          {loading ? "Giriş Yapılıyor..." : "Giriş Yap"}
+          {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
         </button>
       </form>
     </div>
