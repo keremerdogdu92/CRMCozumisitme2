@@ -2,7 +2,7 @@
 
 import { PropsWithChildren, useEffect } from 'react';
 import { ThemeProvider } from './ThemeProvider';
-import { supabase } from '../utils/supabaseClient';
+import { supabaseClient } from '../utils/supabaseClient';
 
 /**
  * Root-level providers for the application.
@@ -12,7 +12,7 @@ import { supabase } from '../utils/supabaseClient';
 export function AppProviders({ children }: PropsWithChildren) {
   useEffect(() => {
     const ensureOrgId = async () => {
-      const { data, error } = await supabase.auth.getUser();
+      const { data, error } = await supabaseClient.auth.getUser();
 
       if (error) {
         console.error('Failed to get current user for org_id check:', error);
@@ -26,8 +26,8 @@ export function AppProviders({ children }: PropsWithChildren) {
         (user.user_metadata as Record<string, unknown> | null)?.org_id;
 
       if (!currentOrgId) {
-        const { error: updateError } = await supabase.auth.updateUser({
-          data: { org_id: 'cozum_isitme' }, // burayı istersen farklı bir org id ile değiştirebilirsin
+        const { error: updateError } = await supabaseClient.auth.updateUser({
+          data: { org_id: 'cozum_isitme' }, // istersen buradaki org id'yi değiştirebilirsin
         });
 
         if (updateError) {
