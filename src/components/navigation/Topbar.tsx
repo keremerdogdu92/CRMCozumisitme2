@@ -2,8 +2,11 @@
 
 import { Menu } from 'lucide-react';
 import { supabaseClient } from '../../utils/supabaseClient';
+import { useNavigate } from 'react-router-dom';
 
 export function Topbar() {
+  const navigate = useNavigate();
+
   const handleLogout = () => {
     supabaseClient.auth
       .signOut()
@@ -11,7 +14,8 @@ export function Topbar() {
         console.error('Logout error:', err);
       })
       .finally(() => {
-        window.location.href = '/login';
+        // SPA içi yönlendirme, Vercel'de 404'a düşmez
+        navigate('/login', { replace: true });
       });
   };
 
