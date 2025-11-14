@@ -4,9 +4,15 @@ import { Menu } from 'lucide-react';
 import { supabaseClient } from '../../utils/supabaseClient';
 
 export function Topbar() {
-  const handleLogout = async () => {
-    await supabaseClient.auth.signOut();
-    window.location.href = "/login";
+  const handleLogout = () => {
+    supabaseClient.auth
+      .signOut()
+      .catch((err) => {
+        console.error('Logout error:', err);
+      })
+      .finally(() => {
+        window.location.href = '/login';
+      });
   };
 
   return (
@@ -16,13 +22,16 @@ export function Topbar() {
           <Menu className="h-6 w-6 text-slate-600" />
           <span className="sr-only">Menüyü Aç</span>
         </button>
-        <h1 className="text-lg font-semibold text-slate-900">Çözüm İşitme CRM</h1>
+        <h1 className="text-lg font-semibold text-slate-900">
+          Çözüm İşitme CRM
+        </h1>
       </div>
 
       <div className="flex items-center gap-4">
         <span className="text-sm text-slate-600">Hoş geldiniz</span>
 
         <button
+          type="button"
           onClick={handleLogout}
           className="text-sm text-red-600 font-medium hover:underline transition"
         >
