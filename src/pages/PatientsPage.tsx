@@ -1,5 +1,4 @@
 // src/pages/PatientsPage.tsx
-
 import { useState, FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabaseClient } from '../utils/supabaseClient';
@@ -150,9 +149,7 @@ export default function PatientsPage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Hastalar</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Toplam {totalCount} kayıt
-          </p>
+          <p className="text-xs text-slate-500 mt-1">Toplam {totalCount} kayıt</p>
         </div>
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center">
@@ -177,9 +174,7 @@ export default function PatientsPage() {
       {/* Yeni hasta formu – butona basınca açılır, tabloyu aşağı iter */}
       {showCreateForm && (
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-900 mb-3">
-            Yeni Hasta Ekle
-          </h3>
+          <h3 className="text-sm font-semibold text-slate-900 mb-3">Yeni Hasta Ekle</h3>
           <form className="grid gap-3 md:grid-cols-4 md:items-end" onSubmit={handleSubmit}>
             <div className="md:col-span-2">
               <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -233,10 +228,10 @@ export default function PatientsPage() {
             <div className="md:col-span-4 flex justify-end">
               <button
                 type="submit"
-                disabled={createMutation.isLoading}
+                disabled={createMutation.isPending}
                 className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
               >
-                {createMutation.isLoading ? 'Kaydediliyor...' : 'Kaydet'}
+                {createMutation.isPending ? 'Kaydediliyor...' : 'Kaydet'}
               </button>
             </div>
 
