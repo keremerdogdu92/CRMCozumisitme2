@@ -38,7 +38,7 @@ async function createPatient(input: NewPatientForm): Promise<void> {
   const { data: userData, error: userError } = await supabaseClient.auth.getUser();
   if (userError) {
     console.error('Failed to get current user:', userError);
-    throw userError;
+    throw new Error(userError.message);
   }
   const user = userData.user;
   if (!user) {
@@ -54,7 +54,7 @@ async function createPatient(input: NewPatientForm): Promise<void> {
 
   if (profileError) {
     console.error('Failed to load profile for org_id:', profileError);
-    throw profileError;
+    throw new Error(profileError.message);
   }
 
   if (!profile?.org_id) {
@@ -71,7 +71,8 @@ async function createPatient(input: NewPatientForm): Promise<void> {
 
   if (insertError) {
     console.error('Failed to insert patient:', insertError);
-    throw insertError;
+    // Burada özellikle message'ı Error içine koyuyoruz ki React Query düzgün göstersin
+    throw new Error(insertError.message);
   }
 }
 
@@ -97,9 +98,7 @@ export default function PatientsPage() {
   const createMutation = useMutation({
     mutationFn: createPatient,
     onSuccess: () => {
-      // Listeyi yenile
       void queryClient.invalidateQueries({ queryKey: ['patients'] });
-      // Formu sıfırla ve kapat
       setFormState({ fullName: '', phone: '', sgkFlag: true });
       setShowCreateForm(false);
     },
@@ -142,6 +141,8 @@ export default function PatientsPage() {
   });
 
   const totalCount = patients.length;
+  const mutationError =
+    (createMutation.error as Error | null | undefined)?.message ?? '';
 
   return (
     <div className="p-8 space-y-6">
@@ -239,6 +240,11 @@ export default function PatientsPage() {
               <p className="md:col-span-4 text-xs text-red-600">
                 Kayıt sırasında bir hata oluştu. Lütfen bilgileri ve bağlantıyı
                 kontrol edin.
+                {mutationError && (
+                  <span className="block text-[10px] text-red-500/80 mt-1">
+                    Detay: {mutationError}
+                  </span>
+                )}
               </p>
             )}
           </form>
