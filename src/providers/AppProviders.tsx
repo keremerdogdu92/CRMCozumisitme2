@@ -7,9 +7,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const queryClient = new QueryClient();
 
-// TODO: Buraya orgs tablosundan dönen gerçek org uuid'sini yaz
-// örnek: '0f2e5c8a-1234-5678-9abc-def012345678'
-const ORG_ID = 'REPLACE_WITH_ORG_UUID';
+// Tek org için sabit org uuid
+// (patients tablosundaki org_id ile aynı)
+const ORG_ID = 'a715c748-a13a-4991-a561-c7433c87bc97';
 
 /**
  * Root-level providers for the application.
