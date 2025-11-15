@@ -3,11 +3,19 @@
 import { PropsWithChildren, useEffect } from 'react';
 import { ThemeProvider } from './ThemeProvider';
 import { supabaseClient } from '../utils/supabaseClient';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
+
+// TODO: Buraya orgs tablosundan dönen gerçek org uuid'sini yaz
+// örnek: '0f2e5c8a-1234-5678-9abc-def012345678'
+const ORG_ID = 'REPLACE_WITH_ORG_UUID';
 
 /**
  * Root-level providers for the application.
  * - Wraps the app in ThemeProvider
- * - Ensures each authenticated user has a user_metadata.org_id set
+ * - Provides React Query client
+ * - Ensures each authenticated user has a user_metadata.org_id set to ORG_ID (uuid)
  */
 export function AppProviders({ children }: PropsWithChildren) {
   useEffect(() => {
@@ -25,15 +33,16 @@ export function AppProviders({ children }: PropsWithChildren) {
       const currentOrgId =
         (user.user_metadata as Record<string, unknown> | null)?.org_id;
 
-      if (!currentOrgId) {
+      // Sadece farklıysa güncelle
+      if (currentOrgId !== ORG_ID) {
         const { error: updateError } = await supabaseClient.auth.updateUser({
-          data: { org_id: 'cozum_isitme' }, // istersen buradaki org id'yi değiştirebilirsin
+          data: { org_id: ORG_ID },
         });
 
         if (updateError) {
           console.error('Failed to set org_id on user_metadata:', updateError);
         } else {
-          console.log('org_id set to cozum_isitme on user_metadata');
+          console.log('user_metadata.org_id updated to ORG_ID');
         }
       }
     };
@@ -41,5 +50,9 @@ export function AppProviders({ children }: PropsWithChildren) {
     void ensureOrgId();
   }, []);
 
-  return <ThemeProvider>{children}</ThemeProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>{children}</ThemeProvider>
+    </QueryClientProvider>
+  );
 }
