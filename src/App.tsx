@@ -14,6 +14,7 @@ import { supabaseClient } from './utils/supabaseClient';
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const PatientsPage = lazy(() => import('./pages/PatientsPage'));
 
 /**
  * ProtectedLayout:
@@ -81,12 +82,7 @@ const router = createBrowserRouter([
       },
       {
         path: 'patients',
-        element: (
-          <PlaceholderPage
-            title="Hastalar"
-            description="Hasta yönetimi yakında eklenecek."
-          />
-        ),
+        element: <PatientsPage />,
       },
       {
         path: 'trials',
