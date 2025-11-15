@@ -37,12 +37,12 @@ async function createPatient(input: NewPatientForm): Promise<void> {
   // 1) Giriş yapan kullanıcıyı al
   const { data: userData, error: userError } = await supabaseClient.auth.getUser();
   if (userError) {
-    console.error('Failed to get current user:', userError);
-    throw new Error(userError.message);
+    console.error('Failed to get current user (STEP_USER):', userError);
+    throw new Error('STEP_USER: ' + userError.message);
   }
   const user = userData.user;
   if (!user) {
-    throw new Error('User not authenticated');
+    throw new Error('STEP_USER: User not authenticated');
   }
 
   // 2) Bu kullanıcının profilinden org_id çek
@@ -53,12 +53,13 @@ async function createPatient(input: NewPatientForm): Promise<void> {
     .single();
 
   if (profileError) {
-    console.error('Failed to load profile for org_id:', profileError);
-    throw new Error(profileError.message);
+    console.error('Failed to load profile for org_id (STEP_PROFILE):', profileError);
+    throw new Error('STEP_PROFILE: ' + profileError.message);
   }
 
   if (!profile?.org_id) {
-    throw new Error('Profile org_id is missing');
+    console.error('Profile org_id is missing (STEP_NO_ORG)', profile);
+    throw new Error('STEP_NO_ORG: Profile org_id is missing');
   }
 
   // 3) Hastayı bu org_id ile ekle
@@ -70,9 +71,8 @@ async function createPatient(input: NewPatientForm): Promise<void> {
   });
 
   if (insertError) {
-    console.error('Failed to insert patient:', insertError);
-    // Burada özellikle message'ı Error içine koyuyoruz ki React Query düzgün göstersin
-    throw new Error(insertError.message);
+    console.error('Failed to insert patient (STEP_INSERT):', insertError);
+    throw new Error('STEP_INSERT: ' + insertError.message);
   }
 }
 
