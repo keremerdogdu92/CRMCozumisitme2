@@ -566,7 +566,9 @@ type PatientDetailDrawerProps = {
   errorMsg: string;
 };
 
-// Basit hasta detay çekmecesi – şimdilik sadece temel bilgiler + SGK üçlüsü
+type PatientDetailTabId = 'info' | 'devices' | 'meetings' | 'payments' | 'audiogram';
+
+// Basit hasta detay çekmecesi – sekmeli yapı
 function PatientDetailDrawer({
   patient,
   onClose,
@@ -581,12 +583,14 @@ function PatientDetailDrawer({
   const [sgkRecordedToSystem, setSgkRecordedToSystem] = useState<boolean>(
     !!patient.sgk_recorded_to_system,
   );
+  const [activeTab, setActiveTab] = useState<PatientDetailTabId>('info');
 
   // Hasta değişince local state’i resetle
   useEffect(() => {
     setSgkFlag(!!patient.sgk_flag);
     setSgkPrescriptionReceived(!!patient.sgk_prescription_received);
     setSgkRecordedToSystem(!!patient.sgk_recorded_to_system);
+    setActiveTab('info');
   }, [patient]);
 
   const handleSave = () => {
@@ -596,6 +600,14 @@ function PatientDetailDrawer({
       sgkRecordedToSystem: sgkFlag ? sgkRecordedToSystem : false,
     });
   };
+
+  const tabs: { id: PatientDetailTabId; label: string }[] = [
+    { id: 'info', label: 'Özlük & SGK' },
+    { id: 'devices', label: 'Cihazlar' },
+    { id: 'meetings', label: 'Görüşmeler' },
+    { id: 'payments', label: 'Ödemeler' },
+    { id: 'audiogram', label: 'Audiogram' },
+  ];
 
   return (
     <>
@@ -618,113 +630,188 @@ function PatientDetailDrawer({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 text-sm">
-          {/* Temel bilgiler */}
-          <section className="space-y-2">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase">
-              Özlük Bilgileri
-            </h4>
-            <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 space-y-1">
-              <div className="flex justify-between gap-2">
-                <span className="text-xs text-slate-500">Ad Soyad</span>
-                <span className="text-xs font-medium text-slate-900">
-                  {patient.full_name}
-                </span>
-              </div>
-              <div className="flex justify-between gap-2">
-                <span className="text-xs text-slate-500">Telefon</span>
-                <span className="text-xs text-slate-900">
-                  {patient.phone ?? '-'}
-                </span>
-              </div>
-              <div className="flex justify-between gap-2">
-                <span className="text-xs text-slate-500">Kayıt Tarihi</span>
-                <span className="text-xs text-slate-900">
-                  {new Date(patient.created_at).toLocaleDateString('tr-TR')}
-                </span>
-              </div>
-              <div className="flex justify-between gap-2">
-                <span className="text-xs text-slate-500">Son Görüşme</span>
-                <span className="text-xs text-slate-900">
-                  {patient.last_visit_at
-                    ? new Date(patient.last_visit_at).toLocaleDateString('tr-TR')
-                    : '-'}
-                </span>
-              </div>
-            </div>
-          </section>
-
-          {/* SGK alanları */}
-          <section className="space-y-2">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase">
-              SGK ve Evrak Takibi
-            </h4>
-            <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 space-y-2">
-              <div className="flex items-center gap-2">
-                <input
-                  id="detail-sgk-flag"
-                  type="checkbox"
-                  checked={sgkFlag}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setSgkFlag(checked);
-                    if (!checked) {
-                      setSgkPrescriptionReceived(false);
-                      setSgkRecordedToSystem(false);
-                    }
-                  }}
-                  className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                />
-                <label
-                  htmlFor="detail-sgk-flag"
-                  className="text-xs font-medium text-slate-700 select-none"
+        {/* Sekme barı */}
+        <div className="border-b border-slate-200 px-3 pt-2">
+          <div className="flex flex-wrap gap-1">
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={
+                    'rounded-md px-3 py-1.5 text-xs font-medium ' +
+                    (isActive
+                      ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                      : 'text-slate-600 hover:bg-slate-50 border border-transparent')
+                  }
                 >
-                  SGK hastası
-                </label>
-              </div>
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-              <div className="pl-5 flex flex-col gap-1 text-xs">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    disabled={!sgkFlag}
-                    checked={sgkPrescriptionReceived}
-                    onChange={(e) => setSgkPrescriptionReceived(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
-                  />
-                  <span>Reçete geldi mi?</span>
-                </label>
+        {/* Sekme içerikleri */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 text-sm">
+          {activeTab === 'info' && (
+            <>
+              {/* Temel bilgiler */}
+              <section className="space-y-2">
+                <h4 className="text-xs font-semibold text-slate-500 uppercase">
+                  Özlük Bilgileri
+                </h4>
+                <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 space-y-1">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-xs text-slate-500">Ad Soyad</span>
+                    <span className="text-xs font-medium text-slate-900">
+                      {patient.full_name}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-xs text-slate-500">Telefon</span>
+                    <span className="text-xs text-slate-900">
+                      {patient.phone ?? '-'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-xs text-slate-500">Kayıt Tarihi</span>
+                    <span className="text-xs text-slate-900">
+                      {new Date(patient.created_at).toLocaleDateString('tr-TR')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-xs text-slate-500">Son Görüşme</span>
+                    <span className="text-xs text-slate-900">
+                      {patient.last_visit_at
+                        ? new Date(patient.last_visit_at).toLocaleDateString('tr-TR')
+                        : '-'}
+                    </span>
+                  </div>
+                </div>
+              </section>
 
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    disabled={!sgkFlag}
-                    checked={sgkRecordedToSystem}
-                    onChange={(e) => setSgkRecordedToSystem(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
-                  />
-                  <span>Sisteme işlendi mi?</span>
-                </label>
-              </div>
+              {/* SGK alanları */}
+              <section className="space-y-2">
+                <h4 className="text-xs font-semibold text-slate-500 uppercase">
+                  SGK ve Evrak Takibi
+                </h4>
+                <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="detail-sgk-flag"
+                      type="checkbox"
+                      checked={sgkFlag}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setSgkFlag(checked);
+                        if (!checked) {
+                          setSgkPrescriptionReceived(false);
+                          setSgkRecordedToSystem(false);
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <label
+                      htmlFor="detail-sgk-flag"
+                      className="text-xs font-medium text-slate-700 select-none"
+                    >
+                      SGK hastası
+                    </label>
+                  </div>
 
-              <p className="text-[11px] text-slate-500 mt-1">
-                Bu alanlar ana listede satırları renklendirir ve
-                &quot;Reçete bekleniyor / Sisteme işlenecek&quot; uyarılarını
-                tetikler.
+                  <div className="pl-5 flex flex-col gap-1 text-xs">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        disabled={!sgkFlag}
+                        checked={sgkPrescriptionReceived}
+                        onChange={(e) =>
+                          setSgkPrescriptionReceived(e.target.checked)
+                        }
+                        className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+                      />
+                      <span>Reçete geldi mi?</span>
+                    </label>
+
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        disabled={!sgkFlag}
+                        checked={sgkRecordedToSystem}
+                        onChange={(e) =>
+                          setSgkRecordedToSystem(e.target.checked)
+                        }
+                        className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+                      />
+                      <span>Sisteme işlendi mi?</span>
+                    </label>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Bu alanlar ana listede satırları renklendirir ve
+                    &quot;Reçete bekleniyor / Sisteme işlenecek&quot; uyarılarını
+                    tetikler.
+                  </p>
+                </div>
+              </section>
+            </>
+          )}
+
+          {activeTab === 'devices' && (
+            <section className="space-y-2">
+              <h4 className="text-xs font-semibold text-slate-500 uppercase">
+                Cihazlar
+              </h4>
+              <p className="text-xs text-slate-500">
+                Bir sonraki adımda bu sekmede hastanın aktif cihazları, kulak
+                tarafı (sağ/sol/çift), model, seri numarası ve garanti bilgileri
+                listelenecek. Şimdilik sadece iskelet olarak duruyor.
               </p>
-            </div>
-          </section>
+            </section>
+          )}
 
-          {/* İleride cihaz/ödeme/audiogram sekmeleri için placeholder */}
-          <section className="space-y-2">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase">
-              Cihazlar &amp; Ödemeler (v2)
-            </h4>
-            <p className="text-xs text-slate-500">
-              Sonraki adımda bu çekmeceye Cihazlar, Görüşmeler, Ödemeler ve
-              Audiogram sekmeleri eklenecek.
-            </p>
-          </section>
+          {activeTab === 'meetings' && (
+            <section className="space-y-2">
+              <h4 className="text-xs font-semibold text-slate-500 uppercase">
+                Görüşmeler
+              </h4>
+              <p className="text-xs text-slate-500">
+                Buraya tarih bazlı ziyaret listesi, not alanı ve
+                &quot;Ödeme / Tamir / Aksesuar&quot; alt etiketleri eklenecek.
+                Referans amaçlı görüşmeler bu sekmede, ancak ana listede
+                personel için gizli tutulacak.
+              </p>
+            </section>
+          )}
+
+          {activeTab === 'payments' && (
+            <section className="space-y-2">
+              <h4 className="text-xs font-semibold text-slate-500 uppercase">
+                Ödemeler
+              </h4>
+              <p className="text-xs text-slate-500">
+                Bu sekme, toplam cihaz bedeli, peşinat, taksit planı ve ödeme
+                geçmişini gösterecek. Kredi kartı komisyonu ve senet taksit
+                gridini buraya bağlamayı planlayacağız.
+              </p>
+            </section>
+          )}
+
+          {activeTab === 'audiogram' && (
+            <section className="space-y-2">
+              <h4 className="text-xs font-semibold text-slate-500 uppercase">
+                Audiogram
+              </h4>
+              <p className="text-xs text-slate-500">
+                Audiogram sonuçları ve işitme testleri bu sekmede tutulacak.
+                İleride grafikli bir görünüm ve &quot;önce / sonra&quot; karşılaştırma
+                seçenekleri eklenebilir.
+              </p>
+            </section>
+          )}
 
           {errorMsg && (
             <p className="text-[11px] text-red-600">
