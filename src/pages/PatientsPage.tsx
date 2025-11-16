@@ -79,6 +79,7 @@ async function createPatient(input: NewPatientForm): Promise<void> {
 export default function PatientsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [sgkFilter, setSgkFilter] = useState<'all' | 'sgk' | 'non-sgk'>('all');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formState, setFormState] = useState<NewPatientForm>({
     fullName: '',
@@ -131,13 +132,22 @@ export default function PatientsPage() {
   }
 
   const patients = data ?? [];
+
   const filteredPatients = patients.filter((p) => {
-    if (!search.trim()) return true;
-    const term = search.toLowerCase();
-    return (
+    // Arama filtresi
+    const term = search.trim().toLowerCase();
+    const matchesSearch =
+      !term ||
       p.full_name.toLowerCase().includes(term) ||
-      (p.phone ?? '').toLowerCase().includes(term)
-    );
+      (p.phone ?? '').toLowerCase().includes(term);
+
+    // SGK filtresi
+    const matchesSgk =
+      sgkFilter === 'all' ||
+      (sgkFilter === 'sgk' && !!p.sgk_flag) ||
+      (sgkFilter === 'non-sgk' && !p.sgk_flag);
+
+    return matchesSearch && matchesSgk;
   });
 
   const totalCount = patients.length;
@@ -151,14 +161,31 @@ export default function PatientsPage() {
 
   return (
     <div className="p-8 space-y-6">
-      {/* Başlık + arama + yeni hasta butonu */}
+      {/* Başlık + filtreler + arama + yeni hasta butonu */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Hastalar</h2>
           <p className="text-xs text-slate-500 mt-1">Toplam {totalCount} kayıt</p>
         </div>
 
-        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          {/* SGK filtresi */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">SGK filtre:</span>
+            <select
+              value={sgkFilter}
+              onChange={(e) =>
+                setSgkFilter(e.target.value as 'all' | 'sgk' | 'non-sgk')
+              }
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            >
+              <option value="all">Hepsi</option>
+              <option value="sgk">Sadece SGK</option>
+              <option value="non-sgk">SGK’sız</option>
+            </select>
+          </div>
+
+          {/* Arama */}
           <input
             type="text"
             placeholder="İsim veya telefon ile ara..."
@@ -167,6 +194,7 @@ export default function PatientsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
 
+          {/* Yeni hasta butonu */}
           <button
             type="button"
             onClick={() => setShowCreateForm((prev) => !prev)}
