@@ -1,5 +1,7 @@
 // src/components/layout/InlineCreateCard.tsx
 // Collapsible inline create/edit card with header, description and optional error message.
+// Default behavior: when closed (open === false), card is not rendered at all.
+// If needed in other screens, renderWhenClosed can be set to true to keep the header visible.
 
 import type { ReactNode } from 'react';
 
@@ -10,6 +12,11 @@ type InlineCreateCardProps = {
   onToggle: () => void;
   errorMessage?: string;
   children: ReactNode;
+  /**
+   * When true, the header stays visible even if the form is closed.
+   * Default is false: when open === false, the whole card is hidden.
+   */
+  renderWhenClosed?: boolean;
 };
 
 export function InlineCreateCard({
@@ -19,7 +26,13 @@ export function InlineCreateCard({
   onToggle,
   errorMessage,
   children,
+  renderWhenClosed = false,
 }: InlineCreateCardProps) {
+  // Default: hide the entire card when closed.
+  if (!open && !renderWhenClosed) {
+    return null;
+  }
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
       {/* Header with toggle */}
