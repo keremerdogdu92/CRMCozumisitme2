@@ -15,6 +15,8 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const PatientsPage = lazy(() => import('./pages/PatientsPage'));
+const TrialsPage = lazy(() => import('./pages/TrialsPage'));
+const ReferencesPage = lazy(() => import('./pages/ReferencesPage'));
 
 /**
  * ProtectedLayout:
@@ -24,7 +26,7 @@ const PatientsPage = lazy(() => import('./pages/PatientsPage'));
  */
 function ProtectedLayout() {
   const [status, setStatus] = useState<'loading' | 'authed' | 'guest'>(
-    'loading'
+    'loading',
   );
 
   useEffect(() => {
@@ -86,12 +88,7 @@ const router = createBrowserRouter([
       },
       {
         path: 'trials',
-        element: (
-          <PlaceholderPage
-            title="Denemeler"
-            description="Deneme modülü yakında eklenecek."
-          />
-        ),
+        element: <TrialsPage />,
       },
       {
         path: 'inventory',
@@ -113,12 +110,7 @@ const router = createBrowserRouter([
       },
       {
         path: 'references',
-        element: (
-          <PlaceholderPage
-            title="Referanslar"
-            description="Referans yönetimi yakında eklenecek."
-          />
-        ),
+        element: <ReferencesPage />,
       },
       {
         path: 'audiogram',
