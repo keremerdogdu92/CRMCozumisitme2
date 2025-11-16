@@ -1,5 +1,5 @@
 // src/pages/PatientsPage.tsx
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabaseClient } from '../utils/supabaseClient';
 
@@ -10,18 +10,33 @@ type PatientRow = {
   created_at: string;
   last_visit_at: string | null;
   sgk_flag: boolean | null;
+  sgk_prescription_received: boolean | null;
+  sgk_recorded_to_system: boolean | null;
 };
 
 type NewPatientForm = {
   fullName: string;
   phone: string;
   sgkFlag: boolean;
+  sgkPrescriptionReceived: boolean;
+  sgkRecordedToSystem: boolean;
 };
 
 async function fetchPatients(): Promise<PatientRow[]> {
   const { data, error } = await supabaseClient
     .from('patients')
-    .select('id, full_name, phone, created_at, last_visit_at, sgk_flag')
+    .select(
+      `
+      id,
+      full_name,
+      phone,
+      created_at,
+      last_visit_at,
+      sgk_flag,
+      sgk_prescription_received,
+      sgk_recorded_to_system
+    `,
+    )
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -68,6 +83,8 @@ async function createPatient(input: NewPatientForm): Promise<void> {
     full_name: input.fullName.trim(),
     phone: input.phone.trim() || null,
     sgk_flag: input.sgkFlag,
+    sgk_prescription_received: input.sgkFlag ? input.sgkPrescriptionReceived : false,
+    sgk_recorded_to_system: input.sgkFlag ? input.sgkRecordedToSystem : false,
   });
 
   if (insertError) {
@@ -76,15 +93,43 @@ async function createPatient(input: NewPatientForm): Promise<void> {
   }
 }
 
+// SGK alanlarını güncellemek için helper
+async function updatePatientSgkFields(params: {
+  id: string;
+  sgkFlag: boolean;
+  sgkPrescriptionReceived: boolean;
+  sgkRecordedToSystem: boolean;
+}): Promise<void> {
+  const { id, sgkFlag, sgkPrescriptionReceived, sgkRecordedToSystem } = params;
+
+  const { error } = await supabaseClient
+    .from('patients')
+    .update({
+      sgk_flag: sgkFlag,
+      sgk_prescription_received: sgkFlag ? sgkPrescriptionReceived : false,
+      sgk_recorded_to_system: sgkFlag ? sgkRecordedToSystem : false,
+    })
+    .eq('id', id);
+
+  if (error) {
+    console.error('Failed to update patient SGK fields (STEP_UPDATE_SGK):', error);
+    throw new Error('STEP_UPDATE_SGK: ' + error.message);
+  }
+}
+
 export default function PatientsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [sgkFilter, setSgkFilter] = useState<'all' | 'sgk' | 'non-sgk'>('all');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [detailPatient, setDetailPatient] = useState<PatientRow | null>(null);
+
   const [formState, setFormState] = useState<NewPatientForm>({
     fullName: '',
     phone: '',
     sgkFlag: true,
+    sgkPrescriptionReceived: false,
+    sgkRecordedToSystem: false,
   });
 
   const {
@@ -100,8 +145,21 @@ export default function PatientsPage() {
     mutationFn: createPatient,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['patients'] });
-      setFormState({ fullName: '', phone: '', sgkFlag: true });
+      setFormState({
+        fullName: '',
+        phone: '',
+        sgkFlag: true,
+        sgkPrescriptionReceived: false,
+        sgkRecordedToSystem: false,
+      });
       setShowCreateForm(false);
+    },
+  });
+
+  const sgkUpdateMutation = useMutation({
+    mutationFn: updatePatientSgkFields,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['patients'] });
     },
   });
 
@@ -115,6 +173,12 @@ export default function PatientsPage() {
       fullName: formState.fullName,
       phone: formState.phone,
       sgkFlag: formState.sgkFlag,
+      sgkPrescriptionReceived: formState.sgkFlag
+        ? formState.sgkPrescriptionReceived
+        : false,
+      sgkRecordedToSystem: formState.sgkFlag
+        ? formState.sgkRecordedToSystem
+        : false,
     });
   };
 
@@ -134,14 +198,12 @@ export default function PatientsPage() {
   const patients = data ?? [];
 
   const filteredPatients = patients.filter((p) => {
-    // Arama filtresi
     const term = search.trim().toLowerCase();
     const matchesSearch =
       !term ||
       p.full_name.toLowerCase().includes(term) ||
       (p.phone ?? '').toLowerCase().includes(term);
 
-    // SGK filtresi
     const matchesSgk =
       sgkFilter === 'all' ||
       (sgkFilter === 'sgk' && !!p.sgk_flag) ||
@@ -157,6 +219,20 @@ export default function PatientsPage() {
   const formatDate = (value: string | null): string => {
     if (!value) return '-';
     return new Date(value).toLocaleDateString('tr-TR');
+  };
+
+  const formatSgkWarning = (p: PatientRow): string | null => {
+    if (!p.sgk_flag) return null;
+    const needsPrescription = !p.sgk_prescription_received;
+    const needsRecording = !p.sgk_recorded_to_system;
+
+    if (!needsPrescription && !needsRecording) return null;
+
+    if (needsPrescription && needsRecording) {
+      return 'Reçete ve sistem kaydı eksik';
+    }
+    if (needsPrescription) return 'Reçete bekleniyor';
+    return 'Sisteme işlenecek';
   };
 
   return (
@@ -209,7 +285,7 @@ export default function PatientsPage() {
       {showCreateForm && (
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="text-sm font-semibold text-slate-900 mb-3">Yeni Hasta Ekle</h3>
-          <form className="grid gap-3 md:grid-cols-4 md:items-end" onSubmit={handleSubmit}>
+          <form className="grid gap-3 md:grid-cols-4 md:items-start" onSubmit={handleSubmit}>
             <div className="md:col-span-2">
               <label className="block text-xs font-medium text-slate-600 mb-1">
                 Ad Soyad
@@ -241,22 +317,65 @@ export default function PatientsPage() {
               />
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                id="sgk-flag"
-                type="checkbox"
-                checked={formState.sgkFlag}
-                onChange={(e) =>
-                  setFormState((s) => ({ ...s, sgkFlag: e.target.checked }))
-                }
-                className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <label
-                htmlFor="sgk-flag"
-                className="text-xs font-medium text-slate-700 select-none"
-              >
-                SGK hastası
-              </label>
+            {/* SGK üçlü checkbox grubu */}
+            <div className="md:col-span-1 flex flex-col gap-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <input
+                  id="sgk-flag"
+                  type="checkbox"
+                  checked={formState.sgkFlag}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFormState((s) => ({
+                      ...s,
+                      sgkFlag: checked,
+                      sgkPrescriptionReceived: checked ? s.sgkPrescriptionReceived : false,
+                      sgkRecordedToSystem: checked ? s.sgkRecordedToSystem : false,
+                    }));
+                  }}
+                  className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                />
+                <label
+                  htmlFor="sgk-flag"
+                  className="text-xs font-medium text-slate-700 select-none"
+                >
+                  SGK hastası
+                </label>
+              </div>
+
+              <div className="pl-5 flex flex-col gap-1 text-xs">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    disabled={!formState.sgkFlag}
+                    checked={formState.sgkPrescriptionReceived}
+                    onChange={(e) =>
+                      setFormState((s) => ({
+                        ...s,
+                        sgkPrescriptionReceived: e.target.checked,
+                      }))
+                    }
+                    className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+                  />
+                  <span>Reçete geldi mi?</span>
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    disabled={!formState.sgkFlag}
+                    checked={formState.sgkRecordedToSystem}
+                    onChange={(e) =>
+                      setFormState((s) => ({
+                        ...s,
+                        sgkRecordedToSystem: e.target.checked,
+                      }))
+                    }
+                    className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+                  />
+                  <span>Sisteme işlendi mi?</span>
+                </label>
+              </div>
             </div>
 
             <div className="md:col-span-4 flex justify-end">
@@ -328,74 +447,310 @@ export default function PatientsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredPatients.map((p) => (
-                <tr key={p.id} className="border-t border-slate-100">
-                  {/* Alış / kayıt tarihi */}
-                  <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
-                    {formatDate(p.created_at)}
-                  </td>
+              {filteredPatients.map((p) => {
+                const warning = formatSgkWarning(p);
+                const hasSgkWarning = !!warning;
 
-                  {/* Ad Soyad */}
-                  <td className="px-4 py-2 text-slate-800">{p.full_name}</td>
+                return (
+                  <tr
+                    key={p.id}
+                    className={
+                      'border-t border-slate-100 ' +
+                      (hasSgkWarning ? 'bg-amber-50/40' : '')
+                    }
+                  >
+                    {/* Alış / kayıt tarihi */}
+                    <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                      {formatDate(p.created_at)}
+                    </td>
 
-                  {/* Telefon */}
-                  <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
-                    {p.phone ?? '-'}
-                  </td>
+                    {/* Ad Soyad */}
+                    <td className="px-4 py-2 text-slate-800">{p.full_name}</td>
 
-                  {/* Cihaz Modeli – v1: henüz bağlı değil */}
-                  <td className="px-4 py-2 text-slate-500 italic">-</td>
+                    {/* Telefon */}
+                    <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                      {p.phone ?? '-'}
+                    </td>
 
-                  {/* Fiyat – v1: henüz bağlı değil */}
-                  <td className="px-4 py-2 text-right text-slate-500 italic">
-                    -
-                  </td>
+                    {/* Cihaz Modeli – v1: henüz bağlı değil */}
+                    <td className="px-4 py-2 text-slate-500 italic">-</td>
 
-                  {/* Memnuniyet – v1: henüz bağlı değil */}
-                  <td className="px-4 py-2 text-center text-slate-500 italic">
-                    -
-                  </td>
+                    {/* Fiyat – v1: henüz bağlı değil */}
+                    <td className="px-4 py-2 text-right text-slate-500 italic">
+                      -
+                    </td>
 
-                  {/* Son Görüşme */}
-                  <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
-                    {formatDate(p.last_visit_at)}
-                  </td>
+                    {/* Memnuniyet – v1: henüz bağlı değil */}
+                    <td className="px-4 py-2 text-center text-slate-500 italic">
+                      -
+                    </td>
 
-                  {/* SGK etiketi */}
-                  <td className="px-4 py-2 text-center">
-                    <span
-                      className={
-                        p.sgk_flag
-                          ? 'inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700'
-                          : 'inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500'
-                      }
-                    >
-                      {p.sgk_flag ? 'Evet' : 'Hayır'}
-                    </span>
-                  </td>
+                    {/* Son Görüşme */}
+                    <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                      {formatDate(p.last_visit_at)}
+                    </td>
 
-                  {/* Arşiv Kodu – v1: placeholder */}
-                  <td className="px-4 py-2 text-slate-500 italic">-</td>
+                    {/* SGK etiketi + uyarı */}
+                    <td className="px-4 py-2 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span
+                          className={
+                            p.sgk_flag
+                              ? 'inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700'
+                              : 'inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500'
+                          }
+                        >
+                          {p.sgk_flag ? 'Evet' : 'Hayır'}
+                        </span>
+                        {warning && (
+                          <span className="text-[10px] font-medium text-amber-700">
+                            {warning}
+                          </span>
+                        )}
+                      </div>
+                    </td>
 
-                  {/* İşlemler – v1: sadece Detay butonu (ileride drawer/route açacağız) */}
-                  <td className="px-4 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // [TODO] v2: hasta detay sayfası / drawer açılacak
-                        console.log('Hasta detayı (TODO):', p.id);
-                      }}
-                      className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      Detay
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    {/* Arşiv Kodu – v1: placeholder */}
+                    <td className="px-4 py-2 text-slate-500 italic">-</td>
+
+                    {/* İşlemler – Detay çekmecesi */}
+                    <td className="px-4 py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setDetailPatient(p)}
+                        className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        Detay
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* Hasta Detay çekmecesi */}
+      {detailPatient && (
+        <PatientDetailDrawer
+          patient={detailPatient}
+          onClose={() => setDetailPatient(null)}
+          onSave={(values) =>
+            sgkUpdateMutation.mutate({
+              id: detailPatient.id,
+              sgkFlag: values.sgkFlag,
+              sgkPrescriptionReceived: values.sgkPrescriptionReceived,
+              sgkRecordedToSystem: values.sgkRecordedToSystem,
+            })
+          }
+          isSaving={sgkUpdateMutation.isPending}
+          errorMsg={
+            (sgkUpdateMutation.error as Error | null | undefined)?.message ?? ''
+          }
+        />
+      )}
     </div>
+  );
+}
+
+type PatientDetailDrawerProps = {
+  patient: PatientRow;
+  onClose: () => void;
+  onSave: (values: {
+    sgkFlag: boolean;
+    sgkPrescriptionReceived: boolean;
+    sgkRecordedToSystem: boolean;
+  }) => void;
+  isSaving: boolean;
+  errorMsg: string;
+};
+
+// Basit hasta detay çekmecesi – şimdilik sadece temel bilgiler + SGK üçlüsü
+function PatientDetailDrawer({
+  patient,
+  onClose,
+  onSave,
+  isSaving,
+  errorMsg,
+}: PatientDetailDrawerProps) {
+  const [sgkFlag, setSgkFlag] = useState<boolean>(!!patient.sgk_flag);
+  const [sgkPrescriptionReceived, setSgkPrescriptionReceived] = useState<boolean>(
+    !!patient.sgk_prescription_received,
+  );
+  const [sgkRecordedToSystem, setSgkRecordedToSystem] = useState<boolean>(
+    !!patient.sgk_recorded_to_system,
+  );
+
+  // Hasta değişince local state’i resetle
+  useEffect(() => {
+    setSgkFlag(!!patient.sgk_flag);
+    setSgkPrescriptionReceived(!!patient.sgk_prescription_received);
+    setSgkRecordedToSystem(!!patient.sgk_recorded_to_system);
+  }, [patient]);
+
+  const handleSave = () => {
+    onSave({
+      sgkFlag,
+      sgkPrescriptionReceived: sgkFlag ? sgkPrescriptionReceived : false,
+      sgkRecordedToSystem: sgkFlag ? sgkRecordedToSystem : false,
+    });
+  };
+
+  return (
+    <>
+      {/* Arka plan overlay */}
+      <div
+        className="fixed inset-0 z-30 bg-slate-900/30"
+        onClick={onClose}
+      />
+
+      {/* Çekmece */}
+      <div className="fixed inset-y-0 right-0 z-40 w-full max-w-md bg-white shadow-xl flex flex-col">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <h3 className="text-sm font-semibold text-slate-900">Hasta Detayı</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-slate-500 hover:text-slate-700"
+          >
+            Kapat
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 text-sm">
+          {/* Temel bilgiler */}
+          <section className="space-y-2">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase">
+              Özlük Bilgileri
+            </h4>
+            <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 space-y-1">
+              <div className="flex justify-between gap-2">
+                <span className="text-xs text-slate-500">Ad Soyad</span>
+                <span className="text-xs font-medium text-slate-900">
+                  {patient.full_name}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-xs text-slate-500">Telefon</span>
+                <span className="text-xs text-slate-900">
+                  {patient.phone ?? '-'}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-xs text-slate-500">Kayıt Tarihi</span>
+                <span className="text-xs text-slate-900">
+                  {new Date(patient.created_at).toLocaleDateString('tr-TR')}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-xs text-slate-500">Son Görüşme</span>
+                <span className="text-xs text-slate-900">
+                  {patient.last_visit_at
+                    ? new Date(patient.last_visit_at).toLocaleDateString('tr-TR')
+                    : '-'}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          {/* SGK alanları */}
+          <section className="space-y-2">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase">
+              SGK ve Evrak Takibi
+            </h4>
+            <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  id="detail-sgk-flag"
+                  type="checkbox"
+                  checked={sgkFlag}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setSgkFlag(checked);
+                    if (!checked) {
+                      setSgkPrescriptionReceived(false);
+                      setSgkRecordedToSystem(false);
+                    }
+                  }}
+                  className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                />
+                <label
+                  htmlFor="detail-sgk-flag"
+                  className="text-xs font-medium text-slate-700 select-none"
+                >
+                  SGK hastası
+                </label>
+              </div>
+
+              <div className="pl-5 flex flex-col gap-1 text-xs">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    disabled={!sgkFlag}
+                    checked={sgkPrescriptionReceived}
+                    onChange={(e) => setSgkPrescriptionReceived(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+                  />
+                  <span>Reçete geldi mi?</span>
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    disabled={!sgkFlag}
+                    checked={sgkRecordedToSystem}
+                    onChange={(e) => setSgkRecordedToSystem(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+                  />
+                  <span>Sisteme işlendi mi?</span>
+                </label>
+              </div>
+
+              <p className="text-[11px] text-slate-500 mt-1">
+                Bu alanlar ana listede satırları renklendirir ve
+                &quot;Reçete bekleniyor / Sisteme işlenecek&quot; uyarılarını
+                tetikler.
+              </p>
+            </div>
+          </section>
+
+          {/* İleride cihaz/ödeme/audiogram sekmeleri için placeholder */}
+          <section className="space-y-2">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase">
+              Cihazlar &amp; Ödemeler (v2)
+            </h4>
+            <p className="text-xs text-slate-500">
+              Sonraki adımda bu çekmeceye Cihazlar, Görüşmeler, Ödemeler ve
+              Audiogram sekmeleri eklenecek.
+            </p>
+          </section>
+
+          {errorMsg && (
+            <p className="text-[11px] text-red-600">
+              Kaydetme sırasında bir hata oluştu. Detay: {errorMsg}
+            </p>
+          )}
+        </div>
+
+        <div className="border-t border-slate-200 px-4 py-3 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Kapat
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="inline-flex items-center rounded-md bg-primary-600 px-4 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isSaving ? 'Kaydediliyor...' : 'Kaydet'}
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
