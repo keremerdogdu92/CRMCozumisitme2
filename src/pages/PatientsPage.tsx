@@ -144,6 +144,11 @@ export default function PatientsPage() {
   const mutationError =
     (createMutation.error as Error | null | undefined)?.message ?? '';
 
+  const formatDate = (value: string | null): string => {
+    if (!value) return '-';
+    return new Date(value).toLocaleDateString('tr-TR');
+  };
+
   return (
     <div className="p-8 space-y-6">
       {/* Başlık + arama + yeni hasta butonu */}
@@ -263,28 +268,73 @@ export default function PatientsPage() {
             <thead className="bg-slate-50">
               <tr>
                 <th className="px-4 py-2 text-left font-medium text-slate-600">
+                  Alış (Kayıt)
+                </th>
+                <th className="px-4 py-2 text-left font-medium text-slate-600">
                   Ad Soyad
                 </th>
                 <th className="px-4 py-2 text-left font-medium text-slate-600">
                   Telefon
                 </th>
                 <th className="px-4 py-2 text-left font-medium text-slate-600">
+                  Cihaz Modeli
+                </th>
+                <th className="px-4 py-2 text-right font-medium text-slate-600">
+                  Fiyat
+                </th>
+                <th className="px-4 py-2 text-center font-medium text-slate-600">
+                  Memnuniyet (1–10)
+                </th>
+                <th className="px-4 py-2 text-left font-medium text-slate-600">
+                  Son Görüşme
+                </th>
+                <th className="px-4 py-2 text-center font-medium text-slate-600">
                   SGK
                 </th>
                 <th className="px-4 py-2 text-left font-medium text-slate-600">
-                  Son Ziyaret
+                  Arşiv Kodu
                 </th>
-                <th className="px-4 py-2 text-left font-medium text-slate-600">
-                  Kayıt Tarihi
+                <th className="px-4 py-2 text-right font-medium text-slate-600">
+                  İşlemler
                 </th>
               </tr>
             </thead>
             <tbody>
               {filteredPatients.map((p) => (
                 <tr key={p.id} className="border-t border-slate-100">
+                  {/* Alış / kayıt tarihi */}
+                  <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                    {formatDate(p.created_at)}
+                  </td>
+
+                  {/* Ad Soyad */}
                   <td className="px-4 py-2 text-slate-800">{p.full_name}</td>
-                  <td className="px-4 py-2 text-slate-700">{p.phone ?? '-'}</td>
-                  <td className="px-4 py-2">
+
+                  {/* Telefon */}
+                  <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                    {p.phone ?? '-'}
+                  </td>
+
+                  {/* Cihaz Modeli – v1: henüz bağlı değil */}
+                  <td className="px-4 py-2 text-slate-500 italic">-</td>
+
+                  {/* Fiyat – v1: henüz bağlı değil */}
+                  <td className="px-4 py-2 text-right text-slate-500 italic">
+                    -
+                  </td>
+
+                  {/* Memnuniyet – v1: henüz bağlı değil */}
+                  <td className="px-4 py-2 text-center text-slate-500 italic">
+                    -
+                  </td>
+
+                  {/* Son Görüşme */}
+                  <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                    {formatDate(p.last_visit_at)}
+                  </td>
+
+                  {/* SGK etiketi */}
+                  <td className="px-4 py-2 text-center">
                     <span
                       className={
                         p.sgk_flag
@@ -295,13 +345,22 @@ export default function PatientsPage() {
                       {p.sgk_flag ? 'Evet' : 'Hayır'}
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-slate-700">
-                    {p.last_visit_at
-                      ? new Date(p.last_visit_at).toLocaleDateString('tr-TR')
-                      : '-'}
-                  </td>
-                  <td className="px-4 py-2 text-slate-700">
-                    {new Date(p.created_at).toLocaleDateString('tr-TR')}
+
+                  {/* Arşiv Kodu – v1: placeholder */}
+                  <td className="px-4 py-2 text-slate-500 italic">-</td>
+
+                  {/* İşlemler – v1: sadece Detay butonu (ileride drawer/route açacağız) */}
+                  <td className="px-4 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // [TODO] v2: hasta detay sayfası / drawer açılacak
+                        console.log('Hasta detayı (TODO):', p.id);
+                      }}
+                      className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Detay
+                    </button>
                   </td>
                 </tr>
               ))}
