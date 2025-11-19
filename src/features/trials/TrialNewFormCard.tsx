@@ -69,9 +69,44 @@ export function TrialNewFormCard({
 
   const handleModelChange = (modelValue: string, models: DeviceModelPriceRow[]) => {
     const found = models.find((m) => m.model === modelValue);
+    if (!found) {
+      onChange({
+        deviceModel: modelValue,
+        deviceListPrice: '',
+      });
+      return;
+    }
+
+    const perDevice = found.list_price;
+    const total =
+      values.deviceSide === 'both' || values.deviceSide === ''
+        ? perDevice * 2
+        : perDevice;
+
     onChange({
       deviceModel: modelValue,
-      deviceListPrice: found ? found.list_price.toFixed(2) : '',
+      deviceListPrice: total.toFixed(2),
+    });
+  };
+
+  const handleSideChange = (side: string, models: DeviceModelPriceRow[]) => {
+    const found = models.find((m) => m.model === values.deviceModel);
+    if (!found) {
+      onChange({
+        deviceSide: side,
+      });
+      return;
+    }
+
+    const perDevice = found.list_price;
+    const total =
+      side === 'both' || side === ''
+        ? perDevice * 2
+        : perDevice;
+
+    onChange({
+      deviceSide: side,
+      deviceListPrice: total.toFixed(2),
     });
   };
 
@@ -161,7 +196,7 @@ export function TrialNewFormCard({
           </label>
           <select
             value={values.deviceSide}
-            onChange={(e) => onChange({ deviceSide: e.target.value })}
+            onChange={(e) => handleSideChange(e.target.value, modelOptions)}
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             required
             disabled={deviceSectionDisabled}
@@ -231,7 +266,7 @@ export function TrialNewFormCard({
         {/* Suggested list price (readonly) */}
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">
-            Önerilen Liste Fiyatı
+            Önerilen Liste Fiyatı (toplam)
           </label>
           <input
             type="text"
