@@ -14,6 +14,11 @@ const initialFormState: NewTrialForm = {
   phone: '',
   firstMeetAt: '',
   nextMeetAt: '',
+  deviceSide: '',
+  deviceBrand: '',
+  deviceModel: '',
+  deviceListPrice: '',
+  deviceQuotePrice: '',
 };
 
 export default function TrialsPage() {
@@ -111,14 +116,7 @@ export default function TrialsPage() {
               ...patch,
             }))
           }
-          onSubmit={() =>
-            createMutation.mutate({
-              fullName: formState.fullName,
-              phone: formState.phone,
-              firstMeetAt: formState.firstMeetAt,
-              nextMeetAt: formState.nextMeetAt,
-            })
-          }
+          onSubmit={() => createMutation.mutate(formState)}
           isSubmitting={createMutation.isPending}
           errorMessage={
             createMutation.isError
