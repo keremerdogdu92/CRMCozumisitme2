@@ -18,27 +18,6 @@ type TrialDetailDrawerProps = {
 
 type TrialTabId = 'summary' | 'devices' | 'meetings';
 
-/**
- * Optional static descriptions per (brand, model) pair.
- * Key format: `${brand}|${model}`
- *
- * Fill these satırlar senin cihaz açıklamalarına göre.
- */
-const DEVICE_MODEL_DESCRIPTIONS: Record<string, string> = {
-  // Örnek:
-  // 'Widex|Moment 220':
-  //   'Şarj edilebilir, bluetooth destekli, orta-yüksek performans sınıfı işitme cihazı.',
-};
-
-function getDeviceDescription(
-  brand: string | null | undefined,
-  model: string | null | undefined,
-): string | null {
-  if (!brand || !model) return null;
-  const key = `${brand}|${model}`;
-  return DEVICE_MODEL_DESCRIPTIONS[key] ?? null;
-}
-
 function formatPrice(amount: number | null | undefined): string {
   if (amount == null || Number.isNaN(amount)) return '-';
   try {
@@ -55,28 +34,31 @@ function formatPrice(amount: number | null | undefined): string {
 export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<TrialTabId>('summary');
 
-  useEffect(() => {
-    if (open) {
-      setActiveTab('summary');
-    }
-  }, [open, trial?.id]);
-
-  if (!trial) {
-    return null;
-  }
+  // Hooks her zaman aynı sırada çalışsın diye trialId'yi yukarıda hesaplıyoruz
+  const trialId = trial?.id ?? null;
 
   const {
     data: devices = [],
     isLoading: isDevicesLoading,
     isError: isDevicesError,
   } = useQuery({
-    queryKey: TRIAL_DEVICES_BY_TRIAL_QUERY_KEY(trial.id),
-    queryFn: () => fetchTrialDevicesByTrialId(trial.id),
-    enabled: open && !!trial.id,
+    // trialId null bile olsa hook çağrılmış olur, sadece enabled false olduğu için sorgu çalışmaz
+    queryKey: TRIAL_DEVICES_BY_TRIAL_QUERY_KEY(trialId ?? 'none'),
+    queryFn: () => fetchTrialDevicesByTrialId(trialId as string),
+    enabled: !!trialId && open,
   });
 
-  // Sadece satır bazında kullanıyoruz; toplam artık baskıda da gösterilmiyor.
-  const totalQuoted = devices.reduce(
+  useEffect(() => {
+    if (open) {
+      setActiveTab('summary');
+    }
+  }, [open, trialId]);
+
+  if (!trial) {
+    return null;
+  }
+
+  const totalQuoted = (devices as TrialDeviceRow[]).reduce(
     (sum, d) => sum + (Number(d.quote_price) || 0),
     0,
   );
@@ -87,28 +69,18 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
     { id: 'meetings', label: 'Görüşmeler' },
   ];
 
-  const handlePrintOffer = (detailed: boolean) => {
+  const handlePrintOffer = () => {
     const printWindow = window.open('', '_blank', 'width=800,height=1000');
     if (!printWindow) return;
 
-    const logoUrl = `${window.location.origin}/logo.png`; // Gerekiyorsa yolu değiştir.
-
     const deviceRowsHtml = (devices as TrialDeviceRow[])
       .map((d, index) => {
-        const description = detailed
-          ? getDeviceDescription(d.brand, d.model) ?? ''
-          : '';
         return `
           <tr>
             <td>${index + 1}</td>
             <td>${d.brand ?? ''}</td>
             <td>${d.model ?? ''}</td>
             <td>${d.side ?? ''}</td>
-            ${
-              detailed
-                ? `<td>${description ? description : ''}</td>`
-                : ''
-            }
             <td style="text-align:right;">${formatPrice(d.quote_price)}</td>
           </tr>
         `;
@@ -123,43 +95,77 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
   <title>İşitme Cihazı Teklifi - ${trial.full_name ?? ''}</title>
   <style>
     @page { size: A4; margin: 20mm; }
+    * {
+      box-sizing: border-box;
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
       font-size: 12px;
       color: #111827;
       margin: 0;
       padding: 0;
-    }
-    .page {
       position: relative;
-      z-index: 1;
     }
-    .page::before {
-      content: "Çözüm İşitme Merkezi";
+    .watermark {
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%) rotate(-30deg);
-      font-size: 52px;
-      font-weight: 600;
-      color: rgba(148, 163, 184, 0.18); /* slate-400 benzeri filigran */
-      z-index: -1;
+      font-size: 72px;
+      font-weight: 700;
+      color: rgba(148, 163, 184, 0.15);
       pointer-events: none;
+      z-index: 0;
+      text-align: center;
       white-space: nowrap;
+    }
+    .page {
+      padding: 0;
+      position: relative;
+      z-index: 1;
     }
     .header {
       display: flex;
-      justify-content: flex-start;
-      align-items: flex-start;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 16px;
+    }
+    .company {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo-box {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: #2563eb;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .company-name {
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .company-subtitle {
+      font-size: 11px;
+      color: #6b7280;
+    }
+    .title-block {
+      text-align: right;
     }
     .title {
       font-size: 18px;
       font-weight: 600;
     }
     .subtitle {
-      font-size: 12px;
+      font-size: 11px;
       color: #6b7280;
+      margin-top: 2px;
     }
     .section-title {
       font-size: 12px;
@@ -193,7 +199,6 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
     table.offer-table td {
       border: 1px solid #e5e7eb;
       padding: 6px 8px;
-      vertical-align: top;
     }
     table.offer-table th {
       background: #f3f4f6;
@@ -209,56 +214,50 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
       padding: 6px 8px;
       margin-top: 4px;
     }
-    .signature-row {
-      margin-top: 24px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 11px;
-    }
-    .signature-box {
-      width: 45%;
-    }
-    .signature-line {
-      margin-top: 32px;
-      border-top: 1px solid #e5e7eb;
-    }
     .footer {
-      position: fixed;
-      bottom: 10mm;
-      left: 20mm;
-      right: 20mm;
+      margin-top: 24px;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 8px;
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      border-top: 1px solid #e5e7eb;
-      padding-top: 6px;
-      margin-top: 12px;
       font-size: 10px;
-      color: #4b5563;
+      color: #374151;
     }
-    .footer-info {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .footer-logo {
+    .footer-left {
       display: flex;
       align-items: center;
       gap: 8px;
     }
-    .footer-logo img {
-      width: 40px;
-      height: 40px;
-      object-fit: contain;
+    .footer-name {
+      font-weight: 600;
+      font-size: 11px;
+    }
+    .footer-meta {
+      font-size: 10px;
+      color: #6b7280;
+    }
+    .footer-right {
+      text-align: right;
+      line-height: 1.4;
     }
   </style>
 </head>
 <body>
+  <div class="watermark">Çözüm İşitme Merkezi</div>
   <div class="page">
     <div class="header">
-      <div>
+      <div class="company">
+        <div class="logo-box">Çİ</div>
+        <div>
+          <div class="company-name">Çözüm İşitme Merkezi</div>
+          <div class="company-subtitle">İşitme Cihazları ve İşitme Sağlığı</div>
+        </div>
+      </div>
+      <div class="title-block">
         <div class="title">İşitme Cihazı Teklifi</div>
-        <div class="subtitle">Çözüm İşitme Merkezi</div>
+        <div class="subtitle">
+          Tarih: ${new Date().toLocaleDateString('tr-TR')}
+        </div>
       </div>
     </div>
 
@@ -298,21 +297,11 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
           <th>Marka</th>
           <th>Model</th>
           <th>Kulak</th>
-          ${
-            detailed
-              ? '<th>Açıklama</th>'
-              : ''
-          }
           <th>Toplam Teklif</th>
         </tr>
       </thead>
       <tbody>
-        ${
-          deviceRowsHtml ||
-          '<tr><td colspan="' +
-          (detailed ? '6' : '5') +
-          '">Kayıtlı cihaz satırı bulunmuyor.</td></tr>'
-        }
+        ${deviceRowsHtml || '<tr><td colspan="5">Kayıtlı cihaz satırı bulunmuyor.</td></tr>'}
       </tbody>
     </table>
 
@@ -323,29 +312,18 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
       </div>
     </div>
 
-    <div class="signature-row">
-      <div class="signature-box">
-        <div>Hasta / Veli</div>
-        <div class="signature-line"></div>
-      </div>
-      <div class="signature-box">
-        <div>Çözüm İşitme Yetkilisi</div>
-        <div class="signature-line"></div>
-      </div>
-    </div>
-
     <div class="footer">
-      <div class="footer-logo">
-        <img src="${logoUrl}" alt="Çözüm İşitme Logosu" />
-        <div class="footer-info">
-          <strong>Çözüm İşitme Merkezi</strong>
-          <span>İşitme Cihazları Satış ve Uygulama Merkezi</span>
+      <div class="footer-left">
+        <div class="logo-box">Çİ</div>
+        <div>
+          <div class="footer-name">Çözüm İşitme Merkezi</div>
+          <div class="footer-meta">Yetkili İşitme Cihazı Satış ve Uygulama Merkezi</div>
         </div>
       </div>
-      <div class="footer-info" style="text-align:right;">
-        <span>Adres: ..........................................................</span>
-        <span>Tel: 0 (___) ___ __ __</span>
-        <span>Web: www.ornek-site.com</span>
+      <div class="footer-right">
+        <div>Telefon: 0 (xxx) xxx xx xx</div>
+        <div>Adres: Adres bilgisi buraya gelecek</div>
+        <div>Web: www.ornek-site.com</div>
       </div>
     </div>
   </div>
@@ -366,7 +344,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
 
   const content = (
     <div className="flex h-full flex-col">
-      {/* Tab bar + print buttons */}
+      {/* Tab bar + print button */}
       <div className="border-b border-slate-200 px-3 pt-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap gap-1">
@@ -390,24 +368,14 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
             })}
           </div>
 
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => handlePrintOffer(false)}
-              disabled={devices.length === 0}
-              className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Teklif Yazdır
-            </button>
-            <button
-              type="button"
-              onClick={() => handlePrintOffer(true)}
-              disabled={devices.length === 0}
-              className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Ayrıntılı Teklif Yazdır
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handlePrintOffer}
+            disabled={devices.length === 0}
+            className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Teklif Yazdır
+          </button>
         </div>
       </div>
 
@@ -519,7 +487,10 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
                     ))}
                   </tbody>
                 </table>
-                {/* Toplam teklif satırı baskıda istenmediği için burada da göstermiyoruz. */}
+
+                <div className="flex justify-end text-[11px] font-semibold text-slate-700">
+                  Toplam teklif: {formatPrice(totalQuoted)}
+                </div>
               </div>
             )}
           </section>
