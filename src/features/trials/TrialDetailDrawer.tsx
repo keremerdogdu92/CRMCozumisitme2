@@ -32,17 +32,20 @@ function formatPrice(amount: number | null | undefined): string {
 }
 
 export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerProps) {
+  // IMPORTANT:
+  // Early return BEFORE any hooks so that hook sayısı her render'da tutarlı kalsın.
+  // (React #310 hatasını engeller.)
+  if (!trial) {
+    return null;
+  }
+
   const [activeTab, setActiveTab] = useState<TrialTabId>('summary');
 
   useEffect(() => {
     if (open) {
       setActiveTab('summary');
     }
-  }, [open, trial?.id]);
-
-  if (!trial) {
-    return null;
-  }
+  }, [open, trial.id]);
 
   const {
     data: devices = [],
