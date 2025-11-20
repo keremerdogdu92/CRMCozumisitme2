@@ -14,11 +14,16 @@ const initialFormState: NewTrialForm = {
   phone: '',
   firstMeetAt: '',
   nextMeetAt: '',
-  deviceSide: '',
-  deviceBrand: '',
-  deviceModel: '',
-  deviceListPrice: '',
-  deviceQuotePrice: '',
+  devices: [
+    {
+      rowKey: 'row-0',
+      side: '',
+      brand: '',
+      model: '',
+      listPrice: '',
+      quotePrice: '',
+    },
+  ],
 };
 
 export default function TrialsPage() {
