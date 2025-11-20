@@ -2,7 +2,12 @@
 // Supabase-backed API helpers and React Query keys for trial (deneme) data.
 
 import { supabaseClient } from '../../utils/supabaseClient';
-import type { TrialRow, NewTrialForm, DeviceModelPriceRow } from './types';
+import type {
+  TrialRow,
+  NewTrialForm,
+  DeviceModelPriceRow,
+  TrialDeviceRow,
+} from './types';
 
 export const TRIALS_QUERY_KEY = ['trials'] as const;
 
@@ -10,6 +15,10 @@ export const TRIALS_QUERY_KEY = ['trials'] as const;
 export const DEVICE_BRANDS_QUERY_KEY = ['device-model-brands'] as const;
 export const DEVICE_MODELS_BY_BRAND_QUERY_KEY = (brand: string) =>
   ['device-models-by-brand', brand] as const;
+
+// Trial devices per trial query key
+export const TRIAL_DEVICES_BY_TRIAL_QUERY_KEY = (trialId: string) =>
+  ['trial-devices-by-trial', trialId] as const;
 
 export async function fetchTrials(): Promise<TrialRow[]> {
   const { data, error } = await supabaseClient
@@ -90,22 +99,50 @@ export async function fetchDeviceModelsByBrand(
   }));
 }
 
+/**
+ * Fetch trial_devices rows for a single trial.
+ */
+export async function fetchTrialDevicesByTrialId(
+  trialId: string,
+): Promise<TrialDeviceRow[]> {
+  if (!trialId) {
+    return [];
+  }
+
+  const { data, error } = await supabaseClient
+    .from('trial_devices')
+    .select('id, side, brand, model, quote_price')
+    .eq('trial_id', trialId)
+    .order('id', { ascending: true });
+
+  if (error) {
+    console.error('Supabase trial devices fetch error:', error);
+    throw error;
+  }
+
+  return (data ?? []) as TrialDeviceRow[];
+}
+
 function parsePriceStringToNumber(raw: string): number {
   const normalized = raw.replace(/\s/g, '').replace(',', '.');
   const value = Number(normalized);
   if (!Number.isFinite(value)) {
-    throw new Error('TRIAL_STEP_PRICE_PARSE: Invalid deviceQuotePrice');
+    throw new Error('TRIAL_STEP_PRICE_PARSE: Invalid device quote price');
   }
   return value;
 }
 
 export async function createTrial(input: NewTrialForm): Promise<void> {
-  // Basic guard: device fields must be provided
-  if (!input.deviceBrand || !input.deviceModel || !input.deviceQuotePrice) {
-    throw new Error('TRIAL_STEP_DEVICE_REQUIRED: Device brand/model/price are required');
-  }
+  // 0) Normalize device list and basic guard
+  const effectiveDevices = (input.devices ?? []).filter(
+    (d) => d.brand && d.model && d.quotePrice.trim(),
+  );
 
-  const quotePriceNumber = parsePriceStringToNumber(input.deviceQuotePrice);
+  if (effectiveDevices.length === 0) {
+    throw new Error(
+      'TRIAL_STEP_DEVICE_REQUIRED: At least one device with brand, model and price is required',
+    );
+  }
 
   // 1) Current user
   const { data: userData, error: userError } = await supabaseClient.auth.getUser();
@@ -142,9 +179,13 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
       org_id: profile.org_id,
       full_name: input.fullName.trim(),
       phone: input.phone.trim() || null,
-      first_meet_at: input.firstMeetAt ? new Date(input.firstMeetAt).toISOString() : null,
-      next_meet_at: input.nextMeetAt ? new Date(input.nextMeetAt).toISOString() : null,
-      reference_id: null, // reference seçimi sonraki iterasyonda eklenecek
+      first_meet_at: input.firstMeetAt
+        ? new Date(input.firstMeetAt).toISOString()
+        : null,
+      next_meet_at: input.nextMeetAt
+        ? new Date(input.nextMeetAt).toISOString()
+        : null,
+      reference_id: null, // reference selection will be added in a later iteration
     })
     .select('id')
     .limit(1);
@@ -160,19 +201,25 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
     throw new Error('TRIAL_STEP_NO_ID: Trial insert did not return an id');
   }
 
-  // 4) Insert associated device row
-  const { error: deviceInsertError } = await supabaseClient.from('trial_devices').insert({
+  // 4) Insert associated device rows
+  const devicePayload = effectiveDevices.map((d) => ({
     org_id: profile.org_id,
     trial_id: trialId,
-    side: input.deviceSide || null,
-    brand: input.deviceBrand,
-    model: input.deviceModel,
-    quote_price: quotePriceNumber,
-  });
+    side: d.side || null,
+    brand: d.brand,
+    model: d.model,
+    quote_price: parsePriceStringToNumber(d.quotePrice),
+  }));
+
+  const { error: deviceInsertError } = await supabaseClient
+    .from('trial_devices')
+    .insert(devicePayload);
 
   if (deviceInsertError) {
-    console.error('Failed to insert trial device (TRIAL_STEP_DEVICE_INSERT):', deviceInsertError);
-    // Note: trial row already exists; manual cleanup can be done later if desired.
+    console.error(
+      'Failed to insert trial devices (TRIAL_STEP_DEVICE_INSERT):',
+      deviceInsertError,
+    );
     throw new Error('TRIAL_STEP_DEVICE_INSERT: ' + deviceInsertError.message);
   }
 }
