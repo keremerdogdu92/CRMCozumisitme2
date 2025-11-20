@@ -1,4 +1,7 @@
-import { PropsWithChildren } from 'react';
+// src/components/layout/AppShell.tsx
+// Main application shell with persistent sidebar and topbar.
+
+import type { PropsWithChildren } from 'react';
 import { Sidebar } from '../navigation/Sidebar';
 import { Topbar } from '../navigation/Topbar';
 
