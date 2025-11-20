@@ -185,7 +185,8 @@ export function TrialNewFormCard({
             Deneme Cihazı
           </p>
           <p className="text-[11px] text-slate-500">
-            Genelde iki kulak için aynı marka ve model seçilir. Fiyat alanına çift + aksesuarlar dahil toplam teklifi yazın.
+            Genelde iki kulak için aynı marka ve model seçilir. Fiyat alanına verdiğiniz
+            toplam fiyatı yazın (tek/çift, aksesuar olabilir veya olmayabilir).
           </p>
         </div>
 
@@ -284,30 +285,10 @@ export function TrialNewFormCard({
         {/* Quote price (user-entered) */}
         <div className="md:col-span-2">
           <label className="block text-xs font-medium text-slate-600 mb-1">
-            Toplam Teklif Fiyatı (çift + aksesuar)
+            Toplam Satış Fiyatı
           </label>
           <input
             type="text"
             value={values.deviceQuotePrice}
             onChange={(e) => onChange({ deviceQuotePrice: e.target.value })}
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            placeholder="Örn. 35000"
-            required
-            disabled={deviceSectionDisabled}
-          />
-        </div>
-
-        {/* Submit */}
-        <div className="md:col-span-4 flex justify-end">
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-          >
-            {isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
-          </button>
-        </div>
-      </form>
-    </InlineCreateCard>
-  );
-}
+            classN
