@@ -11,6 +11,19 @@ export type TrialRow = {
   reference_id: string | null;
 };
 
+/**
+ * One device line used in a trial offer.
+ * Each row corresponds to a row in trial_devices on the backend.
+ */
+export type TrialDeviceFormRow = {
+  rowKey: string;      // local UI key, not persisted
+  side: string;        // 'both' | 'left' | 'right' | ''
+  brand: string;       // brand text
+  model: string;       // model text
+  listPrice: string;   // suggested list price (auto from view, toplam)
+  quotePrice: string;  // user-entered total offer for this device row
+};
+
 export type NewTrialForm = {
   // Patient-facing fields
   fullName: string;
@@ -18,12 +31,8 @@ export type NewTrialForm = {
   firstMeetAt: string; // datetime-local string, can be empty
   nextMeetAt: string;  // datetime-local string, can be empty
 
-  // Device trial fields (required for a valid trial)
-  deviceSide: string;         // e.g. 'both', 'left', 'right'
-  deviceBrand: string;        // brand text
-  deviceModel: string;        // model text (for trial_devices.model)
-  deviceListPrice: string;    // readonly UI field, suggested list price
-  deviceQuotePrice: string;   // user-entered total quote (2 devices + accessories)
+  // Device lines for this trial
+  devices: TrialDeviceFormRow[];
 };
 
 /**
@@ -35,4 +44,15 @@ export type DeviceModelPriceRow = {
   brand: string;
   model: string;
   list_price: number;
+};
+
+/**
+ * trial_devices table row used in detail drawer + print sheet.
+ */
+export type TrialDeviceRow = {
+  id: string;
+  side: string | null;
+  brand: string | null;
+  model: string | null;
+  quote_price: number | null;
 };
