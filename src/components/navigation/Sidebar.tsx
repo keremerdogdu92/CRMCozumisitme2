@@ -1,68 +1,68 @@
-// src/components/navigation/Sidebar.tsx
+// src/components/layout/SideDrawer.tsx
+// Generic right-side drawer shell with overlay, header, optional subtitle and footer.
 
-import { NavLink } from 'react-router-dom';
-import { ReactNode } from 'react';
-import {
-  ClipboardList,
-  Users,
-  FlaskConical,
-  Boxes,
-  CalendarClock,
-  BookUser,
-  Activity,
-  Calculator
-} from 'lucide-react';
+import type { ReactNode } from 'react';
 
-interface NavItem {
-  path: string;
-  label: string;
-  icon: ReactNode;
-}
+type SideDrawerProps = {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle?: string;
+  footer?: ReactNode;
+  children: ReactNode;
+};
 
-const NAV_ITEMS: NavItem[] = [
-  { path: '/', label: 'Pano', icon: <ClipboardList className="h-5 w-5" /> },
-  { path: '/patients', label: 'Hastalar', icon: <Users className="h-5 w-5" /> },
-  { path: '/trials', label: 'Denemeler', icon: <FlaskConical className="h-5 w-5" /> },
-  { path: '/inventory', label: 'Stok', icon: <Boxes className="h-5 w-5" /> },
-  { path: '/meetings', label: 'Görüşmeler', icon: <CalendarClock className="h-5 w-5" /> },
-  { path: '/references', label: 'Referanslar', icon: <BookUser className="h-5 w-5" /> },
-  { path: '/audiogram', label: 'Odyogram', icon: <Activity className="h-5 w-5" /> },
-  { path: '/profit-calculator', label: 'Kar Hesaplayıcı', icon: <Calculator className="h-5 w-5" /> }
-];
+export function SideDrawer({
+  open,
+  onClose,
+  title,
+  subtitle,
+  footer,
+  children,
+}: SideDrawerProps) {
+  if (!open) {
+    return null;
+  }
 
-export function Sidebar() {
   return (
-    <aside className="hidden w-64 flex-shrink-0 border-r border-slate-200 bg-white lg:flex">
-      <div className="flex h-full flex-col">
-        <div className="flex items-center gap-2 border-b border-slate-200 px-6 py-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500 font-semibold text-white">
-            Çİ
-          </div>
+    <>
+      {/* Backdrop overlay */}
+      <div
+        className="fixed inset-0 z-30 bg-slate-900/30"
+        onClick={onClose}
+      />
+
+      {/* Drawer panel */}
+      <div className="fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col bg-white shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
-            <p className="text-sm font-semibold text-slate-900">Çözüm İşitme</p>
-            <p className="text-xs text-slate-500">CRM Sistemi</p>
+            <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+            {subtitle && (
+              <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+            )}
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-slate-500 hover:text-slate-700"
+          >
+            Kapat
+          </button>
         </div>
-        <nav className="flex-1 space-y-1 p-4">
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === '/'}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-primary-100 text-primary-700'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`
-              }
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
-        </nav>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          {children}
+        </div>
+
+        {/* Footer (optional) */}
+        {footer && (
+          <div className="border-t border-slate-200 px-4 py-3">
+            <div className="flex justify-end gap-2">{footer}</div>
+          </div>
+        )}
       </div>
-    </aside>
+    </>
   );
 }
