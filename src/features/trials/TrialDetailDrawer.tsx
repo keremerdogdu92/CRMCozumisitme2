@@ -18,6 +18,27 @@ type TrialDetailDrawerProps = {
 
 type TrialTabId = 'summary' | 'devices' | 'meetings';
 
+/**
+ * Optional static descriptions per (brand, model) pair.
+ * Key format: `${brand}|${model}`
+ *
+ * Fill these satırlar senin cihaz açıklamalarına göre.
+ */
+const DEVICE_MODEL_DESCRIPTIONS: Record<string, string> = {
+  // Örnek:
+  // 'Widex|Moment 220':
+  //   'Şarj edilebilir, bluetooth destekli, orta-yüksek performans sınıfı işitme cihazı.',
+};
+
+function getDeviceDescription(
+  brand: string | null | undefined,
+  model: string | null | undefined,
+): string | null {
+  if (!brand || !model) return null;
+  const key = `${brand}|${model}`;
+  return DEVICE_MODEL_DESCRIPTIONS[key] ?? null;
+}
+
 function formatPrice(amount: number | null | undefined): string {
   if (amount == null || Number.isNaN(amount)) return '-';
   try {
@@ -32,20 +53,17 @@ function formatPrice(amount: number | null | undefined): string {
 }
 
 export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerProps) {
-  // IMPORTANT:
-  // Early return BEFORE any hooks so that hook sayısı her render'da tutarlı kalsın.
-  // (React #310 hatasını engeller.)
-  if (!trial) {
-    return null;
-  }
-
   const [activeTab, setActiveTab] = useState<TrialTabId>('summary');
 
   useEffect(() => {
     if (open) {
       setActiveTab('summary');
     }
-  }, [open, trial.id]);
+  }, [open, trial?.id]);
+
+  if (!trial) {
+    return null;
+  }
 
   const {
     data: devices = [],
@@ -57,6 +75,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
     enabled: open && !!trial.id,
   });
 
+  // Sadece satır bazında kullanıyoruz; toplam artık baskıda da gösterilmiyor.
   const totalQuoted = devices.reduce(
     (sum, d) => sum + (Number(d.quote_price) || 0),
     0,
@@ -68,18 +87,28 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
     { id: 'meetings', label: 'Görüşmeler' },
   ];
 
-  const handlePrintOffer = () => {
+  const handlePrintOffer = (detailed: boolean) => {
     const printWindow = window.open('', '_blank', 'width=800,height=1000');
     if (!printWindow) return;
 
+    const logoUrl = `${window.location.origin}/logo.png`; // Gerekiyorsa yolu değiştir.
+
     const deviceRowsHtml = (devices as TrialDeviceRow[])
       .map((d, index) => {
+        const description = detailed
+          ? getDeviceDescription(d.brand, d.model) ?? ''
+          : '';
         return `
           <tr>
             <td>${index + 1}</td>
             <td>${d.brand ?? ''}</td>
             <td>${d.model ?? ''}</td>
             <td>${d.side ?? ''}</td>
+            ${
+              detailed
+                ? `<td>${description ? description : ''}</td>`
+                : ''
+            }
             <td style="text-align:right;">${formatPrice(d.quote_price)}</td>
           </tr>
         `;
@@ -91,7 +120,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
 <html lang="tr">
 <head>
   <meta charset="utf-8" />
-  <title>Deneme Teklifi - ${trial.full_name ?? ''}</title>
+  <title>İşitme Cihazı Teklifi - ${trial.full_name ?? ''}</title>
   <style>
     @page { size: A4; margin: 20mm; }
     body {
@@ -102,11 +131,25 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
       padding: 0;
     }
     .page {
-      padding: 0;
+      position: relative;
+      z-index: 1;
+    }
+    .page::before {
+      content: "Çözüm İşitme Merkezi";
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-30deg);
+      font-size: 52px;
+      font-weight: 600;
+      color: rgba(148, 163, 184, 0.18); /* slate-400 benzeri filigran */
+      z-index: -1;
+      pointer-events: none;
+      white-space: nowrap;
     }
     .header {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-start;
       align-items: flex-start;
       margin-bottom: 16px;
     }
@@ -150,16 +193,11 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
     table.offer-table td {
       border: 1px solid #e5e7eb;
       padding: 6px 8px;
+      vertical-align: top;
     }
     table.offer-table th {
       background: #f3f4f6;
       text-align: left;
-    }
-    .totals {
-      margin-top: 8px;
-      text-align: right;
-      font-size: 12px;
-      font-weight: 600;
     }
     .notes {
       margin-top: 16px;
@@ -184,18 +222,43 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
       margin-top: 32px;
       border-top: 1px solid #e5e7eb;
     }
+    .footer {
+      position: fixed;
+      bottom: 10mm;
+      left: 20mm;
+      right: 20mm;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 6px;
+      margin-top: 12px;
+      font-size: 10px;
+      color: #4b5563;
+    }
+    .footer-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .footer-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .footer-logo img {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+    }
   </style>
 </head>
 <body>
   <div class="page">
     <div class="header">
       <div>
-        <div class="title">Deneme Cihaz Teklifi</div>
+        <div class="title">İşitme Cihazı Teklifi</div>
         <div class="subtitle">Çözüm İşitme Merkezi</div>
-      </div>
-      <div style="text-align:right;font-size:11px;color:#6b7280;">
-        <div>Tarih: ${new Date().toLocaleDateString('tr-TR')}</div>
-        <div>Saat: ${new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</div>
       </div>
     </div>
 
@@ -235,17 +298,23 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
           <th>Marka</th>
           <th>Model</th>
           <th>Kulak</th>
+          ${
+            detailed
+              ? '<th>Açıklama</th>'
+              : ''
+          }
           <th>Toplam Teklif</th>
         </tr>
       </thead>
       <tbody>
-        ${deviceRowsHtml || '<tr><td colspan="5">Kayıtlı cihaz satırı bulunmuyor.</td></tr>'}
+        ${
+          deviceRowsHtml ||
+          '<tr><td colspan="' +
+          (detailed ? '6' : '5') +
+          '">Kayıtlı cihaz satırı bulunmuyor.</td></tr>'
+        }
       </tbody>
     </table>
-
-    <div class="totals">
-      Toplam Teklif: ${formatPrice(totalQuoted)}
-    </div>
 
     <div class="notes">
       Notlar:
@@ -262,6 +331,21 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
       <div class="signature-box">
         <div>Çözüm İşitme Yetkilisi</div>
         <div class="signature-line"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-logo">
+        <img src="${logoUrl}" alt="Çözüm İşitme Logosu" />
+        <div class="footer-info">
+          <strong>Çözüm İşitme Merkezi</strong>
+          <span>İşitme Cihazları Satış ve Uygulama Merkezi</span>
+        </div>
+      </div>
+      <div class="footer-info" style="text-align:right;">
+        <span>Adres: ..........................................................</span>
+        <span>Tel: 0 (___) ___ __ __</span>
+        <span>Web: www.ornek-site.com</span>
       </div>
     </div>
   </div>
@@ -282,7 +366,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
 
   const content = (
     <div className="flex h-full flex-col">
-      {/* Tab bar + print button */}
+      {/* Tab bar + print buttons */}
       <div className="border-b border-slate-200 px-3 pt-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap gap-1">
@@ -306,14 +390,24 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
             })}
           </div>
 
-          <button
-            type="button"
-            onClick={handlePrintOffer}
-            disabled={devices.length === 0}
-            className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Teklif Yazdır
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => handlePrintOffer(false)}
+              disabled={devices.length === 0}
+              className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Teklif Yazdır
+            </button>
+            <button
+              type="button"
+              onClick={() => handlePrintOffer(true)}
+              disabled={devices.length === 0}
+              className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Ayrıntılı Teklif Yazdır
+            </button>
+          </div>
         </div>
       </div>
 
@@ -425,10 +519,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
                     ))}
                   </tbody>
                 </table>
-
-                <div className="flex justify-end text-[11px] font-semibold text-slate-700">
-                  Toplam teklif: {formatPrice(totalQuoted)}
-                </div>
+                {/* Toplam teklif satırı baskıda istenmediği için burada da göstermiyoruz. */}
               </div>
             )}
           </section>
