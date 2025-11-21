@@ -10,8 +10,8 @@ export interface DeviceModelOption {
 
 export interface DeviceModelPriceRow {
   id: string;
+  org_id: string;
   model: string;
-  brand?: string | null;
   effective_from: string; // date
   purchase_cost: number;
 }
@@ -22,11 +22,11 @@ export interface ReferenceOption {
   id: string;
   name: string;
   scheme: ReferenceScheme;
+  // Bunlar şimdilik DB'den gelmeyecek, ileride kullanmak üzere opsiyonel:
   default_percent?: number | null;
   default_fixed?: number | null;
 }
 
-// aşağısı UI ve hesap tipleri (önceki mesajdakiyle aynı)
 export interface AccessoryRow {
   id: string;
   name: string;
@@ -36,29 +36,42 @@ export interface AccessoryRow {
 
 export interface ProfitCalcInputs {
   mode: ProfitCalcMode;
+
+  // Device + date
   selectedModel: string;
-  asOfDate: string;
+  asOfDate: string; // YYYY-MM-DD
+
+  // Reference
   selectedReferenceId: string | null;
   referenceScheme: ReferenceScheme;
-  referencePercent: number;
-  referenceFixed: number;
-  taxRate: number;
+  referencePercent: number; // 0.10 = %10
+  referenceFixed: number;   // TL
+
+  // Tax
+  taxRate: number; // 0.15 = %15
+
+  // Accessories
   accessories: AccessoryRow[];
-  salePrice: number | null;
-  targetOnCostPercent: number;
-  targetOnRevenuePercent: number;
+
+  // Sale/targets
+  salePrice: number | null;       // S, when mode === 'price'
+  targetOnCostPercent: number;    // m_c (1.0 = %100)
+  targetOnRevenuePercent: number; // m (0.20 = %20)
 }
 
 export interface ProfitCalcResult {
   valid: boolean;
   error?: string;
-  salePrice: number;
-  deviceCost: number;
-  accessoriesCost: number;
-  totalCost: number;
-  referenceCommission: number;
-  taxAmount: number;
-  netProfit: number;
-  profitOverCost: number;
-  profitOverRevenue: number;
+
+  salePrice: number;        // S
+  deviceCost: number;       // C
+  accessoriesCost: number;  // Ac
+  totalCost: number;        // C_eff = C + Ac
+
+  referenceCommission: number; // R
+  taxAmount: number;           // T
+  netProfit: number;           // K
+
+  profitOverCost: number;    // K / C_eff
+  profitOverRevenue: number; // K / S
 }
