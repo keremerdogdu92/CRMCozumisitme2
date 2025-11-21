@@ -19,7 +19,8 @@ const REFERENCES_TABLE = 'references'; // Şu an sadece isim + id çekiyoruz.
  */
 export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
   const { data, error } = await supabaseClient
-    .from<DeviceModelPriceRow>(DEVICE_MODEL_PRICES_TABLE)
+    // NOT: generic yok, şema zaten supabaseClient seviyesinde tanımlı
+    .from(DEVICE_MODEL_PRICES_TABLE)
     .select('model, brand')
     .order('model', { ascending: true });
 
@@ -31,14 +32,13 @@ export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
   const seen = new Set<string>();
   const result: DeviceModelOption[] = [];
 
-  for (const row of data ?? []) {
+  for (const row of (data ?? []) as any[]) {
     if (!row.model) continue;
     if (seen.has(row.model)) continue;
     seen.add(row.model);
     result.push({
       model: row.model,
-      // brand schema.sql'de optional, bu yüzden any cast:
-      brand: (row as any).brand ?? null,
+      brand: row.brand ?? null,
     });
   }
 
@@ -59,7 +59,7 @@ export async function fetchEffectiveDeviceCost(
   if (!model || !asOfDate) return null;
 
   const { data, error } = await supabaseClient
-    .from<DeviceModelPriceRow>(DEVICE_MODEL_PRICES_TABLE)
+    .from(DEVICE_MODEL_PRICES_TABLE)
     .select('id, org_id, model, effective_from, purchase_cost')
     .eq('model', model)
     .lte('effective_from', asOfDate)
@@ -75,7 +75,8 @@ export async function fetchEffectiveDeviceCost(
     return null;
   }
 
-  return Number(data[0].purchase_cost);
+  const row = (data as any[])[0] as DeviceModelPriceRow;
+  return Number(row.purchase_cost);
 }
 
 /**
@@ -97,8 +98,8 @@ export async function fetchReferenceOptions(): Promise<ReferenceOption[]> {
   return (data ?? []).map((row: any) => ({
     id: row.id,
     name: row.full_name ?? '',
-    scheme: null,          // varsayılan: ayarlı değil
-    default_percent: null, // şimdilik DB'den gelmiyor
-    default_fixed: null,   // şimdilik DB'den gelmiyor
+    scheme: null,
+    default_percent: null,
+    default_fixed: null,
   }));
 }
