@@ -156,18 +156,20 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
   }
 
   // 2) Profile → org_id
+  // Use maybeSingle() to avoid "Cannot coerce the result to a single JSON object"
+  // if there are duplicate profile rows for the same user id.
   const { data: profile, error: profileError } = await supabaseClient
     .from('profiles')
     .select('org_id')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   if (profileError) {
     console.error('Failed to load profile for org_id (TRIAL_STEP_PROFILE):', profileError);
     throw new Error('TRIAL_STEP_PROFILE: ' + profileError.message);
   }
 
-  if (!profile?.org_id) {
+  if (!profile || !profile.org_id) {
     console.error('Profile org_id is missing (TRIAL_STEP_NO_ORG)', profile);
     throw new Error('TRIAL_STEP_NO_ORG: Profile org_id is missing');
   }
