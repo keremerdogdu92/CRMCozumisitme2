@@ -17,6 +17,9 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const PatientsPage = lazy(() => import('./pages/PatientsPage'));
 const TrialsPage = lazy(() => import('./pages/TrialsPage'));
 const ReferencesPage = lazy(() => import('./pages/ReferencesPage'));
+const ProfitCalculatorPage = lazy(
+  () => import('./pages/ProfitCalculatorPage'),
+);
 
 /**
  * ProtectedLayout:
@@ -123,12 +126,7 @@ const router = createBrowserRouter([
       },
       {
         path: 'profit-calculator',
-        element: (
-          <PlaceholderPage
-            title="Kar Hesaplayıcı"
-            description="Kar hesaplayıcı yakında eklenecek."
-          />
-        ),
+        element: <ProfitCalculatorPage />,
       },
     ],
   },
