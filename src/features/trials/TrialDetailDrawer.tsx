@@ -9,6 +9,7 @@ import {
   fetchTrialDevicesByTrialId,
   TRIAL_DEVICES_BY_TRIAL_QUERY_KEY,
 } from './api';
+import { openTrialOfferPrint } from './printTrialOffer';
 
 type TrialDetailDrawerProps = {
   trial: TrialRow | null;
@@ -34,7 +35,7 @@ function formatPrice(amount: number | null | undefined): string {
 export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<TrialTabId>('summary');
 
-  // Hooks her zaman aynı sırada çalışsın diye trialId'yi yukarıda hesaplıyoruz
+  // Stabil key için trialId'yi yukarıda hesaplıyoruz
   const trialId = trial?.id ?? null;
 
   const {
@@ -42,7 +43,6 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
     isLoading: isDevicesLoading,
     isError: isDevicesError,
   } = useQuery({
-    // trialId null bile olsa hook çağrılmış olur, sadece enabled false olduğu için sorgu çalışmaz
     queryKey: TRIAL_DEVICES_BY_TRIAL_QUERY_KEY(trialId ?? 'none'),
     queryFn: () => fetchTrialDevicesByTrialId(trialId as string),
     enabled: !!trialId && open,
@@ -58,10 +58,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
     return null;
   }
 
-  const totalQuoted = (devices as TrialDeviceRow[]).reduce(
-    (sum, d) => sum + (Number(d.quote_price) || 0),
-    0,
-  );
+  const typedDevices = devices as TrialDeviceRow[];
 
   const tabs: { id: TrialTabId; label: string }[] = [
     { id: 'summary', label: 'Özet' },
@@ -70,276 +67,8 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
   ];
 
   const handlePrintOffer = () => {
-    const printWindow = window.open('', '_blank', 'width=800,height=1000');
-    if (!printWindow) return;
-
-    const deviceRowsHtml = (devices as TrialDeviceRow[])
-      .map((d, index) => {
-        return `
-          <tr>
-            <td>${index + 1}</td>
-            <td>${d.brand ?? ''}</td>
-            <td>${d.model ?? ''}</td>
-            <td>${d.side ?? ''}</td>
-            <td style="text-align:right;">${formatPrice(d.quote_price)}</td>
-          </tr>
-        `;
-      })
-      .join('');
-
-    const html = `
-<!doctype html>
-<html lang="tr">
-<head>
-  <meta charset="utf-8" />
-  <title>İşitme Cihazı Teklifi - ${trial.full_name ?? ''}</title>
-  <style>
-    @page { size: A4; margin: 20mm; }
-    * {
-      box-sizing: border-box;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      font-size: 12px;
-      color: #111827;
-      margin: 0;
-      padding: 0;
-      position: relative;
-    }
-    .watermark {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) rotate(-30deg);
-      font-size: 72px;
-      font-weight: 700;
-      color: rgba(148, 163, 184, 0.15);
-      pointer-events: none;
-      z-index: 0;
-      text-align: center;
-      white-space: nowrap;
-    }
-    .page {
-      padding: 0;
-      position: relative;
-      z-index: 1;
-    }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-    }
-    .company {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .logo-box {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      background: #2563eb;
-      color: #ffffff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      font-size: 14px;
-    }
-    .company-name {
-      font-size: 13px;
-      font-weight: 600;
-    }
-    .company-subtitle {
-      font-size: 11px;
-      color: #6b7280;
-    }
-    .title-block {
-      text-align: right;
-    }
-    .title {
-      font-size: 18px;
-      font-weight: 600;
-    }
-    .subtitle {
-      font-size: 11px;
-      color: #6b7280;
-      margin-top: 2px;
-    }
-    .section-title {
-      font-size: 12px;
-      font-weight: 600;
-      margin-top: 16px;
-      margin-bottom: 4px;
-    }
-    .info-grid {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 8px;
-    }
-    .info-grid td {
-      padding: 3px 0;
-      font-size: 11px;
-    }
-    .info-label {
-      color: #6b7280;
-      width: 30%;
-    }
-    .info-value {
-      font-weight: 500;
-    }
-    table.offer-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 8px;
-      font-size: 11px;
-    }
-    table.offer-table th,
-    table.offer-table td {
-      border: 1px solid #e5e7eb;
-      padding: 6px 8px;
-    }
-    table.offer-table th {
-      background: #f3f4f6;
-      text-align: left;
-    }
-    .notes {
-      margin-top: 16px;
-      font-size: 11px;
-    }
-    .notes-box {
-      border: 1px solid #e5e7eb;
-      min-height: 80px;
-      padding: 6px 8px;
-      margin-top: 4px;
-    }
-    .footer {
-      margin-top: 24px;
-      border-top: 1px solid #e5e7eb;
-      padding-top: 8px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 10px;
-      color: #374151;
-    }
-    .footer-left {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .footer-name {
-      font-weight: 600;
-      font-size: 11px;
-    }
-    .footer-meta {
-      font-size: 10px;
-      color: #6b7280;
-    }
-    .footer-right {
-      text-align: right;
-      line-height: 1.4;
-    }
-  </style>
-</head>
-<body>
-  <div class="watermark">Çözüm İşitme Merkezi</div>
-  <div class="page">
-    <div class="header">
-      <div class="company">
-        <div class="logo-box">Çİ</div>
-        <div>
-          <div class="company-name">Çözüm İşitme Merkezi</div>
-          <div class="company-subtitle">İşitme Cihazları ve İşitme Sağlığı</div>
-        </div>
-      </div>
-      <div class="title-block">
-        <div class="title">İşitme Cihazı Teklifi</div>
-        <div class="subtitle">
-          Tarih: ${new Date().toLocaleDateString('tr-TR')}
-        </div>
-      </div>
-    </div>
-
-    <div class="section-title">Hasta Bilgileri</div>
-    <table class="info-grid">
-      <tr>
-        <td class="info-label">Ad Soyad</td>
-        <td class="info-value">${trial.full_name ?? '-'}</td>
-      </tr>
-      <tr>
-        <td class="info-label">Telefon</td>
-        <td class="info-value">${trial.phone ?? '-'}</td>
-      </tr>
-      <tr>
-        <td class="info-label">İlk Görüşme</td>
-        <td class="info-value">${
-          trial.first_meet_at
-            ? new Date(trial.first_meet_at).toLocaleString('tr-TR')
-            : '-'
-        }</td>
-      </tr>
-      <tr>
-        <td class="info-label">Sonraki Randevu</td>
-        <td class="info-value">${
-          trial.next_meet_at
-            ? new Date(trial.next_meet_at).toLocaleString('tr-TR')
-            : '-'
-        }</td>
-      </tr>
-    </table>
-
-    <div class="section-title">Teklif Edilen Cihazlar</div>
-    <table class="offer-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Marka</th>
-          <th>Model</th>
-          <th>Kulak</th>
-          <th>Toplam Teklif</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${deviceRowsHtml || '<tr><td colspan="5">Kayıtlı cihaz satırı bulunmuyor.</td></tr>'}
-      </tbody>
-    </table>
-
-    <div class="notes">
-      Notlar:
-      <div class="notes-box">
-        <!-- Bu alan el ile doldurulabilir -->
-      </div>
-    </div>
-
-    <div class="footer">
-      <div class="footer-left">
-        <div class="logo-box">Çİ</div>
-        <div>
-          <div class="footer-name">Çözüm İşitme Merkezi</div>
-          <div class="footer-meta">Yetkili İşitme Cihazı Satış ve Uygulama Merkezi</div>
-        </div>
-      </div>
-      <div class="footer-right">
-        <div>Telefon: 0 (xxx) xxx xx xx</div>
-        <div>Adres: Adres bilgisi buraya gelecek</div>
-        <div>Web: www.ornek-site.com</div>
-      </div>
-    </div>
-  </div>
-  <script>
-    window.onload = function () {
-      window.focus();
-      window.print();
-    };
-  </script>
-</body>
-</html>
-`;
-
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
+    if (typedDevices.length === 0) return;
+    openTrialOfferPrint(trial, typedDevices);
   };
 
   const content = (
@@ -371,7 +100,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
           <button
             type="button"
             onClick={handlePrintOffer}
-            disabled={devices.length === 0}
+            disabled={typedDevices.length === 0}
             className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Teklif Yazdır
@@ -437,13 +166,13 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
               </p>
             )}
 
-            {!isDevicesLoading && !isDevicesError && devices.length === 0 && (
+            {!isDevicesLoading && !isDevicesError && typedDevices.length === 0 && (
               <p className="text-xs text-slate-500">
                 Bu deneme için kayıtlı cihaz satırı bulunmuyor.
               </p>
             )}
 
-            {!isDevicesLoading && !isDevicesError && devices.length > 0 && (
+            {!isDevicesLoading && !isDevicesError && typedDevices.length > 0 && (
               <div className="space-y-2">
                 <table className="min-w-full border border-slate-200 text-[11px]">
                   <thead className="bg-slate-50">
@@ -461,12 +190,12 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
                         Kulak
                       </th>
                       <th className="border-b border-slate-200 px-2 py-1 text-right font-medium text-slate-600">
-                        Toplam Teklif
+                        Teklif (Satır)
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {devices.map((d, index) => (
+                    {typedDevices.map((d, index) => (
                       <tr key={d.id}>
                         <td className="border-b border-slate-100 px-2 py-1">
                           {index + 1}
@@ -487,10 +216,9 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
                     ))}
                   </tbody>
                 </table>
-
-                <div className="flex justify-end text-[11px] font-semibold text-slate-700">
-                  Toplam teklif: {formatPrice(totalQuoted)}
-                </div>
+                {/* Toplam teklif satırı bilinçli olarak kaldırıldı; hasta genelde
+                    bu satırlardan yalnızca birini seçeceği için kafa karışıklığı
+                    yaratmaması adına gösterilmiyor. */}
               </div>
             )}
           </section>
