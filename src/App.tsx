@@ -10,9 +10,8 @@ import { AppProviders } from './providers/AppProviders';
 import { AppShell } from './components/layout/AppShell';
 import { LoadingScreen } from './components/status/LoadingScreen';
 import { supabaseClient } from './utils/supabaseClient';
+
 const MeetingsPage = lazy(() => import('./pages/MeetingsPage'));
-
-
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -106,11 +105,7 @@ const router = createBrowserRouter([
       },
       {
         path: 'meetings',
-  element: <MeetingsPage 
-            title="Görüşmeler"
-            description="Görüşme merkezi."
-          />
-        ),
+        element: <MeetingsPage />,
       },
       {
         path: 'references',
