@@ -15,11 +15,16 @@ const EMPTY_FORM: NewMeetingForm = {
 
 export function MeetingNewFormCard() {
   const [form, setForm] = useState<NewMeetingForm>(EMPTY_FORM);
-  const mutation = useCreateMeetingMutation();
+  const {
+    mutateAsync,
+    isPending,
+    isError,
+    error,
+  } = useCreateMeetingMutation();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    await mutation.mutateAsync(form);
+    await mutateAsync(form);
     setForm(EMPTY_FORM);
   };
 
@@ -109,19 +114,19 @@ export function MeetingNewFormCard() {
           />
         </div>
 
-        {mutation.isError && (
+        {isError && (
           <p className="text-xs text-red-600">
             Kayıt sırasında bir hata oluştu:{' '}
-            {(mutation.error as Error)?.message ?? 'Bilinmeyen hata'}
+            {(error as Error)?.message ?? 'Bilinmeyen hata'}
           </p>
         )}
 
         <button
           type="submit"
-          disabled={mutation.isLoading}
+          disabled={isPending}
           className="inline-flex items-center rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
         >
-          {mutation.isLoading ? 'Kaydediliyor...' : 'Kaydet'}
+          {isPending ? 'Kaydediliyor...' : 'Kaydet'}
         </button>
       </form>
     </div>
