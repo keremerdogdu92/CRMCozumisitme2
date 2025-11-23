@@ -2,7 +2,11 @@
 // Supabase API helpers and React Query keys for the Patients feature.
 
 import { supabaseClient } from '../../utils/supabaseClient';
-import type { NewPatientForm, PatientRow, PatientSgkUpdateInput } from './types';
+import type {
+  NewPatientForm,
+  PatientRow,
+  PatientSgkUpdateInput,
+} from './types';
 
 export const PATIENTS_QUERY_KEY = ['patients'] as const;
 
@@ -129,4 +133,46 @@ export async function updatePatientSgkFields(
     console.error('Failed to update patient SGK fields (STEP_UPDATE_SGK):', error);
     throw new Error('STEP_UPDATE_SGK: ' + error.message);
   }
+}
+
+/**
+ * Payments fetched per patient from meeting_payments.
+ */
+
+export type PatientPaymentRow = {
+  id: string;
+  amount: number;
+  method: string;
+  note: string | null;
+  created_at: string;
+};
+
+export const PATIENT_PAYMENTS_QUERY_KEY = (patientId: string) =>
+  ['patient-payments', patientId] as const;
+
+export async function fetchPatientPaymentsByPatientId(
+  patientId: string,
+): Promise<PatientPaymentRow[]> {
+  if (!patientId) {
+    return [];
+  }
+
+  const { data, error } = await supabaseClient
+    .from('meeting_payments')
+    .select('id, amount, method, note, created_at')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Supabase patient payments fetch error:', error);
+    throw error;
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    amount: Number(row.amount),
+    method: (row.method as string) ?? 'senet',
+    note: (row.note as string | null) ?? null,
+    created_at: row.created_at as string,
+  }));
 }
