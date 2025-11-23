@@ -14,6 +14,16 @@ export interface CurrentProfile {
 }
 
 /**
+ * Map the raw role value from the database into a safe UserRole union.
+ */
+function mapRole(rawRole: unknown): UserRole {
+  if (rawRole === 'admin' || rawRole === 'staff') {
+    return rawRole;
+  }
+  return 'unknown';
+}
+
+/**
  * Fetch the current authenticated user's profile row from `profiles`.
  * Assumes there is exactly one row per user id.
  */
@@ -30,9 +40,12 @@ async function fetchCurrentProfile(): Promise<CurrentProfile | null> {
     return null;
   }
 
+  // NOTE:
+  // Current `profiles` schema has: id, org_id, role, created_at
+  // There is no `full_name` column, so we only select existing fields.
   const { data, error } = await supabaseClient
     .from('profiles')
-    .select('id, org_id, role, full_name')
+    .select('id, org_id, role')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -48,8 +61,9 @@ async function fetchCurrentProfile(): Promise<CurrentProfile | null> {
   return {
     id: data.id as string,
     org_id: (data.org_id as string | null) ?? null,
-    role: (data.role as UserRole | null) ?? 'unknown',
-    full_name: (data.full_name as string | null) ?? null,
+    role: mapRole(data.role),
+    // Profiles table currently does not store a full_name field.
+    full_name: null,
   };
 }
 
