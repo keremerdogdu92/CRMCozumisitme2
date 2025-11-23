@@ -1,6 +1,8 @@
 // src/features/patients/types.ts
 // Shared types for the Patients feature.
 
+export type PatientPaymentMethod = 'Tim' | 'Sivantos' | 'Kredi_Kartı' | 'Nakit' | 'Senet';
+
 export type PatientRow = {
   id: string;
   full_name: string;
@@ -10,7 +12,16 @@ export type PatientRow = {
   sgk_flag: boolean | null;
   sgk_prescription_received: boolean | null;
   sgk_recorded_to_system: boolean | null;
+
+  // Payment summary fields on patients table
+  payment_method: PatientPaymentMethod | null;
+  card_sale_total: number | null;
+  card_fee_rate: number | null;
+  card_fee_amount: number | null;
 };
+
+// Form-level payment method value (boş = seçilmedi)
+export type PatientPaymentMethodFormValue = '' | PatientPaymentMethod;
 
 export type NewPatientForm = {
   fullName: string;
@@ -18,6 +29,26 @@ export type NewPatientForm = {
   sgkFlag: boolean;
   sgkPrescriptionReceived: boolean;
   sgkRecordedToSystem: boolean;
+
+  /**
+   * Payment method at registration:
+   * - ''           → henüz seçilmedi
+   * - 'Tim'        → Tedarikçi Tim
+   * - 'Sivantos'   → Tedarikçi Sivantos
+   * - 'Kredi_Kartı'→ POS / kredi kartı
+   * - 'Nakit'      → nakit satış
+   * - 'Senet'      → senetli satış (ayrıntılı plan patient_installment_plans tablosunda)
+   */
+  paymentMethod: PatientPaymentMethodFormValue;
+
+  /**
+   * Only used when paymentMethod === 'Kredi_Kartı'
+   * - cardSaleTotal: kartla tahsil edilen toplam satış tutarı
+   * - cardFeeRate: % komisyon oranı (3.5 gibi)
+   * APİ tarafında bunlardan card_fee_amount hesaplanır.
+   */
+  cardSaleTotal: string;
+  cardFeeRate: string;
 };
 
 export type PatientSgkUpdateInput = {
