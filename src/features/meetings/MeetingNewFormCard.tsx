@@ -1,9 +1,13 @@
 // src/features/meetings/MeetingNewFormCard.tsx
 // Inline card with form to create a new meeting.
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useCreateMeetingMutation } from './api';
 import type { MeetingType, NewMeetingForm } from './types';
+import { useCurrentProfile } from '../auth/useCurrentProfile';
+import { searchPatientsByName } from '../patients/api';
+import { searchTrialsByName } from '../trials/api';
 
 const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string }[] = [
   { value: 'patient', label: 'Hasta' },
@@ -24,16 +28,141 @@ const EMPTY_FORM: NewMeetingForm = {
   satisfaction10: '',
 };
 
+type SubjectOption = {
+  id: string;
+  name: string;
+};
+
+function useSubjectSearch(meetingType: MeetingType, term: string) {
+  const enabledTypes: MeetingType[] = ['patient', 'trial'];
+
+  return useQuery<SubjectOption[]>({
+    queryKey: ['meeting-subject-search', meetingType, term],
+    enabled:
+      term.trim().length >= 2 && enabledTypes.includes(meetingType),
+    queryFn: async () => {
+      const q = term.trim();
+      if (!q) return [];
+
+      if (meetingType === 'patient') {
+        const rows = await searchPatientsByName(q);
+        return rows.map((r) => ({ id: r.id, name: r.full_name }));
+      }
+
+      if (meetingType === 'trial') {
+        const rows = await searchTrialsByName(q);
+        return rows.map((r) => ({ id: r.id, name: r.full_name }));
+      }
+
+      // For 'reference' we keep manual entry for now
+      return [];
+    },
+  });
+}
+
+interface SubjectSearchFieldProps {
+  meetingType: MeetingType;
+  selectedName: string;
+  onSelect: (id: string, name: string) => void;
+}
+
+function SubjectSearchField({
+  meetingType,
+  selectedName,
+  onSelect,
+}: SubjectSearchFieldProps) {
+  const [inputValue, setInputValue] = useState(selectedName ?? '');
+  const [touched, setTouched] = useState(false);
+
+  const { data: options = [], isFetching } = useSubjectSearch(
+    meetingType,
+    inputValue,
+  );
+
+  // Sync external selectedName → local input when form resets
+  useEffect(() => {
+    if (!touched) {
+      setInputValue(selectedName ?? '');
+    }
+  }, [selectedName, touched]);
+
+  const showDropdown =
+    inputValue.trim().length >= 2 && options.length > 0;
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+        value={inputValue}
+        onChange={(e) => {
+          setTouched(true);
+          setInputValue(e.target.value);
+        }}
+        placeholder="İsimle ara (en az 2 harf)..."
+      />
+      <p className="mt-1 text-[11px] text-slate-500">
+        {isFetching
+          ? 'Kişiler aranıyor...'
+          : 'Sonuçlardan birini seçtiğinizde görüşme bu kişiyle ilişkilendirilecek.'}
+      </p>
+
+      {showDropdown && (
+        <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md border border-slate-200 bg-white text-xs shadow-lg">
+          {options.map((opt) => (
+            <li
+              key={opt.id}
+              className="cursor-pointer px-2 py-1 hover:bg-slate-100"
+              onClick={() => {
+                onSelect(opt.id, opt.name);
+                setInputValue(opt.name);
+                setTouched(false);
+              }}
+            >
+              {opt.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function MeetingNewFormCard() {
   const [form, setForm] = useState<NewMeetingForm>(EMPTY_FORM);
   const { mutateAsync, isPending, isError, error } =
     useCreateMeetingMutation();
+
+  const { data: profile } = useCurrentProfile();
+  const isAdmin = profile?.role === 'admin';
+
+  // Personel için "reference" tipini UI'dan gizle
+  const visibleTypeOptions = isAdmin
+    ? MEETING_TYPE_OPTIONS
+    : MEETING_TYPE_OPTIONS.filter((opt) => opt.value !== 'reference');
+
+  // Eğer kullanıcı personel ise ama form state'de önceki oturumdan "reference" kalmışsa, düzelt
+  useEffect(() => {
+    if (!isAdmin && form.meetingType === 'reference') {
+      setForm((f) => ({ ...f, meetingType: 'patient' }));
+    }
+  }, [isAdmin, form.meetingType]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     await mutateAsync(form);
     setForm(EMPTY_FORM);
   };
+
+  const handleSubjectSelect = (id: string, name: string) => {
+    setForm((f) => ({
+      ...f,
+      subjectId: id,
+      subjectName: name,
+    }));
+  };
+
+  const isReferenceType = form.meetingType === 'reference';
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -58,18 +187,21 @@ export function MeetingNewFormCard() {
                 setForm((f) => ({
                   ...f,
                   meetingType: e.target.value as MeetingType,
+                  // Tip değişince önceki seçimleri sıfırlamak daha temiz
+                  subjectId: null,
+                  subjectName: '',
                 }))
               }
             >
-              {MEETING_TYPE_OPTIONS.map((opt) => (
+              {visibleTypeOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
               ))}
             </select>
             <p className="mt-1 text-[11px] text-slate-500">
-              Referans tipindeki görüşmeler ileride sadece yönetici için
-              görünür olacak.
+              Referans tipindeki görüşmeler, kural gereği sadece yönetici
+              kullanıcılar tarafından görülebilir.
             </p>
           </div>
 
@@ -77,19 +209,30 @@ export function MeetingNewFormCard() {
             <label className="mb-1 block text-xs font-medium text-slate-700">
               Görüşme Yapılan Kişi
             </label>
-            <input
-              type="text"
-              className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-              value={form.subjectName}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, subjectName: e.target.value }))
-              }
-              placeholder="Örn: Ali Yılmaz (hasta, deneme, referans)"
-            />
-            <p className="mt-1 text-[11px] text-slate-500">
-              v2.1&apos;de bu alan; hasta / deneme / referans listelerinden
-              seçim yapılabilen bir arama alanına dönüşecek.
-            </p>
+
+            {isReferenceType ? (
+              <>
+                <input
+                  type="text"
+                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                  value={form.subjectName}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, subjectName: e.target.value }))
+                  }
+                  placeholder="Örn: Ali Yılmaz (referans adı)"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Referanslar için şimdilik serbest metin kullanılıyor.
+                  İleride referans kartlarıyla da bağlayacağız.
+                </p>
+              </>
+            ) : (
+              <SubjectSearchField
+                meetingType={form.meetingType}
+                selectedName={form.subjectName}
+                onSelect={handleSubjectSelect}
+              />
+            )}
           </div>
         </div>
 
