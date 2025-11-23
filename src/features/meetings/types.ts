@@ -33,4 +33,14 @@ export interface NewMeetingForm {
   at: string;                   // yyyy-MM-dd (HTML date input)
   next_at: string;              // yyyy-MM-dd (HTML date input)
   satisfaction10: string;       // kept as string in form, parsed on submit
+
+  /**
+   * Payment section (currently only used when meetingType === 'patient'):
+   * - hasPayment: whether a senet payment was taken in this meeting
+   * - paymentAmount: amount entered by the user (string; will be parsed)
+   * - paymentNote: optional note such as "3. taksit"
+   */
+  hasPayment: boolean;
+  paymentAmount: string;
+  paymentNote: string;
 }
