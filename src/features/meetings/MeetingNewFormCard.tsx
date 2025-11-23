@@ -3,9 +3,20 @@
 
 import { useState, FormEvent } from 'react';
 import { useCreateMeetingMutation } from './api';
-import type { NewMeetingForm } from './types';
+import type { MeetingType, NewMeetingForm } from './types';
 
+const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string }[] = [
+  { value: 'patient', label: 'Hasta' },
+  { value: 'trial', label: 'Deneme hastası' },
+  { value: 'reference', label: 'Referans' },
+];
+
+// v2 form initial state
 const EMPTY_FORM: NewMeetingForm = {
+  meetingType: 'patient',
+  subjectId: null,
+  subjectName: '',
+
   subject: '',
   note: '',
   at: '',
@@ -15,12 +26,8 @@ const EMPTY_FORM: NewMeetingForm = {
 
 export function MeetingNewFormCard() {
   const [form, setForm] = useState<NewMeetingForm>(EMPTY_FORM);
-  const {
-    mutateAsync,
-    isPending,
-    isError,
-    error,
-  } = useCreateMeetingMutation();
+  const { mutateAsync, isPending, isError, error } =
+    useCreateMeetingMutation();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -34,10 +41,59 @@ export function MeetingNewFormCard() {
         Yeni Görüşme
       </h2>
       <p className="mb-4 text-xs text-slate-500">
-        Kısa bir başlık, tarih ve not ile hızlıca görüşme kaydı ekleyin.
+        Görüşme tipini, kişiyi, tarihleri ve notu girerek kayıt oluşturun.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-3">
+        {/* Meeting type + person */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-700">
+              Görüşme Tipi
+            </label>
+            <select
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+              value={form.meetingType}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  meetingType: e.target.value as MeetingType,
+                }))
+              }
+            >
+              {MEETING_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Referans tipindeki görüşmeler ileride sadece yönetici için
+              görünür olacak.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-700">
+              Görüşme Yapılan Kişi
+            </label>
+            <input
+              type="text"
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+              value={form.subjectName}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, subjectName: e.target.value }))
+              }
+              placeholder="Örn: Ali Yılmaz (hasta, deneme, referans)"
+            />
+            <p className="mt-1 text-[11px] text-slate-500">
+              v2.1&apos;de bu alan; hasta / deneme / referans listelerinden
+              seçim yapılabilen bir arama alanına dönüşecek.
+            </p>
+          </div>
+        </div>
+
+        {/* Title */}
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-700">
             Başlık
@@ -53,6 +109,7 @@ export function MeetingNewFormCard() {
           />
         </div>
 
+        {/* Dates */}
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-700">
@@ -62,7 +119,9 @@ export function MeetingNewFormCard() {
               type="date"
               className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
               value={form.at}
-              onChange={(e) => setForm((f) => ({ ...f, at: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, at: e.target.value }))
+              }
             />
           </div>
           <div>
@@ -80,6 +139,7 @@ export function MeetingNewFormCard() {
           </div>
         </div>
 
+        {/* Satisfaction */}
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-700">
@@ -99,6 +159,7 @@ export function MeetingNewFormCard() {
           </div>
         </div>
 
+        {/* Note */}
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-700">
             Not
