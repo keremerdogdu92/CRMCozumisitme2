@@ -105,17 +105,22 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
     : null;
 
   // Ödeme (sadece hasta tipi meeting için anlamlı)
-  const paymentAmountNumber = (() => {
+  let paymentAmountNumber: number | null = null;
+  if (input.hasPayment) {
     try {
-      return parseAmountString(input.paymentAmount);
+      paymentAmountNumber = parseAmountString(input.paymentAmount);
+      if (paymentAmountNumber === null) {
+        throw new Error(
+          'MEET_STEP_PAYMENT_AMOUNT_REQUIRED: Ödeme tutarı boş bırakılamaz.',
+        );
+      }
     } catch (err) {
-      // Mesajı yukarı fırlatıyoruz ki UI'da gösterilsin
       if (err instanceof Error) {
         throw err;
       }
       throw new Error('MEET_STEP_PAYMENT_AMOUNT_INVALID');
     }
-  })();
+  }
 
   const shouldInsertPayment =
     input.hasPayment &&
