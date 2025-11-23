@@ -2,7 +2,7 @@
 // Inline "Yeni Hasta" form card using InlineCreateCard and domain-specific fields.
 
 import { useState, FormEvent } from 'react';
-import type { NewPatientForm } from './types';
+import type { NewPatientForm, PatientPaymentMethodFormValue } from './types';
 import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
 
 type NewPatientFormCardProps = {
@@ -12,6 +12,15 @@ type NewPatientFormCardProps = {
   isSubmitting: boolean;
   errorMessage?: string;
 };
+
+const PAYMENT_METHOD_OPTIONS: { value: PatientPaymentMethodFormValue; label: string }[] = [
+  { value: '', label: 'Seçilmedi' },
+  { value: 'Tim', label: 'Tim' },
+  { value: 'Sivantos', label: 'Sivantos' },
+  { value: 'Kredi_Kartı', label: 'Kredi Kartı' },
+  { value: 'Nakit', label: 'Nakit' },
+  { value: 'Senet', label: 'Senet' },
+];
 
 export function NewPatientFormCard({
   open,
@@ -26,7 +35,12 @@ export function NewPatientFormCard({
     sgkFlag: true,
     sgkPrescriptionReceived: false,
     sgkRecordedToSystem: false,
+    paymentMethod: '',
+    cardSaleTotal: '',
+    cardFeeRate: '',
   });
+
+  const isCard = formState.paymentMethod === 'Kredi_Kartı';
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -42,23 +56,28 @@ export function NewPatientFormCard({
       sgkRecordedToSystem: formState.sgkFlag
         ? formState.sgkRecordedToSystem
         : false,
+      paymentMethod: formState.paymentMethod,
+      cardSaleTotal: formState.cardSaleTotal,
+      cardFeeRate: formState.cardFeeRate,
     });
 
-    // Form başarıyla gönderildiyse, reset işlemi üst seviye tarafından da yapılabilir;
-    // burada sadece optimistic reset bırakıyoruz.
+    // Form optimistic reset
     setFormState({
       fullName: '',
       phone: '',
       sgkFlag: true,
       sgkPrescriptionReceived: false,
       sgkRecordedToSystem: false,
+      paymentMethod: '',
+      cardSaleTotal: '',
+      cardFeeRate: '',
     });
   };
 
   return (
     <InlineCreateCard
       title="Yeni Hasta Ekle"
-      description="Yeni kayıt için kısa form. SGK alanları ana listede uyarıları tetikler."
+      description="Yeni kayıt için kısa form. SGK ve ödeme tipi bilgileri ana listede uyarıları tetikler."
       open={open}
       onToggle={onToggle}
       errorMessage={errorMessage}
@@ -67,6 +86,7 @@ export function NewPatientFormCard({
         className="grid gap-3 md:grid-cols-4 md:items-start"
         onSubmit={handleSubmit}
       >
+        {/* Ad Soyad */}
         <div className="md:col-span-2">
           <label className="mb-1 block text-xs font-medium text-slate-600">
             Ad Soyad
@@ -83,6 +103,7 @@ export function NewPatientFormCard({
           />
         </div>
 
+        {/* Telefon */}
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">
             Telefon
@@ -156,6 +177,87 @@ export function NewPatientFormCard({
               />
               <span>Sisteme işlendi mi?</span>
             </label>
+          </div>
+        </div>
+
+        {/* Ödeme tipi + kart detayı */}
+        <div className="md:col-span-4 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
+          <label className="mb-1 block text-xs font-medium text-slate-600">
+            Ödeme Şekli
+          </label>
+          <div className="grid gap-2 md:grid-cols-4 md:items-end">
+            <div className="md:col-span-1">
+              <select
+                className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                value={formState.paymentMethod}
+                onChange={(e) => {
+                  const value = e.target.value as PatientPaymentMethodFormValue;
+                  setFormState((s) => ({
+                    ...s,
+                    paymentMethod: value,
+                    // Kart dışına çıkınca kart alanlarını temizlemek daha güvenli
+                    cardSaleTotal: value === 'Kredi_Kartı' ? s.cardSaleTotal : '',
+                    cardFeeRate: value === 'Kredi_Kartı' ? s.cardFeeRate : '',
+                  }));
+                }}
+              >
+                {PAYMENT_METHOD_OPTIONS.map((opt) => (
+                  <option key={opt.value || 'none'} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Senet seçersen detaylı taksit planını hasta detayından
+                tanımlamaya devam edeceğiz.
+              </p>
+            </div>
+
+            {isCard && (
+              <>
+                <div className="md:col-span-1">
+                  <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                    Kart Satış Tutarı
+                  </label>
+                  <input
+                    type="text"
+                    value={formState.cardSaleTotal}
+                    onChange={(e) =>
+                      setFormState((s) => ({
+                        ...s,
+                        cardSaleTotal: e.target.value,
+                      }))
+                    }
+                    className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    placeholder="Örn. 80.000"
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                    Komisyon (%)
+                  </label>
+                  <input
+                    type="text"
+                    value={formState.cardFeeRate}
+                    onChange={(e) =>
+                      setFormState((s) => ({
+                        ...s,
+                        cardFeeRate: e.target.value,
+                      }))
+                    }
+                    className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    placeholder="Örn. 3.5"
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <p className="text-[11px] text-slate-500">
+                    Kartla yapılan satışlarda buradaki bilgilerden kart
+                    komisyon tutarı hesaplanır. Nakit / Tim / Sivantos /
+                    Senet seçeneklerinde bu alanlar kullanılmaz.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
