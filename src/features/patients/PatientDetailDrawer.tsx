@@ -61,8 +61,8 @@ function formatDateTime(value: string | null): string {
   }
 }
 
-function formatAmount(amount: number): string {
-  if (!Number.isFinite(amount)) return '-';
+function formatAmount(amount: number | null | undefined): string {
+  if (amount == null || !Number.isFinite(amount)) return '-';
   return (
     amount.toLocaleString('tr-TR', {
       minimumFractionDigits: 0,
@@ -78,6 +78,21 @@ function addMonths(dateStr: string, count: number): string {
     return d.toLocaleDateString('tr-TR');
   } catch {
     return '-';
+  }
+}
+
+function formatPaymentMethodLabel(method: string | null | undefined): string {
+  if (!method) return '-';
+  switch (method) {
+    case 'Kredi_Kartı':
+      return 'Kredi Kartı';
+    case 'Tim':
+    case 'Sivantos':
+    case 'Nakit':
+    case 'Senet':
+      return method;
+    default:
+      return method;
   }
 }
 
@@ -224,6 +239,8 @@ export function PatientDetailDrawer({
     nextDueDate = addMonths(p.first_due_date, paidInstallments);
   }
 
+  const isCardPayment = patient.payment_method === 'Kredi_Kartı';
+
   return (
     <SideDrawer
       open={open}
@@ -296,6 +313,39 @@ export function PatientDetailDrawer({
                     {formatDate(patient.last_visit_at)}
                   </span>
                 </div>
+
+                {/* Payment summary */}
+                <div className="flex justify-between gap-2">
+                  <span className="text-xs text-slate-500">
+                    Ödeme şekli
+                  </span>
+                  <span className="text-xs text-slate-900">
+                    {formatPaymentMethodLabel(patient.payment_method)}
+                  </span>
+                </div>
+
+                {isCardPayment && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-xs text-slate-500">
+                      Kart komisyonu
+                    </span>
+                    <span className="text-xs text-slate-900">
+                      {formatAmount(patient.card_fee_amount)}
+                      {patient.card_fee_rate != null && (
+                        <span className="ml-1 text-[11px] text-slate-500">
+                          ({patient.card_fee_rate.toString().replace('.', ',')}%
+                          {patient.card_sale_total != null && (
+                            <>
+                              {' '}
+                              · kart satış {formatAmount(patient.card_sale_total)}
+                            </>
+                          )}
+                          )
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )}
               </div>
             </section>
 
@@ -478,14 +528,14 @@ export function PatientDetailDrawer({
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 {isPlanSaveError && (
                   <p className="text-[11px] text-red-700">
-                    Plan kaydedilirken hata:{" "}
+                    Plan kaydedilirken hata:{' '}
                     {(planSaveError as Error)?.message ??
                       'Bilinmeyen hata'}
                   </p>
                 )}
                 {isPlanError && (
                   <p className="text-[11px] text-red-700">
-                    Plan yüklenirken hata:{" "}
+                    Plan yüklenirken hata:{' '}
                     {(planError as Error)?.message ??
                       'Bilinmeyen hata'}
                   </p>
@@ -575,7 +625,7 @@ export function PatientDetailDrawer({
                     <div className="flex justify-between gap-2">
                       <span>Ödenen taksit</span>
                       <span className="font-semibold">
-                        {paidInstallments} /{" "}
+                        {paidInstallments} /{' '}
                         {(plan as PatientInstallmentPlanRow)
                           .installment_count}
                       </span>
