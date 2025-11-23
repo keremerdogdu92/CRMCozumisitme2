@@ -40,3 +40,35 @@ export type PatientPaymentRow = {
   note: string | null;
   created_at: string;
 };
+
+/**
+ * Patient installment (senet) plan row.
+ * Backed by patient_installment_plans table.
+ */
+export type PatientInstallmentPlanRow = {
+  id: string;
+  org_id: string;
+  patient_id: string;
+  sale_total: number;
+  upfront_paid: number;
+  installment_count: number;
+  installment_amount: number;
+  first_due_date: string; // ISO date string
+  day_of_month: number;
+  status: 'active' | 'completed' | 'cancelled' | string;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * Input for creating/updating a senet plan for a patient.
+ * Values are string because they come from form fields.
+ */
+export type UpsertPatientInstallmentPlanInput = {
+  patientId: string;
+  saleTotal: string;
+  upfrontPaid: string;
+  installmentCount: string;
+  firstDueDate: string; // yyyy-MM-dd
+  dayOfMonth: string;   // "1"–"31"
+};
