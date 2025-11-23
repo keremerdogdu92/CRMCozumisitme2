@@ -10,32 +10,53 @@ import {
   createPatient,
   updatePatientSgkFields,
 } from '../features/patients/api';
-import type { NewPatientForm, PatientRow } from '../features/patients/types';
+import type {
+  NewPatientForm,
+  PatientRow,
+} from '../features/patients/types';
 import { PatientsTable } from '../features/patients/PatientsTable';
 import { NewPatientFormCard } from '../features/patients/NewPatientFormCard';
 import { PatientDetailDrawer } from '../features/patients/PatientDetailDrawer';
 
+type PatientDetailTabId =
+  | 'info'
+  | 'devices'
+  | 'meetings'
+  | 'payments'
+  | 'audiogram';
+
 export default function PatientsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [sgkFilter, setSgkFilter] = useState<'all' | 'sgk' | 'non-sgk'>('all');
+  const [sgkFilter, setSgkFilter] = useState<'all' | 'sgk' | 'non-sgk'>(
+    'all',
+  );
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [detailPatient, setDetailPatient] = useState<PatientRow | null>(null);
+  const [detailPatient, setDetailPatient] = useState<PatientRow | null>(
+    null,
+  );
+  const [detailInitialTab, setDetailInitialTab] =
+    useState<PatientDetailTabId>('info');
+  const [detailInitialShowPlan, setDetailInitialShowPlan] =
+    useState<boolean>(false);
 
-  const {
-    data,
-    isLoading,
-    isError,
-  } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: PATIENTS_QUERY_KEY,
     queryFn: fetchPatients,
   });
 
   const createMutation = useMutation({
     mutationFn: createPatient,
-    onSuccess: () => {
+    onSuccess: (createdPatient, variables) => {
       void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
       setShowCreateForm(false);
+
+      // Yeni hasta Senet ise: detayı otomatik aç, Ödemeler sekmesi + plan formu açık gelsin.
+      if (variables.paymentMethod === 'Senet' && createdPatient) {
+        setDetailPatient(createdPatient);
+        setDetailInitialTab('payments');
+        setDetailInitialShowPlan(true);
+      }
     },
   });
 
@@ -47,14 +68,18 @@ export default function PatientsPage() {
   });
 
   if (isLoading) {
-    return <div className="p-8 text-sm text-slate-500">Hastalar yükleniyor...</div>;
+    return (
+      <div className="p-8 text-sm text-slate-500">
+        Hastalar yükleniyor...
+      </div>
+    );
   }
 
   if (isError) {
     return (
       <div className="p-8 text-sm text-red-600">
-        Hasta verileri alınırken bir hata oluştu. Lütfen Supabase bağlantısını ve RLS
-        ayarlarını kontrol edin.
+        Hasta verileri alınırken bir hata oluştu. Lütfen Supabase
+        bağlantısını ve RLS ayarlarını kontrol edin.
       </div>
     );
   }
@@ -89,6 +114,8 @@ export default function PatientsPage() {
 
   const handleSelectPatient = (patient: PatientRow) => {
     setDetailPatient(patient);
+    setDetailInitialTab('info');
+    setDetailInitialShowPlan(false);
   };
 
   const handleCloseDrawer = () => {
@@ -113,7 +140,9 @@ export default function PatientsPage() {
             <select
               value={sgkFilter}
               onChange={(e) =>
-                setSgkFilter(e.target.value as 'all' | 'sgk' | 'non-sgk')
+                setSgkFilter(
+                  e.target.value as 'all' | 'sgk' | 'non-sgk',
+                )
               }
               className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
@@ -153,7 +182,10 @@ export default function PatientsPage() {
       />
 
       {/* Hasta listesi */}
-      <PatientsTable patients={filteredPatients} onSelectPatient={handleSelectPatient} />
+      <PatientsTable
+        patients={filteredPatients}
+        onSelectPatient={handleSelectPatient}
+      />
 
       {/* Hasta Detay çekmecesi */}
       {detailPatient && (
@@ -171,8 +203,11 @@ export default function PatientsPage() {
           }
           isSaving={sgkUpdateMutation.isPending}
           errorMsg={
-            (sgkUpdateMutation.error as Error | null | undefined)?.message ?? ''
+            (sgkUpdateMutation.error as Error | null | undefined)
+              ?.message ?? ''
           }
+          initialTab={detailInitialTab}
+          initialShowPlanForm={detailInitialShowPlan}
         />
       )}
     </div>
