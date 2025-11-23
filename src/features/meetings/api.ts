@@ -3,7 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
-import type { MeetingRow, NewMeetingForm } from './types';
+import type { MeetingRow, NewMeetingForm, MeetingType } from './types';
 
 export const MEETINGS_QUERY_KEY = ['meetings'] as const;
 
@@ -34,6 +34,29 @@ export async function fetchMeetings(): Promise<MeetingRow[]> {
   return (data ?? []) as MeetingRow[];
 }
 
+/**
+ * Normalize a money string like "1 250", "1.250", "1250,50" into a number.
+ * Returns null if empty. Throws if invalid or <= 0.
+ */
+function parseAmountString(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
+  const value = Number(normalized);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(
+      'MEET_STEP_PAYMENT_AMOUNT_INVALID: Geçerli bir ödeme tutarı girilmedi.',
+    );
+  }
+
+  // 2 ondalık basamağa yuvarlayalım
+  return Number(value.toFixed(2));
+}
+
 export async function createMeeting(input: NewMeetingForm): Promise<void> {
   // 1) Aktif kullanıcıyı al
   const { data: userData, error: userError } =
@@ -59,6 +82,7 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
       'Failed to load profile for org_id (MEET_STEP_PROFILE):',
       profileError,
     );
+    throw new Error('MEET_STEP_PROFILE: ' + profileError.message);
   }
 
   if (!profile?.org_id) {
@@ -80,25 +104,81 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
     ? new Date(input.next_at).toISOString()
     : null;
 
-  // 4) Insert – meeting_type ve subject_x alanlarını da gönder
-  const { error: insertError } = await supabaseClient.from('meetings').insert({
-    org_id: profile.org_id,
-    meeting_type: input.meetingType,
-    subject_id: input.subjectId,
-    subject_name: input.subjectName.trim() || null,
+  // Ödeme (sadece hasta tipi meeting için anlamlı)
+  const paymentAmountNumber = (() => {
+    try {
+      return parseAmountString(input.paymentAmount);
+    } catch (err) {
+      // Mesajı yukarı fırlatıyoruz ki UI'da gösterilsin
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error('MEET_STEP_PAYMENT_AMOUNT_INVALID');
+    }
+  })();
 
-    subject: input.subject.trim() || null,
-    note: input.note.trim() || null,
-    at: atIso,
-    next_at: nextAtIso,
-    satisfaction_10: satisfaction,
-    // created_by, profiles(id) ile aynı olduğu için direkt user.id
-    created_by: user.id,
-  });
+  const shouldInsertPayment =
+    input.hasPayment &&
+    paymentAmountNumber !== null &&
+    input.meetingType === 'patient' &&
+    !!input.subjectId;
+
+  // 4) Meeting insert – meeting_type ve subject_x alanlarını da gönder
+  const { data: insertedMeetings, error: insertError } = await supabaseClient
+    .from('meetings')
+    .insert({
+      org_id: profile.org_id,
+      meeting_type: input.meetingType as MeetingType,
+      subject_id: input.subjectId,
+      subject_name: input.subjectName.trim() || null,
+
+      subject: input.subject.trim() || null,
+      note: input.note.trim() || null,
+      at: atIso,
+      next_at: nextAtIso,
+      satisfaction_10: satisfaction,
+      // created_by, profiles(id) ile aynı olduğu için direkt user.id
+      created_by: user.id,
+    })
+    .select('id')
+    .limit(1);
 
   if (insertError) {
     console.error('Failed to insert meeting (MEET_STEP_INSERT):', insertError);
     throw new Error('MEET_STEP_INSERT: ' + insertError.message);
+  }
+
+  const meetingId = insertedMeetings?.[0]?.id as string | undefined;
+  if (!meetingId) {
+    console.error(
+      'Meeting insert did not return an id (MEET_STEP_INSERT_NO_ID)',
+      insertedMeetings,
+    );
+    throw new Error('MEET_STEP_INSERT_NO_ID: Meeting insert did not return an id');
+  }
+
+  // 5) Eğer hasta tipi meeting ve ödeme varsa, meeting_payments tablosuna da kayıt aç
+  if (shouldInsertPayment && paymentAmountNumber && input.subjectId) {
+    const { error: paymentError } = await supabaseClient
+      .from('meeting_payments')
+      .insert({
+        org_id: profile.org_id,
+        meeting_id: meetingId,
+        patient_id: input.subjectId,
+        amount: paymentAmountNumber,
+        method: 'senet',
+        note: input.paymentNote.trim() || null,
+      });
+
+    if (paymentError) {
+      console.error(
+        'Failed to insert meeting payment (MEET_STEP_PAYMENT_INSERT):',
+        paymentError,
+      );
+      throw new Error(
+        'MEET_STEP_PAYMENT_INSERT: ' + paymentError.message,
+      );
+    }
   }
 }
 
