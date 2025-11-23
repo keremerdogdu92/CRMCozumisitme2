@@ -2,13 +2,8 @@
 // Tabbed patient detail drawer using the shared SideDrawer shell.
 
 import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import type { PatientRow } from './types';
-import {
-  fetchPatientPaymentsByPatientId,
-  PATIENT_PAYMENTS_QUERY_KEY,
-  type PatientPaymentRow,
-} from './api';
+import type { PatientRow, PatientPaymentRow } from './types';
+import { usePatientPayments } from './api';
 import { SideDrawer } from '../../components/layout/SideDrawer';
 
 type PatientDetailDrawerProps = {
@@ -24,7 +19,48 @@ type PatientDetailDrawerProps = {
   errorMsg?: string;
 };
 
-type PatientDetailTabId = 'info' | 'devices' | 'meetings' | 'payments' | 'audiogram';
+type PatientDetailTabId =
+  | 'info'
+  | 'devices'
+  | 'meetings'
+  | 'payments'
+  | 'audiogram';
+
+function formatDate(value: string | null): string {
+  if (!value) return '-';
+  try {
+    return new Date(value).toLocaleDateString('tr-TR');
+  } catch {
+    return '-';
+  }
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return '-';
+  try {
+    const d = new Date(value);
+    return (
+      d.toLocaleDateString('tr-TR') +
+      ' ' +
+      d.toLocaleTimeString('tr-TR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    );
+  } catch {
+    return '-';
+  }
+}
+
+function formatAmount(amount: number): string {
+  if (!Number.isFinite(amount)) return '-';
+  return (
+    amount.toLocaleString('tr-TR', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }) + ' ₺'
+  );
+}
 
 export function PatientDetailDrawer({
   patient,
@@ -35,13 +71,20 @@ export function PatientDetailDrawer({
   errorMsg,
 }: PatientDetailDrawerProps) {
   const [sgkFlag, setSgkFlag] = useState<boolean>(!!patient.sgk_flag);
-  const [sgkPrescriptionReceived, setSgkPrescriptionReceived] = useState<boolean>(
-    !!patient.sgk_prescription_received,
-  );
-  const [sgkRecordedToSystem, setSgkRecordedToSystem] = useState<boolean>(
-    !!patient.sgk_recorded_to_system,
-  );
-  const [activeTab, setActiveTab] = useState<PatientDetailTabId>('info');
+  const [sgkPrescriptionReceived, setSgkPrescriptionReceived] =
+    useState<boolean>(!!patient.sgk_prescription_received);
+  const [sgkRecordedToSystem, setSgkRecordedToSystem] =
+    useState<boolean>(!!patient.sgk_recorded_to_system);
+  const [activeTab, setActiveTab] =
+    useState<PatientDetailTabId>('info');
+
+  // Payment data – only fetch when drawer open
+  const {
+    data: payments = [],
+    isLoading: isPaymentsLoading,
+    isError: isPaymentsError,
+    error: paymentsError,
+  } = usePatientPayments(open ? patient.id : null);
 
   useEffect(() => {
     setSgkFlag(!!patient.sgk_flag);
@@ -53,24 +96,12 @@ export function PatientDetailDrawer({
   const handleSave = () => {
     onSave({
       sgkFlag,
-      sgkPrescriptionReceived: sgkFlag ? sgkPrescriptionReceived : false,
+      sgkPrescriptionReceived: sgkFlag
+        ? sgkPrescriptionReceived
+        : false,
       sgkRecordedToSystem: sgkFlag ? sgkRecordedToSystem : false,
     });
   };
-
-  // Payments (senet) for this patient
-  const {
-    data: payments = [],
-    isLoading: isPaymentsLoading,
-    isError: isPaymentsError,
-    error: paymentsError,
-  } = useQuery<PatientPaymentRow[]>({
-    queryKey: PATIENT_PAYMENTS_QUERY_KEY(patient.id),
-    queryFn: () => fetchPatientPaymentsByPatientId(patient.id),
-    enabled: open,
-  });
-
-  const totalPaid = payments.reduce((sum, p) => sum + (p.amount ?? 0), 0);
 
   const tabs: { id: PatientDetailTabId; label: string }[] = [
     { id: 'info', label: 'Özlük & SGK' },
@@ -100,6 +131,12 @@ export function PatientDetailDrawer({
     </>
   );
 
+  // Toplam ödenen senet tutarı
+  const totalPaid = (payments as PatientPaymentRow[]).reduce(
+    (sum, p) => sum + (Number(p.amount) || 0),
+    0,
+  );
+
   return (
     <SideDrawer
       open={open}
@@ -108,7 +145,7 @@ export function PatientDetailDrawer({
       subtitle={patient.full_name}
       footer={footer}
     >
-      {/* Sekme barı */}
+      {/* Tab bar */}
       <div className="border-b border-slate-200 pb-2">
         <div className="flex flex-wrap gap-1">
           {tabs.map((tab) => {
@@ -132,18 +169,20 @@ export function PatientDetailDrawer({
         </div>
       </div>
 
-      {/* Sekme içerikleri */}
+      {/* Tab contents */}
       <div className="mt-4 space-y-4 text-sm">
         {activeTab === 'info' && (
           <>
-            {/* Temel bilgiler */}
+            {/* Basic info */}
             <section className="space-y-2">
               <h4 className="text-xs font-semibold uppercase text-slate-500">
                 Özlük Bilgileri
               </h4>
               <div className="space-y-1 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
                 <div className="flex justify-between gap-2">
-                  <span className="text-xs text-slate-500">Ad Soyad</span>
+                  <span className="text-xs text-slate-500">
+                    Ad Soyad
+                  </span>
                   <span className="text-xs font-medium text-slate-900">
                     {patient.full_name}
                   </span>
@@ -155,25 +194,25 @@ export function PatientDetailDrawer({
                   </span>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <span className="text-xs text-slate-500">Kayıt Tarihi</span>
+                  <span className="text-xs text-slate-500">
+                    Kayıt Tarihi
+                  </span>
                   <span className="text-xs text-slate-900">
-                    {new Date(patient.created_at).toLocaleDateString('tr-TR')}
+                    {formatDate(patient.created_at)}
                   </span>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <span className="text-xs text-slate-500">Son Görüşme</span>
+                  <span className="text-xs text-slate-500">
+                    Son Görüşme
+                  </span>
                   <span className="text-xs text-slate-900">
-                    {patient.last_visit_at
-                      ? new Date(patient.last_visit_at).toLocaleDateString(
-                          'tr-TR',
-                        )
-                      : '-'}
+                    {formatDate(patient.last_visit_at)}
                   </span>
                 </div>
               </div>
             </section>
 
-            {/* SGK alanları */}
+            {/* SGK fields */}
             <section className="space-y-2">
               <h4 className="text-xs font-semibold uppercase text-slate-500">
                 SGK ve Evrak Takibi
@@ -232,8 +271,8 @@ export function PatientDetailDrawer({
 
                 <p className="mt-1 text-[11px] text-slate-500">
                   Bu alanlar ana listede satırları renklendirir ve
-                  &quot;Reçete bekleniyor / Sisteme işlenecek&quot; uyarılarını
-                  tetikler.
+                  &quot;Reçete bekleniyor / Sisteme işlenecek&quot;
+                  uyarılarını tetikler.
                 </p>
               </div>
             </section>
@@ -268,91 +307,102 @@ export function PatientDetailDrawer({
         )}
 
         {activeTab === 'payments' && (
-          <section className="space-y-2">
+          <section className="space-y-3">
             <h4 className="text-xs font-semibold uppercase text-slate-500">
-              Ödemeler
+              Ödemeler (Senet)
             </h4>
 
+            {/* Summary card */}
+            <div className="flex flex-col gap-1 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-emerald-900">
+                  Toplam alınan senet ödemesi
+                </span>
+                <span className="text-sm font-bold text-emerald-900">
+                  {formatAmount(totalPaid)}
+                </span>
+              </div>
+              <p className="text-[11px] text-emerald-900">
+                Tutar, görüşmeler ekranından &quot;Senet Ödemesi&quot;
+                kaydı yapıldıkça otomatik güncellenir.
+              </p>
+            </div>
+
+            {/* State messages */}
             {isPaymentsLoading && (
-              <p className="text-xs text-slate-500">Ödemeler yükleniyor...</p>
+              <p className="text-xs text-slate-500">
+                Ödemeler yükleniyor...
+              </p>
             )}
 
             {isPaymentsError && (
               <p className="text-xs text-red-600">
-                Ödemeler yüklenirken hata oluştu:{' '}
-                {(paymentsError as Error)?.message ?? 'Bilinmeyen hata'}
+                Ödemeler yüklenirken bir hata oluştu:{' '}
+                {(paymentsError as Error)?.message ??
+                  'Bilinmeyen hata'}
               </p>
             )}
 
-            {!isPaymentsLoading && !isPaymentsError && (
-              <>
-                <div className="rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold text-emerald-900">
-                    Senet Ödemeleri Toplamı
-                  </p>
-                  <p className="text-lg font-bold text-emerald-900">
-                    {totalPaid.toLocaleString('tr-TR', {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    })}{' '}
-                    ₺
-                  </p>
-                  <p className="text-[11px] text-emerald-800">
-                    Toplam, yalnızca görüşme ekranından girilen senet
-                    ödemelerini gösterir. Cihaz toplam bedeli ve kalan borç,
-                    satış modülü eklendiğinde buraya bağlanacak.
-                  </p>
-                </div>
+            {!isPaymentsLoading &&
+              !isPaymentsError &&
+              payments.length === 0 && (
+                <p className="text-xs text-slate-500">
+                  Henüz kayıtlı senet ödemesi yok. Görüşmeler ekranından
+                  &quot;Ödeme alındı&quot; işaretleyerek ödeme
+                  ekleyebilirsiniz.
+                </p>
+              )}
 
-                {payments.length === 0 ? (
-                  <p className="text-xs text-slate-500">
-                    Bu hasta için kayıtlı senet ödemesi yok. Görüşme ekranında
-                    &quot;Senet Ödemesi&quot; alanını kullanarak ödeme
-                    ekleyebilirsiniz.
-                  </p>
-                ) : (
-                  <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
-                    <table className="min-w-full text-left text-xs">
-                      <thead className="bg-slate-50 text-slate-600">
-                        <tr>
-                          <th className="px-3 py-2 font-medium">Tarih</th>
-                          <th className="px-3 py-2 font-medium">Tutar</th>
-                          <th className="px-3 py-2 font-medium">Yöntem</th>
-                          <th className="px-3 py-2 font-medium">Not</th>
+            {/* Payments table */}
+            {!isPaymentsLoading &&
+              !isPaymentsError &&
+              payments.length > 0 && (
+                <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                  <table className="min-w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">
+                          Tarih
+                        </th>
+                        <th className="px-3 py-2 font-medium">
+                          Tutar
+                        </th>
+                        <th className="px-3 py-2 font-medium">
+                          Yöntem
+                        </th>
+                        <th className="px-3 py-2 font-medium">
+                          Not
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(payments as PatientPaymentRow[]).map((p) => (
+                        <tr
+                          key={p.id}
+                          className="border-t border-slate-100"
+                        >
+                          <td className="px-3 py-2 text-slate-800">
+                            {formatDateTime(p.created_at)}
+                          </td>
+                          <td className="px-3 py-2 text-slate-800">
+                            {formatAmount(p.amount)}
+                          </td>
+                          <td className="px-3 py-2 text-slate-800">
+                            {p.method ?? 'senet'}
+                          </td>
+                          <td className="px-3 py-2 text-slate-600">
+                            {p.note
+                              ? p.note.length > 80
+                                ? p.note.slice(0, 80) + '…'
+                                : p.note
+                              : '-'}
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {payments.map((p) => (
-                          <tr
-                            key={p.id}
-                            className="border-t border-slate-100"
-                          >
-                            <td className="px-3 py-2 text-slate-800">
-                              {new Date(p.created_at).toLocaleDateString(
-                                'tr-TR',
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-slate-800">
-                              {p.amount.toLocaleString('tr-TR', {
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 2,
-                              })}{' '}
-                              ₺
-                            </td>
-                            <td className="px-3 py-2 text-slate-800">
-                              {p.method}
-                            </td>
-                            <td className="px-3 py-2 text-slate-600">
-                              {p.note ?? '-'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </>
-            )}
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
           </section>
         )}
 
