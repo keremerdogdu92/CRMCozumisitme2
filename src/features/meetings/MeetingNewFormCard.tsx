@@ -1,5 +1,6 @@
 // src/features/meetings/MeetingNewFormCard.tsx
 // Inline card with form to create a new meeting.
+// v2.2 – meeting_type + subject picker (patients, trials, references)
 
 import { useState, FormEvent, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -8,6 +9,7 @@ import type { MeetingType, NewMeetingForm } from './types';
 import { useCurrentProfile } from '../auth/useCurrentProfile';
 import { searchPatientsByName } from '../patients/api';
 import { searchTrialsByName } from '../trials/api';
+import { searchReferencesByName } from '../references/api';
 
 const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string }[] = [
   { value: 'patient', label: 'Hasta' },
@@ -34,7 +36,8 @@ type SubjectOption = {
 };
 
 function useSubjectSearch(meetingType: MeetingType, term: string) {
-  const enabledTypes: MeetingType[] = ['patient', 'trial'];
+  // Bu picker; hasta, deneme hastası ve referans için çalışır.
+  const enabledTypes: MeetingType[] = ['patient', 'trial', 'reference'];
 
   return useQuery<SubjectOption[]>({
     queryKey: ['meeting-subject-search', meetingType, term],
@@ -53,7 +56,11 @@ function useSubjectSearch(meetingType: MeetingType, term: string) {
         return rows.map((r) => ({ id: r.id, name: r.full_name }));
       }
 
-      // For 'reference' we keep manual entry for now
+      if (meetingType === 'reference') {
+        const rows = await searchReferencesByName(q);
+        return rows.map((r) => ({ id: r.id, name: r.full_name }));
+      }
+
       return [];
     },
   });
@@ -110,7 +117,7 @@ function SubjectSearchField({
       <p className="mt-1 text-[11px] text-slate-500">
         {isFetching
           ? 'Kişiler aranıyor...'
-          : 'Sonuçlardan birini seçtiğinizde görüşme bu kişiyle ilişkilendirilecek.'}
+          : 'Sonuçlardan birini seçtiğinizde görüşme bu kartla ilişkilendirilecek.'}
       </p>
 
       {showDropdown && (
@@ -171,8 +178,6 @@ export function MeetingNewFormCard() {
     }));
   };
 
-  const isReferenceType = form.meetingType === 'reference';
-
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="mb-2 text-sm font-semibold text-slate-900">
@@ -219,29 +224,11 @@ export function MeetingNewFormCard() {
               Görüşme Yapılan Kişi
             </label>
 
-            {isReferenceType ? (
-              <>
-                <input
-                  type="text"
-                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                  value={form.subjectName}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, subjectName: e.target.value }))
-                  }
-                  placeholder="Örn: Ali Yılmaz (referans adı)"
-                />
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Referanslar için şimdilik serbest metin kullanılıyor.
-                  İleride referans kartlarıyla da bağlayacağız.
-                </p>
-              </>
-            ) : (
-              <SubjectSearchField
-                meetingType={form.meetingType}
-                selectedName={form.subjectName}
-                onSelect={handleSubjectSelect}
-              />
-            )}
+            <SubjectSearchField
+              meetingType={form.meetingType}
+              selectedName={form.subjectName}
+              onSelect={handleSubjectSelect}
+            />
           </div>
         </div>
 
