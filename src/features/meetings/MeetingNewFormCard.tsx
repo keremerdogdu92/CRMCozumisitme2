@@ -1,15 +1,23 @@
 // src/features/meetings/MeetingNewFormCard.tsx
 // Inline card with form to create a new meeting.
-// v2.3 – meeting_type + subject picker (patients, trials, references) + optional senet payment.
+// v2.4 – meeting_type + subject picker (patients, trials, references) + optional senet payment + senet plan summary.
 
 import { useState, FormEvent, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useCreateMeetingMutation } from './api';
 import type { MeetingType, NewMeetingForm } from './types';
 import { useCurrentProfile } from '../auth/useCurrentProfile';
-import { searchPatientsByName } from '../patients/api';
+import {
+  searchPatientsByName,
+  usePatientInstallmentPlan,
+  usePatientPayments,
+} from '../patients/api';
 import { searchTrialsByName } from '../trials/api';
 import { searchReferencesByName } from '../references/api';
+import type {
+  PatientInstallmentPlanRow,
+  PatientPaymentRow,
+} from '../patients/types';
 
 const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string }[] = [
   { value: 'patient', label: 'Hasta' },
@@ -148,6 +156,26 @@ function SubjectSearchField({
   );
 }
 
+function formatAmount(amount: number): string {
+  if (!Number.isFinite(amount)) return '-';
+  return (
+    amount.toLocaleString('tr-TR', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }) + ' ₺'
+  );
+}
+
+function addMonths(dateStr: string, count: number): string {
+  try {
+    const d = new Date(dateStr);
+    d.setMonth(d.getMonth() + count);
+    return d.toLocaleDateString('tr-TR');
+  } catch {
+    return '-';
+  }
+}
+
 export function MeetingNewFormCard() {
   const [form, setForm] = useState<NewMeetingForm>(EMPTY_FORM);
   const { mutateAsync, isPending, isError, error } =
@@ -190,6 +218,61 @@ export function MeetingNewFormCard() {
 
   const showPaymentSection =
     form.meetingType === 'patient' && !!form.subjectId;
+
+  // Eğer hasta seçiliyse, aktif senet planını ve ödemeleri çek
+  const {
+    data: plan,
+    isLoading: isPlanLoading,
+  } = usePatientInstallmentPlan(
+    showPaymentSection ? form.subjectId : null,
+  );
+  const { data: payments = [] } = usePatientPayments(
+    showPaymentSection ? form.subjectId : null,
+  );
+
+  // Plan + ödemelerden bu taksitte beklenen tutarı ve kalan borcu hesapla
+  let thisInstallmentAmount: number | null = null;
+  let remainingTotal = 0;
+  let nextDueDate = '-';
+
+  if (plan) {
+    const p = plan as PatientInstallmentPlanRow;
+    const totalPaid = (payments as PatientPaymentRow[]).reduce(
+      (sum, pay) => sum + (Number(pay.amount) || 0),
+      0,
+    );
+    const remainingAfterUpfront =
+      p.sale_total - p.upfront_paid;
+    remainingTotal = Math.max(
+      0,
+      remainingAfterUpfront - totalPaid,
+    );
+
+    const perInstallment = p.installment_amount || 1;
+    const paidInstallments = Math.min(
+      p.installment_count,
+      Math.floor(totalPaid / perInstallment),
+    );
+    nextDueDate = addMonths(p.first_due_date, paidInstallments);
+    thisInstallmentAmount = perInstallment;
+  }
+
+  // Eğer plan var, ödeme kutusu açıldı ve henüz bir tutar yazılmadıysa, varsayılan olarak bu taksit tutarını doldur
+  useEffect(() => {
+    if (
+      showPaymentSection &&
+      plan &&
+      !form.paymentAmount.trim() &&
+      thisInstallmentAmount &&
+      form.hasPayment
+    ) {
+      setForm((f) => ({
+        ...f,
+        paymentAmount: thisInstallmentAmount!.toString(),
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPaymentSection, plan, thisInstallmentAmount, form.hasPayment]);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -317,8 +400,47 @@ export function MeetingNewFormCard() {
 
         {/* Payment (senet) – only for patient meetings with selected person */}
         {showPaymentSection && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
-            <div className="flex items-center justify-between gap-2">
+          <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+            {/* Plan summary inside meeting form */}
+            {isPlanLoading && (
+              <p className="text-[11px] text-amber-900">
+                Senet planı yükleniyor...
+              </p>
+            )}
+
+            {plan && (
+              <div className="flex flex-col gap-1 rounded-md border border-amber-300 bg-amber-100 px-3 py-2">
+                <div className="flex justify-between gap-2 text-[11px] text-amber-900">
+                  <span>Bu taksit için beklenen tutar</span>
+                  <span className="font-semibold">
+                    {thisInstallmentAmount !== null
+                      ? formatAmount(thisInstallmentAmount)
+                      : '-'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2 text-[11px] text-amber-900">
+                  <span>Kalan borç (yaklaşık)</span>
+                  <span className="font-semibold">
+                    {formatAmount(remainingTotal)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2 text-[11px] text-amber-900">
+                  <span>Sonraki taksit tarihi</span>
+                  <span className="font-semibold">
+                    {nextDueDate}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {!plan && !isPlanLoading && (
+              <p className="text-[11px] text-amber-900">
+                Bu hasta için henüz senet planı yok. Hasta detayından
+                &quot;Ödemeler&quot; sekmesinden plan oluşturabilirsiniz.
+              </p>
+            )}
+
+            <div className="mt-1 flex items-center justify-between gap-2">
               <div>
                 <p className="text-xs font-medium text-amber-900">
                   Senet Ödemesi
@@ -337,8 +459,12 @@ export function MeetingNewFormCard() {
                     setForm((f) => ({
                       ...f,
                       hasPayment: e.target.checked,
-                      paymentAmount: e.target.checked ? f.paymentAmount : '',
-                      paymentNote: e.target.checked ? f.paymentNote : '',
+                      paymentAmount: e.target.checked
+                        ? f.paymentAmount
+                        : '',
+                      paymentNote: e.target.checked
+                        ? f.paymentNote
+                        : '',
                     }))
                   }
                 />
@@ -362,7 +488,11 @@ export function MeetingNewFormCard() {
                         paymentAmount: e.target.value,
                       }))
                     }
-                    placeholder="Örn: 1250, 1.250,00"
+                    placeholder={
+                      thisInstallmentAmount !== null
+                        ? `Örn: ${thisInstallmentAmount}`
+                        : 'Örn: 1250, 1.250,00'
+                    }
                   />
                 </div>
                 <div>
