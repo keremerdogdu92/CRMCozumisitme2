@@ -2,7 +2,13 @@
 // Tabbed patient detail drawer using the shared SideDrawer shell.
 
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { PatientRow } from './types';
+import {
+  fetchPatientPaymentsByPatientId,
+  PATIENT_PAYMENTS_QUERY_KEY,
+  type PatientPaymentRow,
+} from './api';
 import { SideDrawer } from '../../components/layout/SideDrawer';
 
 type PatientDetailDrawerProps = {
@@ -51,6 +57,20 @@ export function PatientDetailDrawer({
       sgkRecordedToSystem: sgkFlag ? sgkRecordedToSystem : false,
     });
   };
+
+  // Payments (senet) for this patient
+  const {
+    data: payments = [],
+    isLoading: isPaymentsLoading,
+    isError: isPaymentsError,
+    error: paymentsError,
+  } = useQuery<PatientPaymentRow[]>({
+    queryKey: PATIENT_PAYMENTS_QUERY_KEY(patient.id),
+    queryFn: () => fetchPatientPaymentsByPatientId(patient.id),
+    enabled: open,
+  });
+
+  const totalPaid = payments.reduce((sum, p) => sum + (p.amount ?? 0), 0);
 
   const tabs: { id: PatientDetailTabId; label: string }[] = [
     { id: 'info', label: 'Özlük & SGK' },
@@ -144,7 +164,9 @@ export function PatientDetailDrawer({
                   <span className="text-xs text-slate-500">Son Görüşme</span>
                   <span className="text-xs text-slate-900">
                     {patient.last_visit_at
-                      ? new Date(patient.last_visit_at).toLocaleDateString('tr-TR')
+                      ? new Date(patient.last_visit_at).toLocaleDateString(
+                          'tr-TR',
+                        )
                       : '-'}
                   </span>
                 </div>
@@ -250,11 +272,87 @@ export function PatientDetailDrawer({
             <h4 className="text-xs font-semibold uppercase text-slate-500">
               Ödemeler
             </h4>
-            <p className="text-xs text-slate-500">
-              Bu sekme, toplam cihaz bedeli, peşinat, taksit planı ve ödeme
-              geçmişini gösterecek. Kredi kartı komisyonu ve senet taksit
-              gridini buraya bağlamayı planlayacağız.
-            </p>
+
+            {isPaymentsLoading && (
+              <p className="text-xs text-slate-500">Ödemeler yükleniyor...</p>
+            )}
+
+            {isPaymentsError && (
+              <p className="text-xs text-red-600">
+                Ödemeler yüklenirken hata oluştu:{' '}
+                {(paymentsError as Error)?.message ?? 'Bilinmeyen hata'}
+              </p>
+            )}
+
+            {!isPaymentsLoading && !isPaymentsError && (
+              <>
+                <div className="rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2">
+                  <p className="text-[11px] font-semibold text-emerald-900">
+                    Senet Ödemeleri Toplamı
+                  </p>
+                  <p className="text-lg font-bold text-emerald-900">
+                    {totalPaid.toLocaleString('tr-TR', {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 2,
+                    })}{' '}
+                    ₺
+                  </p>
+                  <p className="text-[11px] text-emerald-800">
+                    Toplam, yalnızca görüşme ekranından girilen senet
+                    ödemelerini gösterir. Cihaz toplam bedeli ve kalan borç,
+                    satış modülü eklendiğinde buraya bağlanacak.
+                  </p>
+                </div>
+
+                {payments.length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    Bu hasta için kayıtlı senet ödemesi yok. Görüşme ekranında
+                    &quot;Senet Ödemesi&quot; alanını kullanarak ödeme
+                    ekleyebilirsiniz.
+                  </p>
+                ) : (
+                  <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
+                    <table className="min-w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-600">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Tarih</th>
+                          <th className="px-3 py-2 font-medium">Tutar</th>
+                          <th className="px-3 py-2 font-medium">Yöntem</th>
+                          <th className="px-3 py-2 font-medium">Not</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payments.map((p) => (
+                          <tr
+                            key={p.id}
+                            className="border-t border-slate-100"
+                          >
+                            <td className="px-3 py-2 text-slate-800">
+                              {new Date(p.created_at).toLocaleDateString(
+                                'tr-TR',
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-slate-800">
+                              {p.amount.toLocaleString('tr-TR', {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 2,
+                              })}{' '}
+                              ₺
+                            </td>
+                            <td className="px-3 py-2 text-slate-800">
+                              {p.method}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">
+                              {p.note ?? '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
           </section>
         )}
 
