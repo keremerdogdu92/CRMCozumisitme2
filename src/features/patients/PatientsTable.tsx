@@ -1,216 +1,161 @@
-// src/pages/PatientsPage.tsx
-// Container page for Patients: fetches data, manages filters and orchestrates
-// NewPatientFormCard, PatientsTable and PatientDetailDrawer.
+// src/features/patients/PatientsTable.tsx
+// Patients listing table with columns and "Detay" action.
 
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  PATIENTS_QUERY_KEY,
-  fetchPatients,
-  createPatient,
-  updatePatientSgkFields,
-} from '../features/patients/api';
-import type {
-  NewPatientForm,
-  PatientRow,
-} from '../features/patients/types';
-import { PatientsTable } from '../features/patients/PatientsTable';
-import { NewPatientFormCard } from '../features/patients/NewPatientFormCard';
-import { PatientDetailDrawer } from '../features/patients/PatientDetailDrawer';
+import type { PatientRow } from './types';
 
-type PatientDetailTabId =
-  | 'info'
-  | 'devices'
-  | 'meetings'
-  | 'payments'
-  | 'audiogram';
+type PatientsTableProps = {
+  patients: PatientRow[];
+  onSelectPatient: (patient: PatientRow) => void;
+};
 
-export default function PatientsPage() {
-  const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
-  const [sgkFilter, setSgkFilter] = useState<'all' | 'sgk' | 'non-sgk'>(
-    'all',
-  );
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [detailPatient, setDetailPatient] = useState<PatientRow | null>(
-    null,
-  );
-  const [detailInitialTab, setDetailInitialTab] =
-    useState<PatientDetailTabId>('info');
-  const [detailInitialShowPlan, setDetailInitialShowPlan] =
-    useState<boolean>(false);
+function formatDate(value: string | null): string {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString('tr-TR');
+}
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: PATIENTS_QUERY_KEY,
-    queryFn: fetchPatients,
-  });
+function formatSgkWarning(p: PatientRow): string | null {
+  if (!p.sgk_flag) return null;
+  const needsPrescription = !p.sgk_prescription_received;
+  const needsRecording = !p.sgk_recorded_to_system;
 
-  const createMutation = useMutation({
-    mutationFn: createPatient,
-    onSuccess: (createdPatient, variables) => {
-      void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
-      setShowCreateForm(false);
+  if (!needsPrescription && !needsRecording) return null;
 
-      // If this patient is marked as Senet, directly open their detail
-      // on the Payments tab with the plan form expanded.
-      if (variables.paymentMethod === 'Senet' && createdPatient) {
-        setDetailPatient(createdPatient);
-        setDetailInitialTab('payments');
-        setDetailInitialShowPlan(true);
-      }
-    },
-  });
+  if (needsPrescription && needsRecording) {
+    return 'Reçete ve sistem kaydı eksik';
+  }
+  if (needsPrescription) return 'Reçete bekleniyor';
+  return 'Sisteme işlenecek';
+}
 
-  const sgkUpdateMutation = useMutation({
-    mutationFn: updatePatientSgkFields,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
-    },
-  });
-
-  if (isLoading) {
+export function PatientsTable({ patients, onSelectPatient }: PatientsTableProps) {
+  if (patients.length === 0) {
     return (
-      <div className="p-8 text-sm text-slate-500">
-        Hastalar yükleniyor...
+      <div className="text-sm text-slate-500">
+        Filtreye uyan hasta bulunamadı. Arama kutusunu temizleyebilir veya yeni
+        hasta ekleyebilirsiniz.
       </div>
     );
   }
-
-  if (isError) {
-    return (
-      <div className="p-8 text-sm text-red-600">
-        Hasta verileri alınırken bir hata oluştu. Lütfen Supabase
-        bağlantısını ve RLS ayarlarını kontrol edin.
-      </div>
-    );
-  }
-
-  const patients = data ?? [];
-
-  const filteredPatients = patients.filter((p) => {
-    const term = search.trim().toLowerCase();
-    const matchesSearch =
-      !term ||
-      p.full_name.toLowerCase().includes(term) ||
-      (p.phone ?? '').toLowerCase().includes(term);
-
-    const matchesSgk =
-      sgkFilter === 'all' ||
-      (sgkFilter === 'sgk' && !!p.sgk_flag) ||
-      (sgkFilter === 'non-sgk' && !p.sgk_flag);
-
-    return matchesSearch && matchesSgk;
-  });
-
-  const mutationError =
-    (createMutation.error as Error | null | undefined)?.message ?? '';
-
-  const handleToggleCreateForm = () => {
-    setShowCreateForm((prev) => !prev);
-  };
-
-  const handleCreateSubmit = (values: NewPatientForm) => {
-    createMutation.mutate(values);
-  };
-
-  const handleSelectPatient = (patient: PatientRow) => {
-    setDetailPatient(patient);
-    setDetailInitialTab('info');
-    setDetailInitialShowPlan(false);
-  };
-
-  const handleCloseDrawer = () => {
-    setDetailPatient(null);
-  };
 
   return (
-    <div className="space-y-6 p-8">
-      {/* Başlık + filtreler + arama + yeni hasta butonu */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Hastalar</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Toplam {patients.length} kayıt
-          </p>
-        </div>
+    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <table className="min-w-full text-sm">
+        <thead className="bg-slate-50">
+          <tr>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Alış (Kayıt)
+            </th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Ad Soyad
+            </th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Telefon
+            </th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Cihaz Modeli
+            </th>
+            <th className="px-4 py-2 text-right font-medium text-slate-600">
+              Fiyat
+            </th>
+            <th className="px-4 py-2 text-center font-medium text-slate-600">
+              Memnuniyet (1–10)
+            </th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Son Görüşme
+            </th>
+            <th className="px-4 py-2 text-center font-medium text-slate-600">
+              SGK
+            </th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Arşiv Kodu
+            </th>
+            <th className="px-4 py-2 text-right font-medium text-slate-600">
+              İşlemler
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {patients.map((p) => {
+            const warning = formatSgkWarning(p);
+            const hasSgkWarning = !!warning;
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          {/* SGK filtresi */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">SGK filtre:</span>
-            <select
-              value={sgkFilter}
-              onChange={(e) =>
-                setSgkFilter(
-                  e.target.value as 'all' | 'sgk' | 'non-sgk',
-                )
-              }
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            >
-              <option value="all">Hepsi</option>
-              <option value="sgk">Sadece SGK</option>
-              <option value="non-sgk">SGK’sız</option>
-            </select>
-          </div>
+            return (
+              <tr
+                key={p.id}
+                className={
+                  'border-t border-slate-100 ' +
+                  (hasSgkWarning ? 'bg-amber-50/40' : '')
+                }
+              >
+                {/* Alış / kayıt tarihi */}
+                <td className="whitespace-nowrap px-4 py-2 text-slate-700">
+                  {formatDate(p.created_at)}
+                </td>
 
-          {/* Arama */}
-          <input
-            type="text"
-            placeholder="İsim veya telefon ile ara..."
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:w-64"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+                {/* Ad Soyad */}
+                <td className="px-4 py-2 text-slate-800">{p.full_name}</td>
 
-          {/* Yeni hasta butonu */}
-          <button
-            type="button"
-            onClick={handleToggleCreateForm}
-            className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-          >
-            {showCreateForm ? 'Formu Kapat' : 'Yeni Hasta'}
-          </button>
-        </div>
-      </div>
+                {/* Telefon */}
+                <td className="whitespace-nowrap px-4 py-2 text-slate-700">
+                  {p.phone ?? '-'}
+                </td>
 
-      {/* Yeni hasta formu */}
-      <NewPatientFormCard
-        open={showCreateForm}
-        onToggle={handleToggleCreateForm}
-        onSubmit={handleCreateSubmit}
-        isSubmitting={createMutation.isPending}
-        errorMessage={createMutation.isError ? mutationError : undefined}
-      />
+                {/* Cihaz Modeli – v1: henüz bağlı değil */}
+                <td className="px-4 py-2 italic text-slate-500">-</td>
 
-      {/* Hasta listesi */}
-      <PatientsTable
-        patients={filteredPatients}
-        onSelectPatient={handleSelectPatient}
-      />
+                {/* Fiyat – v1: henüz bağlı değil */}
+                <td className="px-4 py-2 text-right italic text-slate-500">
+                  -
+                </td>
 
-      {/* Hasta Detay çekmecesi */}
-      {detailPatient && (
-        <PatientDetailDrawer
-          patient={detailPatient}
-          open={true}
-          onClose={handleCloseDrawer}
-          onSave={(values) =>
-            sgkUpdateMutation.mutate({
-              id: detailPatient.id,
-              sgkFlag: values.sgkFlag,
-              sgkPrescriptionReceived: values.sgkPrescriptionReceived,
-              sgkRecordedToSystem: values.sgkRecordedToSystem,
-            })
-          }
-          isSaving={sgkUpdateMutation.isPending}
-          errorMsg={
-            (sgkUpdateMutation.error as Error | null | undefined)
-              ?.message ?? ''
-          }
-          initialTab={detailInitialTab}
-          initialShowPlanForm={detailInitialShowPlan}
-        />
-      )}
+                {/* Memnuniyet – v1: henüz bağlı değil */}
+                <td className="px-4 py-2 text-center italic text-slate-500">
+                  -
+                </td>
+
+                {/* Son Görüşme */}
+                <td className="whitespace-nowrap px-4 py-2 text-slate-700">
+                  {formatDate(p.last_visit_at)}
+                </td>
+
+                {/* SGK etiketi + uyarı */}
+                <td className="px-4 py-2 text-center">
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span
+                      className={
+                        p.sgk_flag
+                          ? 'inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700'
+                          : 'inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500'
+                      }
+                    >
+                      {p.sgk_flag ? 'Evet' : 'Hayır'}
+                    </span>
+                    {warning && (
+                      <span className="text-[10px] font-medium text-amber-700">
+                        {warning}
+                      </span>
+                    )}
+                  </div>
+                </td>
+
+                {/* Arşiv Kodu – v1: placeholder */}
+                <td className="px-4 py-2 italic text-slate-500">-</td>
+
+                {/* İşlemler – Detay çekmecesi */}
+                <td className="px-4 py-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => onSelectPatient(p)}
+                    className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Detay
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
