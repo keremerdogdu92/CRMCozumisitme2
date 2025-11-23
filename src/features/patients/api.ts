@@ -31,6 +31,42 @@ export async function fetchPatients(): Promise<PatientRow[]> {
   return data ?? [];
 }
 
+/**
+ * Lightweight search for patients by full_name.
+ * Used by the Meetings subject picker to attach meetings to existing patients.
+ */
+export interface PatientLite {
+  id: string;
+  full_name: string;
+}
+
+export async function searchPatientsByName(
+  query: string,
+  limit = 10,
+): Promise<PatientLite[]> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const { data, error } = await supabaseClient
+    .from('patients')
+    .select('id, full_name')
+    .ilike('full_name', `%${trimmed}%`)
+    .order('full_name', { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    console.error('Supabase patients search error:', error);
+    throw error;
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    full_name: row.full_name as string,
+  }));
+}
+
 // Create a new patient row with org_id taken from the current profile.
 export async function createPatient(input: NewPatientForm): Promise<void> {
   const { data: userData, error: userError } = await supabaseClient.auth.getUser();
