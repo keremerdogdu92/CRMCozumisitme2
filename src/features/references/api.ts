@@ -35,8 +35,44 @@ export async function fetchReferences(): Promise<ReferenceRow[]> {
   );
 }
 
-export async function createReference(input: NewReferenceForm): Promise<void> {
-  const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+/**
+ * Lightweight search helper for Meeting subject picker.
+ * Returns only id + full_name, RLS ile zaten kendi org'unu görür.
+ */
+type ReferenceSearchRow = {
+  id: string;
+  full_name: string;
+};
+
+export async function searchReferencesByName(
+  term: string,
+): Promise<ReferenceSearchRow[]> {
+  const q = term.trim();
+  if (!q) return [];
+
+  const { data, error } = await supabaseClient
+    .from('references')
+    .select('id, full_name')
+    .ilike('full_name', `%${q}%`)
+    .order('full_name', { ascending: true })
+    .limit(20);
+
+  if (error) {
+    console.error(
+      'Supabase references search error (REF_STEP_SEARCH):',
+      error,
+    );
+    throw new Error('REF_STEP_SEARCH: ' + error.message);
+  }
+
+  return (data ?? []) as ReferenceSearchRow[];
+}
+
+export async function createReference(
+  input: NewReferenceForm,
+): Promise<void> {
+  const { data: userData, error: userError } =
+    await supabaseClient.auth.getUser();
   if (userError) {
     console.error('Failed to get current user (REF_STEP_USER):', userError);
     throw new Error('REF_STEP_USER: ' + userError.message);
@@ -53,7 +89,10 @@ export async function createReference(input: NewReferenceForm): Promise<void> {
     .single();
 
   if (profileError) {
-    console.error('Failed to load profile for org_id (REF_STEP_PROFILE):', profileError);
+    console.error(
+      'Failed to load profile for org_id (REF_STEP_PROFILE):',
+      profileError,
+    );
     throw new Error('REF_STEP_PROFILE: ' + profileError.message);
   }
 
@@ -62,21 +101,26 @@ export async function createReference(input: NewReferenceForm): Promise<void> {
     throw new Error('REF_STEP_NO_ORG: Profile org_id is missing');
   }
 
-  const { error: insertError } = await supabaseClient.from('references').insert({
-    org_id: profile.org_id,
-    full_name: input.fullName.trim() || null,
-    group: input.group || null,
-    last_meet_at: input.lastMeetAt
-      ? new Date(input.lastMeetAt).toISOString()
-      : null,
-    next_meet_at: input.nextMeetAt
-      ? new Date(input.nextMeetAt).toISOString()
-      : null,
-    note: input.note.trim() || null,
-  });
+  const { error: insertError } = await supabaseClient
+    .from('references')
+    .insert({
+      org_id: profile.org_id,
+      full_name: input.fullName.trim() || null,
+      group: input.group || null,
+      last_meet_at: input.lastMeetAt
+        ? new Date(input.lastMeetAt).toISOString()
+        : null,
+      next_meet_at: input.nextMeetAt
+        ? new Date(input.nextMeetAt).toISOString()
+        : null,
+      note: input.note.trim() || null,
+    });
 
   if (insertError) {
-    console.error('Failed to insert reference (REF_STEP_INSERT):', insertError);
+    console.error(
+      'Failed to insert reference (REF_STEP_INSERT):',
+      insertError,
+    );
     throw new Error('REF_STEP_INSERT: ' + insertError.message);
   }
 }
