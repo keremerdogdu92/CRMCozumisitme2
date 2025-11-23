@@ -195,7 +195,6 @@ export function NewPatientFormCard({
                   setFormState((s) => ({
                     ...s,
                     paymentMethod: value,
-                    // Kart dışına çıkınca kart alanlarını temizlemek daha güvenli
                     cardSaleTotal: value === 'Kredi_Kartı' ? s.cardSaleTotal : '',
                     cardFeeRate: value === 'Kredi_Kartı' ? s.cardFeeRate : '',
                   }));
