@@ -1,5 +1,6 @@
 // src/features/meetings/MeetingsTable.tsx
 // Simple table that lists meetings for the current org using useMeetingsQuery.
+console.log('MeetingsTable render oldu');
 
 import { useMeetingsQuery } from './api';
 import type { MeetingRow } from './types';
