@@ -1,14 +1,20 @@
 // src/features/patients/api.ts
 // Supabase API helpers and React Query keys for the Patients feature.
 
+import { useQuery } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
 import type {
   NewPatientForm,
   PatientRow,
   PatientSgkUpdateInput,
+  PatientPaymentRow,
 } from './types';
 
 export const PATIENTS_QUERY_KEY = ['patients'] as const;
+
+// Payment history per patient
+export const PATIENT_PAYMENTS_BY_PATIENT_QUERY_KEY = (patientId: string) =>
+  ['patient-payments', patientId] as const;
 
 export async function fetchPatients(): Promise<PatientRow[]> {
   const { data, error } = await supabaseClient
@@ -73,7 +79,8 @@ export async function searchPatientsByName(
 
 // Create a new patient row with org_id taken from the current profile.
 export async function createPatient(input: NewPatientForm): Promise<void> {
-  const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+  const { data: userData, error: userError } =
+    await supabaseClient.auth.getUser();
   if (userError) {
     console.error('Failed to get current user (STEP_USER):', userError);
     throw new Error('STEP_USER: ' + userError.message);
@@ -90,7 +97,10 @@ export async function createPatient(input: NewPatientForm): Promise<void> {
     .single();
 
   if (profileError) {
-    console.error('Failed to load profile for org_id (STEP_PROFILE):', profileError);
+    console.error(
+      'Failed to load profile for org_id (STEP_PROFILE):',
+      profileError,
+    );
     throw new Error('STEP_PROFILE: ' + profileError.message);
   }
 
@@ -104,8 +114,12 @@ export async function createPatient(input: NewPatientForm): Promise<void> {
     full_name: input.fullName.trim(),
     phone: input.phone.trim() || null,
     sgk_flag: input.sgkFlag,
-    sgk_prescription_received: input.sgkFlag ? input.sgkPrescriptionReceived : false,
-    sgk_recorded_to_system: input.sgkFlag ? input.sgkRecordedToSystem : false,
+    sgk_prescription_received: input.sgkFlag
+      ? input.sgkPrescriptionReceived
+      : false,
+    sgk_recorded_to_system: input.sgkFlag
+      ? input.sgkRecordedToSystem
+      : false,
   });
 
   if (insertError) {
@@ -130,26 +144,17 @@ export async function updatePatientSgkFields(
     .eq('id', id);
 
   if (error) {
-    console.error('Failed to update patient SGK fields (STEP_UPDATE_SGK):', error);
+    console.error(
+      'Failed to update patient SGK fields (STEP_UPDATE_SGK):',
+      error,
+    );
     throw new Error('STEP_UPDATE_SGK: ' + error.message);
   }
 }
 
 /**
- * Payments fetched per patient from meeting_payments.
+ * Fetch senet payments for a single patient from meeting_payments.
  */
-
-export type PatientPaymentRow = {
-  id: string;
-  amount: number;
-  method: string;
-  note: string | null;
-  created_at: string;
-};
-
-export const PATIENT_PAYMENTS_QUERY_KEY = (patientId: string) =>
-  ['patient-payments', patientId] as const;
-
 export async function fetchPatientPaymentsByPatientId(
   patientId: string,
 ): Promise<PatientPaymentRow[]> {
@@ -159,7 +164,17 @@ export async function fetchPatientPaymentsByPatientId(
 
   const { data, error } = await supabaseClient
     .from('meeting_payments')
-    .select('id, amount, method, note, created_at')
+    .select(
+      `
+      id,
+      meeting_id,
+      patient_id,
+      amount,
+      method,
+      note,
+      created_at
+    `,
+    )
     .eq('patient_id', patientId)
     .order('created_at', { ascending: false });
 
@@ -170,9 +185,25 @@ export async function fetchPatientPaymentsByPatientId(
 
   return (data ?? []).map((row) => ({
     id: row.id as string,
+    meeting_id: (row.meeting_id as string | null) ?? null,
+    patient_id: row.patient_id as string,
     amount: Number(row.amount),
-    method: (row.method as string) ?? 'senet',
+    method: (row.method as string | null) ?? null,
     note: (row.note as string | null) ?? null,
     created_at: row.created_at as string,
   }));
+}
+
+/**
+ * React Query hook: senet ödeme geçmişi.
+ */
+export function usePatientPayments(patientId: string | null) {
+  return useQuery({
+    queryKey: patientId
+      ? PATIENT_PAYMENTS_BY_PATIENT_QUERY_KEY(patientId)
+      : ['patient-payments', 'none'],
+    enabled: !!patientId,
+    queryFn: () =>
+      fetchPatientPaymentsByPatientId(patientId as string),
+  });
 }
