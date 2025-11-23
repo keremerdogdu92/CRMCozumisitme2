@@ -53,7 +53,7 @@ function parseAmountString(raw: string): number | null {
     );
   }
 
-  // 2 ondalık basamağa yuvarlayalım
+  // Round to 2 decimals
   return Number(value.toFixed(2));
 }
 
@@ -105,22 +105,17 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
     : null;
 
   // Ödeme (sadece hasta tipi meeting için anlamlı)
-  let paymentAmountNumber: number | null = null;
-  if (input.hasPayment) {
+  const paymentAmountNumber = (() => {
     try {
-      paymentAmountNumber = parseAmountString(input.paymentAmount);
-      if (paymentAmountNumber === null) {
-        throw new Error(
-          'MEET_STEP_PAYMENT_AMOUNT_REQUIRED: Ödeme tutarı boş bırakılamaz.',
-        );
-      }
+      return parseAmountString(input.paymentAmount);
     } catch (err) {
+      // Mesajı yukarı fırlatıyoruz ki UI'da gösterilsin
       if (err instanceof Error) {
         throw err;
       }
       throw new Error('MEET_STEP_PAYMENT_AMOUNT_INVALID');
     }
-  }
+  })();
 
   const shouldInsertPayment =
     input.hasPayment &&
@@ -171,7 +166,9 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
         meeting_id: meetingId,
         patient_id: input.subjectId,
         amount: paymentAmountNumber,
-        method: 'senet',
+        // NOTE: method artık CHECK constraint ile kısıtlı.
+        // Şimdilik meeting ekranından sadece 'Senet' kaydediyoruz.
+        method: 'Senet',
         note: input.paymentNote.trim() || null,
       });
 
