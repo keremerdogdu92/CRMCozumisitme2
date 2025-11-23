@@ -34,7 +34,11 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       last_visit_at,
       sgk_flag,
       sgk_prescription_received,
-      sgk_recorded_to_system
+      sgk_recorded_to_system,
+      payment_method,
+      card_sale_total,
+      card_fee_rate,
+      card_fee_amount
     `,
     )
     .order('created_at', { ascending: false });
@@ -107,12 +111,54 @@ export async function createPatient(input: NewPatientForm): Promise<void> {
       'Failed to load profile for org_id (STEP_PROFILE):',
       profileError,
     );
-    throw new Error('STEP_PROFILE: ' + profileError.message);
+  throw new Error('STEP_PROFILE: ' + profileError.message);
   }
 
   if (!profile?.org_id) {
     console.error('Profile org_id is missing (STEP_NO_ORG)', profile);
     throw new Error('STEP_NO_ORG: Profile org_id is missing');
+  }
+
+  // --- Payment normalization (patients.payment_* alanları) ---
+
+  let paymentMethod: string | null = null;
+  let cardSaleTotal: number | null = null;
+  let cardFeeRate: number | null = null;
+  let cardFeeAmount: number | null = null;
+
+  const rawMethod = input.paymentMethod;
+
+  if (rawMethod && rawMethod !== '') {
+    paymentMethod = rawMethod;
+
+    if (rawMethod === 'Kredi_Kartı') {
+      // Kart satışında hem satış tutarı hem de % komisyon zorunlu
+      const saleTotalNum = parseMoneyToNumber(
+        input.cardSaleTotal,
+        'PATIENT_CARD_SALE_TOTAL',
+      );
+
+      const rateTrimmed = input.cardFeeRate.trim();
+      if (!rateTrimmed) {
+        throw new Error(
+          'PATIENT_CARD_FEE_RATE: Kart komisyon yüzdesi (örn. 3.5) boş bırakılamaz.',
+        );
+      }
+
+      const rateNorm = rateTrimmed.replace(',', '.');
+      const rate = Number(rateNorm);
+      if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+        throw new Error(
+          'PATIENT_CARD_FEE_RATE: 0–100 arasında geçerli bir yüzde girin.',
+        );
+      }
+
+      cardSaleTotal = saleTotalNum;
+      cardFeeRate = Number(rate.toFixed(2));
+      cardFeeAmount = Number(
+        (saleTotalNum * (cardFeeRate / 100)).toFixed(2),
+      );
+    }
   }
 
   const { error: insertError } = await supabaseClient.from('patients').insert({
@@ -126,6 +172,10 @@ export async function createPatient(input: NewPatientForm): Promise<void> {
     sgk_recorded_to_system: input.sgkFlag
       ? input.sgkRecordedToSystem
       : false,
+    payment_method: paymentMethod,
+    card_sale_total: cardSaleTotal,
+    card_fee_rate: cardFeeRate,
+    card_fee_amount: cardFeeAmount,
   });
 
   if (insertError) {
