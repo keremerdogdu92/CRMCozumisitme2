@@ -48,7 +48,9 @@ export async function fetchPatients(): Promise<PatientRow[]> {
     throw error;
   }
 
-  return data ?? [];
+  // Supabase already returns proper JS types for numeric columns.
+  // We just cast the shape to PatientRow; nullability is handled in the type.
+  return (data ?? []) as PatientRow[];
 }
 
 /**
@@ -111,7 +113,6 @@ export async function createPatient(input: NewPatientForm): Promise<void> {
       'Failed to load profile for org_id (STEP_PROFILE):',
       profileError,
     );
-  throw new Error('STEP_PROFILE: ' + profileError.message);
   }
 
   if (!profile?.org_id) {
@@ -119,46 +120,40 @@ export async function createPatient(input: NewPatientForm): Promise<void> {
     throw new Error('STEP_NO_ORG: Profile org_id is missing');
   }
 
-  // --- Payment normalization (patients.payment_* alanları) ---
+  // Normalize payment fields.
+  const isCard = input.paymentMethod === 'Kredi_Kartı';
 
-  let paymentMethod: string | null = null;
+  // DB tarafında boş string yerine null tutmak istiyoruz.
+  const paymentMethodValue = input.paymentMethod || null;
+
   let cardSaleTotal: number | null = null;
   let cardFeeRate: number | null = null;
   let cardFeeAmount: number | null = null;
 
-  const rawMethod = input.paymentMethod;
-
-  if (rawMethod && rawMethod !== '') {
-    paymentMethod = rawMethod;
-
-    if (rawMethod === 'Kredi_Kartı') {
-      // Kart satışında hem satış tutarı hem de % komisyon zorunlu
-      const saleTotalNum = parseMoneyToNumber(
-        input.cardSaleTotal,
-        'PATIENT_CARD_SALE_TOTAL',
-      );
-
-      const rateTrimmed = input.cardFeeRate.trim();
-      if (!rateTrimmed) {
-        throw new Error(
-          'PATIENT_CARD_FEE_RATE: Kart komisyon yüzdesi (örn. 3.5) boş bırakılamaz.',
-        );
-      }
-
-      const rateNorm = rateTrimmed.replace(',', '.');
-      const rate = Number(rateNorm);
-      if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
-        throw new Error(
-          'PATIENT_CARD_FEE_RATE: 0–100 arasında geçerli bir yüzde girin.',
-        );
-      }
-
-      cardSaleTotal = saleTotalNum;
-      cardFeeRate = Number(rate.toFixed(2));
-      cardFeeAmount = Number(
-        (saleTotalNum * (cardFeeRate / 100)).toFixed(2),
+  if (isCard) {
+    if (!input.cardSaleTotal.trim()) {
+      throw new Error(
+        'CARD_SALE_TOTAL: Kartla satışta, kart satış tutarı boş bırakılamaz.',
       );
     }
+    if (!input.cardFeeRate.trim()) {
+      throw new Error(
+        'CARD_FEE_RATE: Kartla satışta, komisyon oranı boş bırakılamaz.',
+      );
+    }
+
+    cardSaleTotal = parseMoneyToNumber(
+      input.cardSaleTotal,
+      'CARD_SALE_TOTAL',
+    );
+    cardFeeRate = parsePercentToNumber(
+      input.cardFeeRate,
+      'CARD_FEE_RATE',
+    );
+
+    cardFeeAmount = Number(
+      (cardSaleTotal * (cardFeeRate / 100)).toFixed(2),
+    );
   }
 
   const { error: insertError } = await supabaseClient.from('patients').insert({
@@ -172,7 +167,9 @@ export async function createPatient(input: NewPatientForm): Promise<void> {
     sgk_recorded_to_system: input.sgkFlag
       ? input.sgkRecordedToSystem
       : false,
-    payment_method: paymentMethod,
+
+    // Payment fields
+    payment_method: paymentMethodValue,
     card_sale_total: cardSaleTotal,
     card_fee_rate: cardFeeRate,
     card_fee_amount: cardFeeAmount,
@@ -355,6 +352,35 @@ function parseMoneyToNumber(raw: string, fieldCode: string): number {
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(
       `${fieldCode}: Geçerli bir tutar girin (0'dan büyük olmalı).`,
+    );
+  }
+
+  return Number(value.toFixed(2));
+}
+
+/**
+ * Parse a percent-like string ("3.5", "3,5", "18") into number.
+ */
+function parsePercentToNumber(raw: string, fieldCode: string): number {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error(
+      `${fieldCode}: Boş bırakılamaz, geçerli bir oran girin.`,
+    );
+  }
+
+  const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
+  const value = Number(normalized);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(
+      `${fieldCode}: Geçerli bir oran girin (0'dan büyük olmalı).`,
+    );
+  }
+
+  if (value > 100) {
+    throw new Error(
+      `${fieldCode}: Oran 100'den büyük olamaz.`,
     );
   }
 
