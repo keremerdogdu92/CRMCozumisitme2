@@ -38,8 +38,7 @@ function useSubjectSearch(meetingType: MeetingType, term: string) {
 
   return useQuery<SubjectOption[]>({
     queryKey: ['meeting-subject-search', meetingType, term],
-    enabled:
-      term.trim().length >= 2 && enabledTypes.includes(meetingType),
+    enabled: term.trim().length >= 2 && enabledTypes.includes(meetingType),
     queryFn: async () => {
       const q = term.trim();
       if (!q) return [];
@@ -73,6 +72,7 @@ function SubjectSearchField({
 }: SubjectSearchFieldProps) {
   const [inputValue, setInputValue] = useState(selectedName ?? '');
   const [touched, setTouched] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   const { data: options = [], isFetching } = useSubjectSearch(
     meetingType,
@@ -87,7 +87,7 @@ function SubjectSearchField({
   }, [selectedName, touched]);
 
   const showDropdown =
-    inputValue.trim().length >= 2 && options.length > 0;
+    isOpen && inputValue.trim().length >= 2 && options.length > 0;
 
   return (
     <div className="relative">
@@ -98,6 +98,12 @@ function SubjectSearchField({
         onChange={(e) => {
           setTouched(true);
           setInputValue(e.target.value);
+          setIsOpen(true);
+        }}
+        onBlur={() => {
+          // Blur → dropdown'ı kısa bir gecikmeyle kapatıyoruz ki
+          // liste elemanına tıklama çalışmaya devam etsin.
+          setTimeout(() => setIsOpen(false), 120);
         }}
         placeholder="İsimle ara (en az 2 harf)..."
       />
@@ -113,10 +119,13 @@ function SubjectSearchField({
             <li
               key={opt.id}
               className="cursor-pointer px-2 py-1 hover:bg-slate-100"
-              onClick={() => {
+              onMouseDown={(e) => {
+                // onBlur'dan önce çalışsın diye onMouseDown kullanıyoruz
+                e.preventDefault();
                 onSelect(opt.id, opt.name);
                 setInputValue(opt.name);
                 setTouched(false);
+                setIsOpen(false);
               }}
             >
               {opt.name}
