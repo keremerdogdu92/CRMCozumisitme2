@@ -13,6 +13,9 @@ export async function fetchMeetings(): Promise<MeetingRow[]> {
     .select(
       `
       id,
+      meeting_type,
+      subject_id,
+      subject_name,
       subject,
       note,
       at,
@@ -33,7 +36,8 @@ export async function fetchMeetings(): Promise<MeetingRow[]> {
 
 export async function createMeeting(input: NewMeetingForm): Promise<void> {
   // 1) Aktif kullanıcıyı al
-  const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+  const { data: userData, error: userError } =
+    await supabaseClient.auth.getUser();
   if (userError) {
     console.error('Failed to get current user (MEET_STEP_USER):', userError);
     throw new Error('MEET_STEP_USER: ' + userError.message);
@@ -51,8 +55,10 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
     .single();
 
   if (profileError) {
-    console.error('Failed to load profile for org_id (MEET_STEP_PROFILE):', profileError);
-    throw new Error('MEET_STEP_PROFILE: ' + profileError.message);
+    console.error(
+      'Failed to load profile for org_id (MEET_STEP_PROFILE):',
+      profileError,
+    );
   }
 
   if (!profile?.org_id) {
@@ -70,11 +76,17 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
         );
 
   const atIso = input.at ? new Date(input.at).toISOString() : null;
-  const nextAtIso = input.next_at ? new Date(input.next_at).toISOString() : null;
+  const nextAtIso = input.next_at
+    ? new Date(input.next_at).toISOString()
+    : null;
 
-  // 4) Insert
+  // 4) Insert – meeting_type ve subject_x alanlarını da gönder
   const { error: insertError } = await supabaseClient.from('meetings').insert({
     org_id: profile.org_id,
+    meeting_type: input.meetingType,
+    subject_id: input.subjectId,
+    subject_name: input.subjectName.trim() || null,
+
     subject: input.subject.trim() || null,
     note: input.note.trim() || null,
     at: atIso,
