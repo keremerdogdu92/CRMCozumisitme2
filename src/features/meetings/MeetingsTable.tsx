@@ -68,13 +68,19 @@ export function MeetingsTable() {
     );
   }
 
-  const rows: MeetingRow[] = (data ?? []).map((m) => ({
-    // Eski kayıtlar için default değerler
-    meeting_type: (m.meeting_type ?? 'patient') as MeetingType,
-    subject_name: m.subject_name ?? null,
-    subject_id: m.subject_id ?? null,
-    ...m,
-  }));
+  // Eski kayıtlar için default değerler atayıp MeetingRow tipine normalize et
+  const rows: MeetingRow[] = (data ?? []).map((m) => {
+    const meeting_type = (m.meeting_type ?? 'patient') as MeetingType;
+    const subject_name = (m.subject_name ?? null) as string | null;
+    const subject_id = (m.subject_id ?? null) as string | null;
+
+    return {
+      ...m,
+      meeting_type,
+      subject_name,
+      subject_id,
+    };
+  });
 
   const filteredRows =
     typeFilter === 'all'
