@@ -10,6 +10,7 @@ import type {
   PatientPaymentRow,
   PatientInstallmentPlanRow,
   UpsertPatientInstallmentPlanInput,
+  PatientPaymentMethod,
 } from './types';
 
 export const PATIENTS_QUERY_KEY = ['patients'] as const;
@@ -19,8 +20,9 @@ export const PATIENT_PAYMENTS_BY_PATIENT_QUERY_KEY = (patientId: string) =>
   ['patient-payments', patientId] as const;
 
 // Installment plan per patient
-export const PATIENT_INSTALLMENT_PLAN_BY_PATIENT_QUERY_KEY = (patientId: string) =>
-  ['patient-installment-plan', patientId] as const;
+export const PATIENT_INSTALLMENT_PLAN_BY_PATIENT_QUERY_KEY = (
+  patientId: string,
+) => ['patient-installment-plan', patientId] as const;
 
 export async function fetchPatients(): Promise<PatientRow[]> {
   const { data, error } = await supabaseClient
@@ -48,8 +50,6 @@ export async function fetchPatients(): Promise<PatientRow[]> {
     throw error;
   }
 
-  // Supabase already returns proper JS types for numeric columns.
-  // We just cast the shape to PatientRow; nullability is handled in the type.
   return (data ?? []) as PatientRow[];
 }
 
@@ -89,8 +89,34 @@ export async function searchPatientsByName(
   }));
 }
 
-// Create a new patient row with org_id taken from the current profile.
-export async function createPatient(input: NewPatientForm): Promise<void> {
+/**
+ * Parse a money-like string ("20 000", "20.000", "20000,50") into number.
+ */
+function parseMoneyToNumber(raw: string, fieldCode: string): number {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error(
+      `${fieldCode}: Boş bırakılamaz, geçerli bir tutar girin.`,
+    );
+  }
+
+  const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
+  const value = Number(normalized);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(
+      `${fieldCode}: Geçerli bir tutar girin (0'dan büyük olmalı).`,
+    );
+  }
+
+  return Number(value.toFixed(2));
+}
+
+/**
+ * Create a new patient row with org_id taken from the current profile.
+ * Returns the inserted PatientRow so that callers can immediately open the detail drawer.
+ */
+export async function createPatient(input: NewPatientForm): Promise<PatientRow> {
   const { data: userData, error: userError } =
     await supabaseClient.auth.getUser();
   if (userError) {
@@ -113,6 +139,7 @@ export async function createPatient(input: NewPatientForm): Promise<void> {
       'Failed to load profile for org_id (STEP_PROFILE):',
       profileError,
     );
+    throw new Error('STEP_PROFILE: ' + profileError.message);
   }
 
   if (!profile?.org_id) {
@@ -120,65 +147,79 @@ export async function createPatient(input: NewPatientForm): Promise<void> {
     throw new Error('STEP_NO_ORG: Profile org_id is missing');
   }
 
-  // Normalize payment fields.
-  const isCard = input.paymentMethod === 'Kredi_Kartı';
+  // Payment metadata on patient row
+  let payment_method: PatientPaymentMethod | null = null;
+  let card_sale_total: number | null = null;
+  let card_fee_rate: number | null = null;
+  let card_fee_amount: number | null = null;
 
-  // DB tarafında boş string yerine null tutmak istiyoruz.
-  const paymentMethodValue = input.paymentMethod || null;
+  if (input.paymentMethod) {
+    payment_method = input.paymentMethod as PatientPaymentMethod;
 
-  let cardSaleTotal: number | null = null;
-  let cardFeeRate: number | null = null;
-  let cardFeeAmount: number | null = null;
+    if (payment_method === 'Kredi_Kartı') {
+      const saleTotalNum = parseMoneyToNumber(
+        input.cardSaleTotal || '',
+        'CARD_SALE_TOTAL',
+      );
 
-  if (isCard) {
-    if (!input.cardSaleTotal.trim()) {
-      throw new Error(
-        'CARD_SALE_TOTAL: Kartla satışta, kart satış tutarı boş bırakılamaz.',
+      const feeRateRaw = input.cardFeeRate.trim().replace(',', '.');
+      const feeRateNum = Number(feeRateRaw);
+      if (!Number.isFinite(feeRateNum) || feeRateNum <= 0) {
+        throw new Error(
+          'CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0\'dan büyük).',
+        );
+      }
+
+      card_sale_total = saleTotalNum;
+      card_fee_rate = Number(feeRateNum.toFixed(2));
+      card_fee_amount = Number(
+        (saleTotalNum * (feeRateNum / 100)).toFixed(2),
       );
     }
-    if (!input.cardFeeRate.trim()) {
-      throw new Error(
-        'CARD_FEE_RATE: Kartla satışta, komisyon oranı boş bırakılamaz.',
-      );
-    }
-
-    cardSaleTotal = parseMoneyToNumber(
-      input.cardSaleTotal,
-      'CARD_SALE_TOTAL',
-    );
-    cardFeeRate = parsePercentToNumber(
-      input.cardFeeRate,
-      'CARD_FEE_RATE',
-    );
-
-    cardFeeAmount = Number(
-      (cardSaleTotal * (cardFeeRate / 100)).toFixed(2),
-    );
   }
 
-  const { error: insertError } = await supabaseClient.from('patients').insert({
-    org_id: profile.org_id,
-    full_name: input.fullName.trim(),
-    phone: input.phone.trim() || null,
-    sgk_flag: input.sgkFlag,
-    sgk_prescription_received: input.sgkFlag
-      ? input.sgkPrescriptionReceived
-      : false,
-    sgk_recorded_to_system: input.sgkFlag
-      ? input.sgkRecordedToSystem
-      : false,
-
-    // Payment fields
-    payment_method: paymentMethodValue,
-    card_sale_total: cardSaleTotal,
-    card_fee_rate: cardFeeRate,
-    card_fee_amount: cardFeeAmount,
-  });
+  const { data, error: insertError } = await supabaseClient
+    .from('patients')
+    .insert({
+      org_id: profile.org_id,
+      full_name: input.fullName.trim(),
+      phone: input.phone.trim() || null,
+      sgk_flag: input.sgkFlag,
+      sgk_prescription_received: input.sgkFlag
+        ? input.sgkPrescriptionReceived
+        : false,
+      sgk_recorded_to_system: input.sgkFlag
+        ? input.sgkRecordedToSystem
+        : false,
+      payment_method,
+      card_sale_total,
+      card_fee_rate,
+      card_fee_amount,
+    })
+    .select(
+      `
+      id,
+      full_name,
+      phone,
+      created_at,
+      last_visit_at,
+      sgk_flag,
+      sgk_prescription_received,
+      sgk_recorded_to_system,
+      payment_method,
+      card_sale_total,
+      card_fee_rate,
+      card_fee_amount
+    `,
+    )
+    .single();
 
   if (insertError) {
     console.error('Failed to insert patient (STEP_INSERT):', insertError);
     throw new Error('STEP_INSERT: ' + insertError.message);
   }
+
+  return data as PatientRow;
 }
 
 // Update SGK-related fields for a given patient.
@@ -206,7 +247,7 @@ export async function updatePatientSgkFields(
 }
 
 /**
- * Fetch senet payments for a single patient from meeting_payments.
+ * Fetch payments for a single patient from meeting_payments.
  */
 export async function fetchPatientPaymentsByPatientId(
   patientId: string,
@@ -248,7 +289,7 @@ export async function fetchPatientPaymentsByPatientId(
 }
 
 /**
- * React Query hook: senet ödeme geçmişi.
+ * React Query hook: payment history.
  */
 export function usePatientPayments(patientId: string | null) {
   return useQuery({
@@ -256,8 +297,7 @@ export function usePatientPayments(patientId: string | null) {
       ? PATIENT_PAYMENTS_BY_PATIENT_QUERY_KEY(patientId)
       : ['patient-payments', 'none'],
     enabled: !!patientId,
-    queryFn: () =>
-      fetchPatientPaymentsByPatientId(patientId as string),
+    queryFn: () => fetchPatientPaymentsByPatientId(patientId as string),
   });
 }
 
@@ -336,58 +376,6 @@ export function usePatientInstallmentPlan(patientId: string | null) {
 }
 
 /**
- * Parse a money-like string ("20 000", "20.000", "20000,50") into number.
- */
-function parseMoneyToNumber(raw: string, fieldCode: string): number {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    throw new Error(
-      `${fieldCode}: Boş bırakılamaz, geçerli bir tutar girin.`,
-    );
-  }
-
-  const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
-  const value = Number(normalized);
-
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new Error(
-      `${fieldCode}: Geçerli bir tutar girin (0'dan büyük olmalı).`,
-    );
-  }
-
-  return Number(value.toFixed(2));
-}
-
-/**
- * Parse a percent-like string ("3.5", "3,5", "18") into number.
- */
-function parsePercentToNumber(raw: string, fieldCode: string): number {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    throw new Error(
-      `${fieldCode}: Boş bırakılamaz, geçerli bir oran girin.`,
-    );
-  }
-
-  const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
-  const value = Number(normalized);
-
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new Error(
-      `${fieldCode}: Geçerli bir oran girin (0'dan büyük olmalı).`,
-    );
-  }
-
-  if (value > 100) {
-    throw new Error(
-      `${fieldCode}: Oran 100'den büyük olamaz.`,
-    );
-  }
-
-  return Number(value.toFixed(2));
-}
-
-/**
  * Upsert (create/update) a patient installment plan.
  * Rule: her org + patient için en fazla 1 aktif plan.
  */
@@ -431,7 +419,6 @@ export async function upsertPatientInstallmentPlan(
       'Failed to load profile for org_id (PLAN_STEP_PROFILE):',
       profileError,
     );
-    throw new Error('PLAN_STEP_PROFILE: ' + profileError.message);
   }
 
   if (!profile?.org_id) {
@@ -481,9 +468,7 @@ export async function upsertPatientInstallmentPlan(
     );
   }
 
-  const installmentAmount = Number(
-    (remaining / count).toFixed(2),
-  );
+  const installmentAmount = Number((remaining / count).toFixed(2));
 
   // Check for existing active plan
   const { data: existing, error: existingError } = await supabaseClient
@@ -505,7 +490,6 @@ export async function upsertPatientInstallmentPlan(
   }
 
   if (!existing) {
-    // Insert new plan
     const { error: insertError } = await supabaseClient
       .from('patient_installment_plans')
       .insert({
@@ -529,7 +513,6 @@ export async function upsertPatientInstallmentPlan(
       throw new Error('PLAN_STEP_INSERT: ' + insertError.message);
     }
   } else {
-    // Update existing plan
     const { error: updateError } = await supabaseClient
       .from('patient_installment_plans')
       .update({
@@ -562,7 +545,6 @@ export function useUpsertPatientInstallmentPlanMutation() {
   return useMutation({
     mutationFn: upsertPatientInstallmentPlan,
     onSuccess: (_data, variables) => {
-      // Refresh plan + payments for this patient
       if (variables.patientId) {
         queryClient.invalidateQueries({
           queryKey: PATIENT_INSTALLMENT_PLAN_BY_PATIENT_QUERY_KEY(
@@ -575,7 +557,6 @@ export function useUpsertPatientInstallmentPlanMutation() {
           ),
         });
       }
-      // Listeyi de tazelemek mantıklı (kalan borç vs. ileride ana listede gösterilebilir)
       queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
     },
   });
