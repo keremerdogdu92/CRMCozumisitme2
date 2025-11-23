@@ -45,6 +45,42 @@ export async function fetchTrials(): Promise<TrialRow[]> {
 }
 
 /**
+ * Lightweight search for trials by full_name.
+ * Used by the Meetings subject picker to attach meetings to existing trial patients.
+ */
+export interface TrialLite {
+  id: string;
+  full_name: string;
+}
+
+export async function searchTrialsByName(
+  query: string,
+  limit = 10,
+): Promise<TrialLite[]> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const { data, error } = await supabaseClient
+    .from('trials')
+    .select('id, full_name')
+    .ilike('full_name', `%${trimmed}%`)
+    .order('full_name', { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    console.error('Supabase trials search error:', error);
+    throw error;
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    full_name: row.full_name as string,
+  }));
+}
+
+/**
  * Fetch distinct device brands visible to the current organization
  * from the current_device_model_prices_public view.
  */
