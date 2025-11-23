@@ -26,3 +26,17 @@ export type PatientSgkUpdateInput = {
   sgkPrescriptionReceived: boolean;
   sgkRecordedToSystem: boolean;
 };
+
+/**
+ * One senet payment row recorded via meetings.
+ * Backed by meeting_payments table.
+ */
+export type PatientPaymentRow = {
+  id: string;
+  meeting_id: string | null;
+  patient_id: string;
+  amount: number;
+  method: string | null;
+  note: string | null;
+  created_at: string;
+};
