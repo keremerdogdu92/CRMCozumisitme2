@@ -2,7 +2,10 @@
 // Inline "Yeni Hasta" form card using InlineCreateCard and domain-specific fields.
 
 import { useState, FormEvent } from 'react';
-import type { NewPatientForm, PatientPaymentMethodFormValue } from './types';
+import type {
+  NewPatientForm,
+  PatientPaymentMethodFormValue,
+} from './types';
 import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
 
 type NewPatientFormCardProps = {
@@ -13,7 +16,10 @@ type NewPatientFormCardProps = {
   errorMessage?: string;
 };
 
-const PAYMENT_METHOD_OPTIONS: { value: PatientPaymentMethodFormValue; label: string }[] = [
+const PAYMENT_METHOD_OPTIONS: {
+  value: PatientPaymentMethodFormValue;
+  label: string;
+}[] = [
   { value: '', label: 'Seçilmedi' },
   { value: 'Tim', label: 'Tim' },
   { value: 'Sivantos', label: 'Sivantos' },
@@ -61,7 +67,6 @@ export function NewPatientFormCard({
       cardFeeRate: formState.cardFeeRate,
     });
 
-    // Form optimistic reset
     setFormState({
       fullName: '',
       phone: '',
@@ -131,8 +136,12 @@ export function NewPatientFormCard({
                 setFormState((s) => ({
                   ...s,
                   sgkFlag: checked,
-                  sgkPrescriptionReceived: checked ? s.sgkPrescriptionReceived : false,
-                  sgkRecordedToSystem: checked ? s.sgkRecordedToSystem : false,
+                  sgkPrescriptionReceived: checked
+                    ? s.sgkPrescriptionReceived
+                    : false,
+                  sgkRecordedToSystem: checked
+                    ? s.sgkRecordedToSystem
+                    : false,
                 }));
               }}
               className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
@@ -191,12 +200,15 @@ export function NewPatientFormCard({
                 className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 value={formState.paymentMethod}
                 onChange={(e) => {
-                  const value = e.target.value as PatientPaymentMethodFormValue;
+                  const value =
+                    e.target.value as PatientPaymentMethodFormValue;
                   setFormState((s) => ({
                     ...s,
                     paymentMethod: value,
-                    cardSaleTotal: value === 'Kredi_Kartı' ? s.cardSaleTotal : '',
-                    cardFeeRate: value === 'Kredi_Kartı' ? s.cardFeeRate : '',
+                    cardSaleTotal:
+                      value === 'Kredi_Kartı' ? s.cardSaleTotal : '',
+                    cardFeeRate:
+                      value === 'Kredi_Kartı' ? s.cardFeeRate : '',
                   }));
                 }}
               >
@@ -207,8 +219,8 @@ export function NewPatientFormCard({
                 ))}
               </select>
               <p className="mt-1 text-[11px] text-slate-500">
-                Senet seçersen detaylı taksit planını hasta detayından
-                tanımlamaya devam edeceğiz.
+                Senet seçersen taksit planını hasta detayındaki Ödemeler
+                sekmesinden tanımlayacağız.
               </p>
             </div>
 
@@ -250,9 +262,9 @@ export function NewPatientFormCard({
                 </div>
                 <div className="md:col-span-1">
                   <p className="text-[11px] text-slate-500">
-                    Kartla yapılan satışlarda buradaki bilgilerden kart
-                    komisyon tutarı hesaplanır. Nakit / Tim / Sivantos /
-                    Senet seçeneklerinde bu alanlar kullanılmaz.
+                    Kartla yapılan satışlarda bu bilgilerden kart komisyonu
+                    hesaplanır. Nakit / Tim / Sivantos / Senet
+                    seçeneklerinde bu alanlar kullanılmaz.
                   </p>
                 </div>
               </>
