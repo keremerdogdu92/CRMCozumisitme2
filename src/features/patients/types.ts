@@ -1,23 +1,14 @@
 // src/features/patients/types.ts
 // Shared types for the Patients feature.
 
-/**
- * Valid payment method values as stored in the database.
- */
-export type PatientPaymentMethodDbValue =
+export type PatientPaymentMethod =
   | 'Tim'
   | 'Sivantos'
   | 'Kredi_Kartı'
   | 'Nakit'
   | 'Senet';
 
-/**
- * Payment method value as used in forms.
- * Empty string means "not selected yet".
- */
-export type PatientPaymentMethodFormValue =
-  | ''
-  | PatientPaymentMethodDbValue;
+export type PatientPaymentMethodFormValue = '' | PatientPaymentMethod;
 
 export type PatientRow = {
   id: string;
@@ -29,8 +20,8 @@ export type PatientRow = {
   sgk_prescription_received: boolean | null;
   sgk_recorded_to_system: boolean | null;
 
-  // Payment summary (nullable for eski kayıtlar)
-  payment_method: PatientPaymentMethodDbValue | null;
+  // Payment metadata on the patient row (optional in v1).
+  payment_method: PatientPaymentMethod | null;
   card_sale_total: number | null;
   card_fee_rate: number | null;
   card_fee_amount: number | null;
@@ -43,7 +34,6 @@ export type NewPatientForm = {
   sgkPrescriptionReceived: boolean;
   sgkRecordedToSystem: boolean;
 
-  // New payment fields
   paymentMethod: PatientPaymentMethodFormValue;
   cardSaleTotal: string;
   cardFeeRate: string;
@@ -57,7 +47,7 @@ export type PatientSgkUpdateInput = {
 };
 
 /**
- * One senet payment row recorded via meetings.
+ * One payment row recorded via meetings.
  * Backed by meeting_payments table.
  */
 export type PatientPaymentRow = {
@@ -99,5 +89,5 @@ export type UpsertPatientInstallmentPlanInput = {
   upfrontPaid: string;
   installmentCount: string;
   firstDueDate: string; // yyyy-MM-dd
-  dayOfMonth: string;   // "1"–"31"
+  dayOfMonth: string; // "1"–"31"
 };
