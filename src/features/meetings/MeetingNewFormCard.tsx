@@ -1,6 +1,6 @@
 // src/features/meetings/MeetingNewFormCard.tsx
 // Inline card with form to create a new meeting.
-// v2.2 – meeting_type + subject picker (patients, trials, references)
+// v2.3 – meeting_type + subject picker (patients, trials, references) + optional senet payment.
 
 import { useState, FormEvent, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -28,6 +28,10 @@ const EMPTY_FORM: NewMeetingForm = {
   at: '',
   next_at: '',
   satisfaction10: '',
+
+  hasPayment: false,
+  paymentAmount: '',
+  paymentNote: '',
 };
 
 type SubjectOption = {
@@ -160,7 +164,13 @@ export function MeetingNewFormCard() {
   // Eğer kullanıcı personel ise ama form state'de önceki oturumdan "reference" kalmışsa, düzelt
   useEffect(() => {
     if (!isAdmin && form.meetingType === 'reference') {
-      setForm((f) => ({ ...f, meetingType: 'patient' }));
+      setForm((f) => ({
+        ...f,
+        meetingType: 'patient',
+        hasPayment: false,
+        paymentAmount: '',
+        paymentNote: '',
+      }));
     }
   }, [isAdmin, form.meetingType]);
 
@@ -178,6 +188,9 @@ export function MeetingNewFormCard() {
     }));
   };
 
+  const showPaymentSection =
+    form.meetingType === 'patient' && !!form.subjectId;
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="mb-2 text-sm font-semibold text-slate-900">
@@ -185,6 +198,7 @@ export function MeetingNewFormCard() {
       </h2>
       <p className="mb-4 text-xs text-slate-500">
         Görüşme tipini, kişiyi, tarihleri ve notu girerek kayıt oluşturun.
+        Senetli hastalar için bu ekrandan ödeme de kaydedebilirsiniz.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-3">
@@ -204,6 +218,9 @@ export function MeetingNewFormCard() {
                   // Tip değişince önceki seçimleri sıfırlamak daha temiz
                   subjectId: null,
                   subjectName: '',
+                  hasPayment: false,
+                  paymentAmount: '',
+                  paymentNote: '',
                 }))
               }
             >
@@ -297,6 +314,78 @@ export function MeetingNewFormCard() {
             />
           </div>
         </div>
+
+        {/* Payment (senet) – only for patient meetings with selected person */}
+        {showPaymentSection && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-medium text-amber-900">
+                  Senet Ödemesi
+                </p>
+                <p className="text-[11px] text-amber-800">
+                  Bu görüşmede senetli hastadan ödeme aldıysanız buradan
+                  miktarı girin. Tutar hasta borç takibinde kullanılacak.
+                </p>
+              </div>
+              <label className="flex items-center gap-1 text-[11px] text-amber-900">
+                <input
+                  type="checkbox"
+                  className="h-3 w-3"
+                  checked={form.hasPayment}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      hasPayment: e.target.checked,
+                      paymentAmount: e.target.checked ? f.paymentAmount : '',
+                      paymentNote: e.target.checked ? f.paymentNote : '',
+                    }))
+                  }
+                />
+                Ödeme alındı
+              </label>
+            </div>
+
+            {form.hasPayment && (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-amber-900">
+                    Ödenen Tutar
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
+                    value={form.paymentAmount}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        paymentAmount: e.target.value,
+                      }))
+                    }
+                    placeholder="Örn: 1250, 1.250,00"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-amber-900">
+                    Not (opsiyonel)
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
+                    value={form.paymentNote}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        paymentNote: e.target.value,
+                      }))
+                    }
+                    placeholder="Örn: 3. taksit"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Note */}
         <div>
