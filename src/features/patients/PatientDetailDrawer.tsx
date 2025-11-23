@@ -15,6 +15,13 @@ import {
 } from './api';
 import { SideDrawer } from '../../components/layout/SideDrawer';
 
+type PatientDetailTabId =
+  | 'info'
+  | 'devices'
+  | 'meetings'
+  | 'payments'
+  | 'audiogram';
+
 type PatientDetailDrawerProps = {
   patient: PatientRow;
   open: boolean;
@@ -26,14 +33,12 @@ type PatientDetailDrawerProps = {
   }) => void;
   isSaving: boolean;
   errorMsg?: string;
-};
 
-type PatientDetailTabId =
-  | 'info'
-  | 'devices'
-  | 'meetings'
-  | 'payments'
-  | 'audiogram';
+  // Optional: allow caller to open on a specific tab and with the
+  // senet plan form expanded.
+  initialTab?: PatientDetailTabId;
+  initialShowPlanForm?: boolean;
+};
 
 function formatDate(value: string | null): string {
   if (!value) return '-';
@@ -61,8 +66,8 @@ function formatDateTime(value: string | null): string {
   }
 }
 
-function formatAmount(amount: number | null | undefined): string {
-  if (amount == null || !Number.isFinite(amount)) return '-';
+function formatAmount(amount: number): string {
+  if (!Number.isFinite(amount)) return '-';
   return (
     amount.toLocaleString('tr-TR', {
       minimumFractionDigits: 0,
@@ -81,21 +86,6 @@ function addMonths(dateStr: string, count: number): string {
   }
 }
 
-function formatPaymentMethodLabel(method: string | null | undefined): string {
-  if (!method) return '-';
-  switch (method) {
-    case 'Kredi_Kartı':
-      return 'Kredi Kartı';
-    case 'Tim':
-    case 'Sivantos':
-    case 'Nakit':
-    case 'Senet':
-      return method;
-    default:
-      return method;
-  }
-}
-
 export function PatientDetailDrawer({
   patient,
   open,
@@ -103,6 +93,8 @@ export function PatientDetailDrawer({
   onSave,
   isSaving,
   errorMsg,
+  initialTab = 'info',
+  initialShowPlanForm = false,
 }: PatientDetailDrawerProps) {
   const [sgkFlag, setSgkFlag] = useState<boolean>(!!patient.sgk_flag);
   const [sgkPrescriptionReceived, setSgkPrescriptionReceived] =
@@ -110,7 +102,9 @@ export function PatientDetailDrawer({
   const [sgkRecordedToSystem, setSgkRecordedToSystem] =
     useState<boolean>(!!patient.sgk_recorded_to_system);
   const [activeTab, setActiveTab] =
-    useState<PatientDetailTabId>('info');
+    useState<PatientDetailTabId>(initialTab);
+  const [showPlanForm, setShowPlanForm] =
+    useState<boolean>(initialShowPlanForm);
 
   // Payment history
   const {
@@ -146,8 +140,9 @@ export function PatientDetailDrawer({
     setSgkFlag(!!patient.sgk_flag);
     setSgkPrescriptionReceived(!!patient.sgk_prescription_received);
     setSgkRecordedToSystem(!!patient.sgk_recorded_to_system);
-    setActiveTab('info');
-  }, [patient]);
+    setActiveTab(initialTab);
+    setShowPlanForm(initialShowPlanForm);
+  }, [patient.id, patient.sgk_flag, patient.sgk_prescription_received, patient.sgk_recorded_to_system, initialTab, initialShowPlanForm]);
 
   // When we load or change the plan, sync it into the form
   useEffect(() => {
@@ -220,12 +215,8 @@ export function PatientDetailDrawer({
 
   if (plan) {
     const p = plan as PatientInstallmentPlanRow;
-    const remainingAfterUpfront =
-      p.sale_total - p.upfront_paid;
-    remainingTotal = Math.max(
-      0,
-      remainingAfterUpfront - totalPaid,
-    );
+    const remainingAfterUpfront = p.sale_total - p.upfront_paid;
+    remainingTotal = Math.max(0, remainingAfterUpfront - totalPaid);
 
     const perInstallment = p.installment_amount || 1;
     paidInstallments = Math.min(
@@ -238,8 +229,6 @@ export function PatientDetailDrawer({
     );
     nextDueDate = addMonths(p.first_due_date, paidInstallments);
   }
-
-  const isCardPayment = patient.payment_method === 'Kredi_Kartı';
 
   return (
     <SideDrawer
@@ -313,39 +302,6 @@ export function PatientDetailDrawer({
                     {formatDate(patient.last_visit_at)}
                   </span>
                 </div>
-
-                {/* Payment summary */}
-                <div className="flex justify-between gap-2">
-                  <span className="text-xs text-slate-500">
-                    Ödeme şekli
-                  </span>
-                  <span className="text-xs text-slate-900">
-                    {formatPaymentMethodLabel(patient.payment_method)}
-                  </span>
-                </div>
-
-                {isCardPayment && (
-                  <div className="flex justify-between gap-2">
-                    <span className="text-xs text-slate-500">
-                      Kart komisyonu
-                    </span>
-                    <span className="text-xs text-slate-900">
-                      {formatAmount(patient.card_fee_amount)}
-                      {patient.card_fee_rate != null && (
-                        <span className="ml-1 text-[11px] text-slate-500">
-                          ({patient.card_fee_rate.toString().replace('.', ',')}%
-                          {patient.card_sale_total != null && (
-                            <>
-                              {' '}
-                              · kart satış {formatAmount(patient.card_sale_total)}
-                            </>
-                          )}
-                          )
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                )}
               </div>
             </section>
 
@@ -423,8 +379,9 @@ export function PatientDetailDrawer({
             </h4>
             <p className="text-xs text-slate-500">
               Bir sonraki adımda bu sekmede hastanın aktif cihazları, kulak
-              tarafı (sağ/sol/çift), model, seri numarası ve garanti bilgileri
-              listelenecek. Şimdilik sadece iskelet olarak duruyor.
+              tarafı (sağ/sol/çift), model, seri numarası ve garanti
+              bilgileri listelenecek. Şimdilik sadece iskelet olarak
+              duruyor.
             </p>
           </section>
         )}
@@ -436,9 +393,9 @@ export function PatientDetailDrawer({
             </h4>
             <p className="text-xs text-slate-500">
               Buraya tarih bazlı ziyaret listesi, not alanı ve
-              &quot;Ödeme / Tamir / Aksesuar&quot; alt etiketleri eklenecek.
-              Referans amaçlı görüşmeler bu sekmede, ancak ana listede
-              personel için gizli tutulacak.
+              &quot;Ödeme / Tamir / Aksesuar&quot; alt etiketleri
+              eklenecek. Referans amaçlı görüşmeler bu sekmede, ancak ana
+              listede personel için gizli tutulacak.
             </p>
           </section>
         )}
@@ -449,121 +406,148 @@ export function PatientDetailDrawer({
               Ödemeler (Senet)
             </h4>
 
-            {/* Plan form */}
+            {/* Plan form (toggle) */}
             <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3">
-              <p className="text-xs font-medium text-amber-900">
-                Senet Planı
-              </p>
-              <p className="text-[11px] text-amber-900">
-                Toplam satış fiyatı, peşinat ve taksit bilgilerini girerek
-                bu hasta için senet planı oluşturun. Görüşmeler ekranından
-                eklenen ödemeler bu plana göre takip edilir.
-              </p>
-
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <div className="flex items-start justify-between gap-2">
                 <div>
-                  <label className="mb-1 block text-[11px] font-medium text-amber-900">
-                    Toplam Satış Fiyatı
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
-                    value={saleTotal}
-                    onChange={(e) => setSaleTotal(e.target.value)}
-                    placeholder="Örn: 20000"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-amber-900">
-                    Peşinat (opsiyonel)
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
-                    value={upfrontPaid}
-                    onChange={(e) => setUpfrontPaid(e.target.value)}
-                    placeholder="Örn: 5000"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-amber-900">
-                    Taksit Sayısı
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
-                    value={installmentCount}
-                    onChange={(e) => setInstallmentCount(e.target.value)}
-                    placeholder="Örn: 6"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-amber-900">
-                    İlk Ödeme Tarihi
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
-                    value={firstDueDate}
-                    onChange={(e) => setFirstDueDate(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-amber-900">
-                    Her Ayın Günü
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={31}
-                    className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
-                    value={dayOfMonth}
-                    onChange={(e) => setDayOfMonth(e.target.value)}
-                    placeholder="Örn: 15"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                {isPlanSaveError && (
-                  <p className="text-[11px] text-red-700">
-                    Plan kaydedilirken hata:{' '}
-                    {(planSaveError as Error)?.message ??
-                      'Bilinmeyen hata'}
+                  <p className="text-xs font-medium text-amber-900">
+                    Senet Planı
                   </p>
-                )}
-                {isPlanError && (
-                  <p className="text-[11px] text-red-700">
-                    Plan yüklenirken hata:{' '}
-                    {(planError as Error)?.message ??
-                      'Bilinmeyen hata'}
+                  <p className="text-[11px] text-amber-900">
+                    Toplam satış fiyatı, peşinat ve taksit bilgilerini
+                    girerek bu hasta için senet planı oluşturun.
+                    Görüşmeler ekranından eklenen ödemeler bu plana göre
+                    takip edilir.
                   </p>
-                )}
-
+                </div>
                 <button
                   type="button"
-                  onClick={async () => {
-                    const payload: UpsertPatientInstallmentPlanInput = {
-                      patientId: patient.id,
-                      saleTotal,
-                      upfrontPaid,
-                      installmentCount,
-                      firstDueDate,
-                      dayOfMonth,
-                    };
-                    await upsertPlan(payload);
-                  }}
-                  disabled={isPlanSaving}
-                  className="inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+                  onClick={() =>
+                    setShowPlanForm((prev) => !prev)
+                  }
+                  className="inline-flex shrink-0 items-center rounded-md border border-amber-300 bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-900 hover:bg-amber-200"
                 >
-                  {isPlanSaving
-                    ? 'Plan kaydediliyor...'
-                    : plan
-                    ? 'Planı güncelle'
-                    : 'Plan oluştur'}
+                  {showPlanForm ? 'Plan formunu gizle' : 'Plan formunu aç'}
                 </button>
               </div>
+
+              {showPlanForm && (
+                <>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-amber-900">
+                        Toplam Satış Fiyatı
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
+                        value={saleTotal}
+                        onChange={(e) => setSaleTotal(e.target.value)}
+                        placeholder="Örn: 20000"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-amber-900">
+                        Peşinat (opsiyonel)
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
+                        value={upfrontPaid}
+                        onChange={(e) =>
+                          setUpfrontPaid(e.target.value)
+                        }
+                        placeholder="Örn: 5000"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-amber-900">
+                        Taksit Sayısı
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
+                        value={installmentCount}
+                        onChange={(e) =>
+                          setInstallmentCount(e.target.value)
+                        }
+                        placeholder="Örn: 6"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-amber-900">
+                        İlk Ödeme Tarihi
+                      </label>
+                      <input
+                        type="date"
+                        className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
+                        value={firstDueDate}
+                        onChange={(e) =>
+                          setFirstDueDate(e.target.value)
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-amber-900">
+                        Her Ayın Günü
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={31}
+                        className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
+                        value={dayOfMonth}
+                        onChange={(e) =>
+                          setDayOfMonth(e.target.value)
+                        }
+                        placeholder="Örn: 15"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    {isPlanSaveError && (
+                      <p className="text-[11px] text-red-700">
+                        Plan kaydedilirken hata:{' '}
+                        {(planSaveError as Error)?.message ??
+                          'Bilinmeyen hata'}
+                      </p>
+                    )}
+                    {isPlanError && (
+                      <p className="text-[11px] text-red-700">
+                        Plan yüklenirken hata:{' '}
+                        {(planError as Error)?.message ??
+                          'Bilinmeyen hata'}
+                      </p>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const payload: UpsertPatientInstallmentPlanInput =
+                          {
+                            patientId: patient.id,
+                            saleTotal,
+                            upfrontPaid,
+                            installmentCount,
+                            firstDueDate,
+                            dayOfMonth,
+                          };
+                        await upsertPlan(payload);
+                      }}
+                      disabled={isPlanSaving}
+                      className="inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+                    >
+                      {isPlanSaving
+                        ? 'Plan kaydediliyor...'
+                        : plan
+                        ? 'Planı güncelle'
+                        : 'Plan oluştur'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Plan summary */}
@@ -585,8 +569,8 @@ export function PatientDetailDrawer({
 
               {!isPlanLoading && !plan && (
                 <p className="text-[11px] text-emerald-900">
-                  Bu hasta için henüz senet planı yok. Yukarıdaki formdan
-                  plan oluşturduktan sonra taksit takibi otomatik
+                  Bu hasta için henüz senet planı yok. Yukarıdaki formu
+                  açıp plan oluşturduktan sonra taksit takibi otomatik
                   hesaplanacak.
                 </p>
               )}
@@ -657,8 +641,7 @@ export function PatientDetailDrawer({
             {isPaymentsError && (
               <p className="text-xs text-red-600">
                 Ödemeler yüklenirken bir hata oluştu:{' '}
-                {(paymentsError as Error)?.message ??
-                  'Bilinmeyen hata'}
+                {(paymentsError as Error)?.message ?? 'Bilinmeyen hata'}
               </p>
             )}
 
