@@ -4,7 +4,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
 import type {
-  EarSide,
   InventoryItemRow,
   InventoryStatus,
   InventoryItemType,
@@ -27,6 +26,7 @@ function parsePriceOrNull(raw: string): number | null {
 
 /**
  * Fetch inventory items for current org.
+ * Also resolves sold_patient_name from patients table (if sold_patient_id is set).
  */
 export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
   const { data, error } = await supabaseClient
@@ -57,8 +57,7 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
     throw error;
   }
 
-  const rows = data ?? [];
-  return rows.map((row: any) => ({
+  const baseRows = (data ?? []).map((row: any): InventoryItemRow => ({
     id: row.id as string,
     org_id: row.org_id as string,
     brand: row.brand as string,
@@ -66,7 +65,8 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
     item_type: row.item_type as InventoryItemType,
     barcode: (row.barcode as string | null) ?? null,
     serial_no: (row.serial_no as string | null) ?? null,
-    ear_side: row.ear_side as EarSide,
+    // ear_side can be null in DB
+    ear_side: (row.ear_side as InventoryItemRow['ear_side']) ?? null,
     status: row.status as InventoryStatus,
     purchase_price: row.purchase_price === null ? null : Number(row.purchase_price),
     list_price: row.list_price === null ? null : Number(row.list_price),
@@ -74,7 +74,45 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
     sold_at: (row.sold_at as string | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
+    sold_patient_name: null,
   }));
+
+  // Resolve patient names for sold items (best-effort; UI çalışsın yeter)
+  const soldIds = Array.from(
+    new Set(
+      baseRows
+        .map((r) => r.sold_patient_id)
+        .filter((id): id is string => !!id),
+    ),
+  );
+
+  if (soldIds.length > 0) {
+    const { data: patients, error: patientsError } = await supabaseClient
+      .from('patients')
+      .select('id, full_name')
+      .in('id', soldIds);
+
+    if (patientsError) {
+      console.error('Supabase inventory patient lookup error:', patientsError);
+      // Hata olursa sadece isimleri boş bırakıyoruz, liste yine de çalışsın.
+      return baseRows;
+    }
+
+    const nameMap = new Map<string, string>();
+    (patients ?? []).forEach((p: any) => {
+      if (p.id && p.full_name) {
+        nameMap.set(p.id as string, p.full_name as string);
+      }
+    });
+
+    baseRows.forEach((row) => {
+      if (row.sold_patient_id) {
+        row.sold_patient_name = nameMap.get(row.sold_patient_id) ?? null;
+      }
+    });
+  }
+
+  return baseRows;
 }
 
 /**
@@ -120,12 +158,20 @@ export async function createInventoryItem(input: NewInventoryItemForm): Promise<
     throw new Error('INVENTORY_NO_ORG: Profilde org_id bulunamadı.');
   }
 
+  // Formdaki earSide → DB ear_side (charger ve "none" için NULL yazıyoruz)
+  const ear_side_db =
+    itemType === 'charger'
+      ? null
+      : earSide === 'none'
+      ? null
+      : earSide; // right | left | bilateral
+
   const { error: insertError } = await supabaseClient.from('inventory_items').insert({
     org_id: profile.org_id,
     brand: brand.trim(),
     model: model.trim(),
     item_type: itemType,
-    ear_side: earSide,
+    ear_side: ear_side_db,
     barcode: barcode.trim() || null,
     serial_no: serialNo.trim() || null,
     purchase_price,
