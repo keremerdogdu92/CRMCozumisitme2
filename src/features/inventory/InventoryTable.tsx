@@ -87,9 +87,7 @@ export function InventoryTable({
           <span className="ml-3 text-slate-500">Tür:</span>
           <select
             value={typeFilter}
-            onChange={(e) =>
-              onTypeFilterChange(e.target.value as any)
-            }
+            onChange={(e) => onTypeFilterChange(e.target.value as any)}
             className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           >
             <option value="all">Hepsi</option>
@@ -112,6 +110,8 @@ export function InventoryTable({
           <thead className="bg-slate-50">
             <tr>
               <th className="px-3 py-2 text-left font-medium text-slate-600">Eklenme</th>
+              <th className="px-3 py-2 text-left font-medium text-slate-600">Satış</th>
+              <th className="px-3 py-2 text-left font-medium text-slate-600">Hasta</th>
               <th className="px-3 py-2 text-left font-medium text-slate-600">Marka</th>
               <th className="px-3 py-2 text-left font-medium text-slate-600">Model</th>
               <th className="px-3 py-2 text-left font-medium text-slate-600">Tür</th>
@@ -128,55 +128,66 @@ export function InventoryTable({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((item) => (
-              <tr key={item.id} className="border-t border-slate-100">
-                <td className="whitespace-nowrap px-3 py-2 text-slate-700">
-                  {formatDate(item.created_at)}
-                </td>
-                <td className="px-3 py-2 text-slate-800">{item.brand}</td>
-                <td className="px-3 py-2 text-slate-800">{item.model}</td>
-                <td className="px-3 py-2 text-slate-700">
-                  {item.item_type === 'hearing_aid'
-                    ? 'İşitme cihazı'
-                    : 'Şarj cihazı / aksesuar'}
-                </td>
-                <td className="px-3 py-2 text-slate-700">
-                  {item.ear_side === 'right'
+            {filtered.map((item) => {
+              const isSold = item.status === 'sold';
+
+              let earLabel = '-';
+              if (isSold && item.ear_side) {
+                earLabel =
+                  item.ear_side === 'right'
                     ? 'Sağ'
                     : item.ear_side === 'left'
                     ? 'Sol'
                     : item.ear_side === 'bilateral'
                     ? 'Çift'
-                    : 'Yok'}
-                </td>
-                <td className="px-3 py-2 text-slate-700">
-                  {item.barcode ?? '-'}
-                </td>
-                <td className="px-3 py-2 text-slate-700">
-                  {item.serial_no ?? '-'}
-                </td>
-                <td className="px-3 py-2 text-right text-slate-700">
-                  {formatMoney(item.purchase_price)}
-                </td>
-                <td className="px-3 py-2 text-right text-slate-700">
-                  {formatMoney(item.list_price)}
-                </td>
-                <td className="px-3 py-2 text-slate-700">
-                  {item.status === 'in_stock'
-                    ? 'Stokta'
-                    : item.status === 'sold'
-                    ? 'Satıldı'
-                    : 'Tamirde'}
-                </td>
-              </tr>
-            ))}
+                    : 'Yok';
+              }
+
+              return (
+                <tr key={item.id} className="border-t border-slate-100">
+                  <td className="whitespace-nowrap px-3 py-2 text-slate-700">
+                    {formatDate(item.created_at)}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-slate-700">
+                    {isSold ? formatDate(item.sold_at) : '-'}
+                  </td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {isSold ? item.sold_patient_name ?? '-' : '-'}
+                  </td>
+                  <td className="px-3 py-2 text-slate-800">{item.brand}</td>
+                  <td className="px-3 py-2 text-slate-800">{item.model}</td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {item.item_type === 'hearing_aid'
+                      ? 'İşitme cihazı'
+                      : 'Şarj cihazı / aksesuar'}
+                  </td>
+                  <td className="px-3 py-2 text-slate-700">{earLabel}</td>
+                  <td className="px-3 py-2 text-slate-700">{item.barcode ?? '-'}</td>
+                  <td className="px-3 py-2 text-slate-700">{item.serial_no ?? '-'}</td>
+                  <td className="px-3 py-2 text-right text-slate-700">
+                    {formatMoney(item.purchase_price)}
+                  </td>
+                  <td className="px-3 py-2 text-right text-slate-700">
+                    {formatMoney(item.list_price)}
+                  </td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {item.status === 'in_stock'
+                      ? 'Stokta'
+                      : item.status === 'sold'
+                      ? 'Satıldı'
+                      : 'Tamirde'}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       <p className="text-[11px] text-slate-500">
-        Not: Satış ve tamir akışları eklendiğinde &quot;Satıldı&quot; ve &quot;Tamirde&quot;
-        durumları otomatik güncellenecek. Şimdilik stok takibi için manuel giriş yapabilirsiniz.
+        Not: Satış ve tamir akışları ileride hastalar ekranı ile entegre olduğunda
+        &quot;Satıldı&quot; ve &quot;Tamirde&quot; durumları ve kulak yönü otomatik
+        güncellenecek. Şimdilik stok takibi için manuel giriş yapabilirsiniz.
       </p>
     </div>
   );
