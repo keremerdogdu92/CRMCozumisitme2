@@ -22,7 +22,7 @@ const EAR_SIDE_OPTIONS: { value: EarSide; label: string }[] = [
   { value: 'right', label: 'Sağ' },
   { value: 'left', label: 'Sol' },
   { value: 'bilateral', label: 'Çift (Sağ+Sol)' },
-  { value: 'none', label: 'Yok / Geçerli Değil' },
+  { value: 'none', label: 'Yok / Henüz Atanmadı' },
 ];
 
 export function InventoryNewItemFormCard({
@@ -36,7 +36,7 @@ export function InventoryNewItemFormCard({
     brand: '',
     model: '',
     itemType: 'hearing_aid',
-    earSide: 'bilateral',
+    earSide: 'none', // yeni stokta kulak yönü zorunlu değil
     barcode: '',
     serialNo: '',
     purchasePrice: '',
@@ -53,7 +53,7 @@ export function InventoryNewItemFormCard({
       brand: '',
       model: '',
       itemType: 'hearing_aid',
-      earSide: 'bilateral',
+      earSide: 'none',
       barcode: '',
       serialNo: '',
       purchasePrice: '',
@@ -160,7 +160,8 @@ export function InventoryNewItemFormCard({
             ))}
           </select>
           <p className="mt-1 text-[11px] text-slate-500">
-            Şarj cihazı seçtiğinizde kulak tarafı otomatik olarak &quot;Yok&quot; olur.
+            Yeni stok için kulak yönü boş bırakılabilir. Satış sırasında hastaya göre sağ / sol
+            atanacak. Şarj cihazı seçtiğinizde kulak tarafı otomatik olarak &quot;Yok&quot; olur.
           </p>
         </div>
 
