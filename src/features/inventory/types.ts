@@ -5,10 +5,16 @@ export type InventoryItemType = 'hearing_aid' | 'charger';
 
 export type InventoryStatus = 'in_stock' | 'sold' | 'repair';
 
+/**
+ * Ear side as used in forms.
+ * - 'none' means "not set yet / not applicable" on the UI.
+ * - In the database, 'none' is stored as NULL.
+ */
 export type EarSide = 'right' | 'left' | 'bilateral' | 'none';
 
 /**
  * One inventory row from public.inventory_items.
+ * Note: ear_side can be null in the database, so we model it as EarSide | null here.
  */
 export type InventoryItemRow = {
   id: string;
@@ -18,12 +24,14 @@ export type InventoryItemRow = {
   item_type: InventoryItemType;
   barcode: string | null;
   serial_no: string | null;
-  ear_side: EarSide;
+  ear_side: EarSide | null;
   status: InventoryStatus;
   purchase_price: number | null;
   list_price: number | null;
   sold_patient_id: string | null;
   sold_at: string | null;
+  /** Resolved from patients.full_name via sold_patient_id; null if not sold or not found. */
+  sold_patient_name: string | null;
   created_at: string;
   updated_at: string;
 };
