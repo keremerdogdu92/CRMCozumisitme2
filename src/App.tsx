@@ -21,6 +21,8 @@ const ReferencesPage = lazy(() => import('./pages/ReferencesPage'));
 const ProfitCalculatorPage = lazy(
   () => import('./pages/ProfitCalculatorPage'),
 );
+// NEW: inventory page
+const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 
 /**
  * ProtectedLayout:
@@ -96,12 +98,7 @@ const router = createBrowserRouter([
       },
       {
         path: 'inventory',
-        element: (
-          <PlaceholderPage
-            title="Stok"
-            description="Stok yönetimi yakında eklenecek."
-          />
-        ),
+        element: <InventoryPage />,
       },
       {
         path: 'meetings',
