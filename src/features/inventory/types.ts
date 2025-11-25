@@ -50,3 +50,13 @@ export type NewInventoryItemForm = {
   purchasePrice: string;
   listPrice: string;
 };
+
+/**
+ * Result summary for CSV import jobs.
+ */
+export type InventoryImportSummary = {
+  jobId: string;
+  totalRows: number;
+  importedCount: number;
+  errorCount: number;
+};
