@@ -20,7 +20,7 @@ export type TrialDeviceFormRow = {
   side: string;        // 'both' | 'left' | 'right' | ''
   brand: string;       // brand text
   model: string;       // model text
-  listPrice: string;   // suggested list price (auto from view, toplam)
+  listPrice: string;   // suggested list price (auto from catalog view, toplam)
   quotePrice: string;  // user-entered total offer for this device row
 };
 
@@ -37,7 +37,7 @@ export type NewTrialForm = {
 
 /**
  * Current device model price row as exposed by the
- * current_device_model_prices_public view.
+ * current_device_catalog_prices_public view.
  */
 export type DeviceModelPriceRow = {
   id: string;
