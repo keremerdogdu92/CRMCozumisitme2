@@ -82,11 +82,11 @@ export async function searchTrialsByName(
 
 /**
  * Fetch distinct device brands visible to the current organization
- * from the current_device_model_prices_public view.
+ * from the current_device_catalog_prices_public view.
  */
 export async function fetchDeviceBrands(): Promise<string[]> {
   const { data, error } = await supabaseClient
-    .from('current_device_model_prices_public')
+    .from('current_device_catalog_prices_public')
     .select('brand')
     .order('brand', { ascending: true });
 
@@ -106,7 +106,7 @@ export async function fetchDeviceBrands(): Promise<string[]> {
 
 /**
  * Fetch device models and list prices for a given brand from the
- * current_device_model_prices_public view.
+ * current_device_catalog_prices_public view.
  */
 export async function fetchDeviceModelsByBrand(
   brand: string,
@@ -116,7 +116,7 @@ export async function fetchDeviceModelsByBrand(
   }
 
   const { data, error } = await supabaseClient
-    .from('current_device_model_prices_public')
+    .from('current_device_catalog_prices_public')
     .select('id, brand, model, list_price')
     .eq('brand', brand)
     .order('model', { ascending: true });
