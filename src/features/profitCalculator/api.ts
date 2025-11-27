@@ -1,6 +1,6 @@
 // src/features/profitCalculator/api.ts
 // Summary: Supabase data access for the Profitability Calculator
-// (device models, latest price by date, references).
+// (device models, latest price, references).
 
 import { supabaseClient } from '../../utils/supabaseClient';
 import {
@@ -17,12 +17,13 @@ const REFERENCES_TABLE = 'references'; // Şu an sadece isim + id çekiyoruz.
 /**
  * Cihaz model seçenekleri:
  * Denemeler ekranında kullanılan current_device_model_prices_public view'undan
- * model/brand listesini çekeriz.
+ * sadece hearing_aid olan model/brand listesini çekeriz.
  */
 export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
   const { data, error } = await supabaseClient
     .from(CURRENT_DEVICE_MODEL_PRICES_VIEW)
-    .select('model, brand')
+    .select('model, brand, item_type')
+    .eq('item_type', 'hearing_aid')
     .order('brand', { ascending: true })
     .order('model', { ascending: true });
 
@@ -49,25 +50,22 @@ export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
 }
 
 /**
- * Belirli bir model ve AS OF DATE için geçerli cihaz maliyetini döndürür.
+ * Belirli bir model için EN GÜNCEL cihaz maliyetini döndürür.
  *
- * device_model_prices
- *   WHERE model = X AND effective_from <= asOfDate
- *   ORDER BY effective_from DESC
- *   LIMIT 1
+ * current_device_model_prices_public
+ *   WHERE model = X
+ *   (view zaten org + tarih mantığını çözüyor)
  */
 export async function fetchEffectiveDeviceCost(
   model: string,
-  asOfDate: string,
+  asOfDate: string, // Şimdilik imzada dursun; view zaten "en güncel" fiyatı döner.
 ): Promise<number | null> {
-  if (!model || !asOfDate) return null;
+  if (!model) return null;
 
   const { data, error } = await supabaseClient
-    .from(DEVICE_MODEL_PRICES_TABLE)
-    .select('id, org_id, model, effective_from, purchase_cost')
+    .from(CURRENT_DEVICE_MODEL_PRICES_VIEW)
+    .select('purchase_cost, model')
     .eq('model', model)
-    .lte('effective_from', asOfDate)
-    .order('effective_from', { ascending: false })
     .limit(1);
 
   if (error) {
@@ -79,8 +77,15 @@ export async function fetchEffectiveDeviceCost(
     return null;
   }
 
-  const row = (data as any[])[0] as DeviceModelPriceRow;
-  return row.purchase_cost != null ? Number(row.purchase_cost) : null;
+  const row = (data as any[])[0] as Partial<DeviceModelPriceRow> & {
+    purchase_cost?: number;
+  };
+
+  if (row.purchase_cost == null) {
+    return null;
+  }
+
+  return Number(row.purchase_cost);
 }
 
 /**
