@@ -23,8 +23,10 @@ function todayISO(): string {
 function createEmptyInputs(): ProfitCalcInputs {
   return {
     mode: "price",
+
+    selectedBrand: "REXTON",
     selectedModel: "",
-    asOfDate: todayISO(), // sadece bilgi amaçlı gösterilecek
+    asOfDate: todayISO(),
 
     selectedReferenceId: null,
     referenceScheme: null,
@@ -183,6 +185,16 @@ export const ProfitCalculatorForm: React.FC = () => {
   const [inputs, setInputs] = useState<ProfitCalcInputs>(createEmptyInputs());
   const [deviceCost, setDeviceCost] = useState<number | null>(null);
   const [deviceCostLoading, setDeviceCostLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Marka listesi (distinct)
+  const brandOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of deviceModels) {
+      if (m.brand) set.add(m.brand);
+    }
+    return Array.from(set).sort();
+  }, [deviceModels]);
 
   // İlk yüklemede cihaz modelleri + referanslar
   useEffect(() => {
@@ -194,11 +206,17 @@ export const ProfitCalculatorForm: React.FC = () => {
           fetchReferenceOptions(),
         ]);
         setDeviceModels(models);
+
         setReferences(refs);
-        // asOfDate her mount'ta bugünün tarihi olsun
+
         setInputs((prev) => ({
           ...prev,
           asOfDate: todayISO(),
+          // Eğer default REXTON yoksa, ilk markayı seç
+          selectedBrand:
+            prev.selectedBrand ||
+            models.find((m) => m.brand)?.brand ||
+            "",
         }));
       } catch (err) {
         console.error("ProfitCalculator init error:", err);
@@ -209,16 +227,19 @@ export const ProfitCalculatorForm: React.FC = () => {
     init();
   }, []);
 
-  // Seçili modele göre cihaz maliyetini bugüne göre çek
+  // Seçili model veya tarih değişince cihaz maliyetini çek
   useEffect(() => {
     async function loadCost() {
-      if (!inputs.selectedModel) {
+      if (!inputs.selectedModel || !inputs.asOfDate) {
         setDeviceCost(null);
         return;
       }
       setDeviceCostLoading(true);
       try {
-        const cost = await fetchEffectiveDeviceCost(inputs.selectedModel);
+        const cost = await fetchEffectiveDeviceCost(
+          inputs.selectedModel,
+          inputs.asOfDate
+        );
         setDeviceCost(cost);
       } catch (err) {
         console.error("loadCost error:", err);
@@ -228,7 +249,7 @@ export const ProfitCalculatorForm: React.FC = () => {
       }
     }
     loadCost();
-  }, [inputs.selectedModel]);
+  }, [inputs.selectedModel, inputs.asOfDate]);
 
   const result = useMemo(
     () => calculateResult(inputs, deviceCost),
@@ -243,6 +264,23 @@ export const ProfitCalculatorForm: React.FC = () => {
       ...prev,
       [key]: value,
     }));
+  }
+
+  function handleBrandChange(brand: string) {
+    setInputs((prev) => {
+      const allowedModels = deviceModels.filter(
+        (m) => !brand || m.brand === brand
+      );
+      const hasCurrent =
+        prev.selectedModel &&
+        allowedModels.some((m) => m.model === prev.selectedModel);
+
+      return {
+        ...prev,
+        selectedBrand: brand,
+        selectedModel: hasCurrent ? prev.selectedModel : "",
+      };
+    });
   }
 
   function handleReferenceChange(id: string | null) {
@@ -290,14 +328,36 @@ export const ProfitCalculatorForm: React.FC = () => {
     return <div className="p-4">Yükleniyor...</div>;
   }
 
+  const filteredModels = deviceModels.filter((m) =>
+    inputs.selectedBrand ? m.brand === inputs.selectedBrand : true
+  );
+
   return (
     <div className="space-y-6 max-w-3xl">
       <h1 className="text-2xl font-semibold">Karlılık Hesaplama Aracı</h1>
 
-      {/* Device + date */}
+      {/* Device + brand + (optional) date */}
       <section className="border rounded-lg p-4 space-y-4">
-        <h2 className="font-semibold">1. Cihaz ve Tarih</h2>
+        <h2 className="font-semibold">1. Cihaz</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Marka
+            </label>
+            <select
+              className="w-full border rounded px-2 py-1 text-sm"
+              value={inputs.selectedBrand}
+              onChange={(e) => handleBrandChange(e.target.value)}
+            >
+              <option value="">Tümü</option>
+              {brandOptions.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div>
             <label className="block text-sm font-medium mb-1">
               Cihaz modeli
@@ -308,37 +368,49 @@ export const ProfitCalculatorForm: React.FC = () => {
               onChange={(e) => handleChange("selectedModel", e.target.value)}
             >
               <option value="">Seçiniz</option>
-              {deviceModels.map((m) => (
-                <option key={m.model} value={m.model}>
+              {filteredModels.map((m) => (
+                <option key={`${m.brand ?? ""}-${m.model}`} value={m.model}>
                   {m.brand ? `${m.brand} - ${m.model}` : m.model}
                 </option>
               ))}
             </select>
           </div>
+        </div>
 
-          <div>
+        <button
+          type="button"
+          className="text-xs text-gray-600 underline"
+          onClick={() => setShowDatePicker((v) => !v)}
+        >
+          {showDatePicker
+            ? "Tarih ayarını gizle"
+            : "Tarih ayarını göster (opsiyonel)"}
+        </button>
+
+        {showDatePicker && (
+          <div className="mt-2 max-w-xs">
             <label className="block text-sm font-medium mb-1">
-              Tarih (her zaman bugün)
+              Fiyat geçerlilik tarihi
             </label>
             <input
               type="date"
-              className="w-full border rounded px-2 py-1 text-sm bg-gray-100 cursor-not-allowed"
+              className="w-full border rounded px-2 py-1 text-sm"
               value={inputs.asOfDate}
-              disabled
-              readOnly
+              onChange={(e) => handleChange("asOfDate", e.target.value)}
             />
             <p className="text-xs text-gray-600 mt-1">
-              Hesaplamalar her zaman bugünkü geçerli fiyatlara göre yapılır.
+              Varsayılan olarak bugün gelir. İstersen geriye dönük farklı bir
+              tarih için maliyet hesabı yapabilirsin.
             </p>
           </div>
-        </div>
+        )}
 
         <div className="text-sm mt-2">
           {deviceCostLoading ? (
             <span>Cihaz maliyeti yükleniyor...</span>
           ) : deviceCost == null ? (
             <span className="text-red-600">
-              Bugün için cihaz maliyeti bulunamadı.
+              Seçilen tarih için cihaz maliyeti bulunamadı.
             </span>
           ) : (
             <span>
@@ -676,8 +748,7 @@ export const ProfitCalculatorForm: React.FC = () => {
 
         {!deviceCost && (
           <p className="text-sm text-red-600">
-            Hesaplama için önce cihaz modeli seçmelisin ve bugüne ait bir
-            maliyet kaydı olmalı.
+            Hesaplama için önce cihaz modeli ve geçerli bir tarih seçmelisin.
           </p>
         )}
 
