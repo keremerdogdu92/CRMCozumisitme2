@@ -11,17 +11,19 @@ import {
 
 // Supabase table / view names
 const DEVICE_MODEL_PRICES_TABLE = 'device_model_prices';
+const CURRENT_DEVICE_MODEL_PRICES_VIEW = 'current_device_model_prices_public';
 const REFERENCES_TABLE = 'references'; // Şu an sadece isim + id çekiyoruz.
 
 /**
  * Cihaz model seçenekleri:
- * device_model_prices içindeki model/brand kolonlarından distinct liste üretir.
+ * Denemeler ekranında kullanılan current_device_model_prices_public view'undan
+ * model/brand listesini çekeriz.
  */
 export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
   const { data, error } = await supabaseClient
-    // NOT: generic yok, şema zaten supabaseClient seviyesinde tanımlı
-    .from(DEVICE_MODEL_PRICES_TABLE)
+    .from(CURRENT_DEVICE_MODEL_PRICES_VIEW)
     .select('model, brand')
+    .order('brand', { ascending: true })
     .order('model', { ascending: true });
 
   if (error) {
@@ -34,8 +36,9 @@ export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
 
   for (const row of (data ?? []) as any[]) {
     if (!row.model) continue;
-    if (seen.has(row.model)) continue;
-    seen.add(row.model);
+    const key = `${row.brand ?? ''}||${row.model}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     result.push({
       model: row.model,
       brand: row.brand ?? null,
@@ -46,25 +49,24 @@ export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
 }
 
 /**
- * Belirli bir model için BUGÜNE kadar geçerli olan en güncel cihaz maliyetini döndürür.
+ * Belirli bir model ve AS OF DATE için geçerli cihaz maliyetini döndürür.
  *
  * device_model_prices
- *   WHERE model = X AND effective_from <= today
+ *   WHERE model = X AND effective_from <= asOfDate
  *   ORDER BY effective_from DESC
  *   LIMIT 1
  */
 export async function fetchEffectiveDeviceCost(
   model: string,
+  asOfDate: string,
 ): Promise<number | null> {
-  if (!model) return null;
-
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  if (!model || !asOfDate) return null;
 
   const { data, error } = await supabaseClient
     .from(DEVICE_MODEL_PRICES_TABLE)
     .select('id, org_id, model, effective_from, purchase_cost')
     .eq('model', model)
-    .lte('effective_from', today)
+    .lte('effective_from', asOfDate)
     .order('effective_from', { ascending: false })
     .limit(1);
 
