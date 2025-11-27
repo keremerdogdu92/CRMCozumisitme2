@@ -2,11 +2,13 @@
 // Inline "Yeni Hasta" form card using InlineCreateCard and domain-specific fields.
 
 import { useState, FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type {
   NewPatientForm,
   PatientPaymentMethodFormValue,
 } from './types';
 import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
+import { searchReferencesByName } from '../references/api';
 
 type NewPatientFormCardProps = {
   open: boolean;
@@ -28,6 +30,11 @@ const PAYMENT_METHOD_OPTIONS: {
   { value: 'Senet', label: 'Senet' },
 ];
 
+type ReferenceSearchResult = {
+  id: string;
+  full_name: string;
+};
+
 export function NewPatientFormCard({
   open,
   onToggle,
@@ -44,9 +51,26 @@ export function NewPatientFormCard({
     paymentMethod: '',
     cardSaleTotal: '',
     cardFeeRate: '',
+    referenceId: null,
+    referenceName: '',
   });
 
+  const [referenceSearch, setReferenceSearch] = useState('');
+  const [isReferenceDropdownOpen, setIsReferenceDropdownOpen] =
+    useState(false);
+
   const isCard = formState.paymentMethod === 'Kredi_Kartı';
+
+  const {
+    data: referenceOptions = [],
+    isLoading: isReferenceLoading,
+    isError: isReferenceError,
+  } = useQuery<ReferenceSearchResult[]>({
+    queryKey: ['reference-search-for-patient', referenceSearch],
+    queryFn: () => searchReferencesByName(referenceSearch),
+    enabled:
+      isReferenceDropdownOpen && referenceSearch.trim().length >= 2,
+  });
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -65,6 +89,8 @@ export function NewPatientFormCard({
       paymentMethod: formState.paymentMethod,
       cardSaleTotal: formState.cardSaleTotal,
       cardFeeRate: formState.cardFeeRate,
+      referenceId: formState.referenceId,
+      referenceName: formState.referenceName,
     });
 
     setFormState({
@@ -76,7 +102,41 @@ export function NewPatientFormCard({
       paymentMethod: '',
       cardSaleTotal: '',
       cardFeeRate: '',
+      referenceId: null,
+      referenceName: '',
     });
+    setReferenceSearch('');
+    setIsReferenceDropdownOpen(false);
+  };
+
+  const handleReferenceInputChange = (value: string) => {
+    setReferenceSearch(value);
+    setIsReferenceDropdownOpen(true);
+    setFormState((s) => ({
+      ...s,
+      referenceId: null,
+      referenceName: value,
+    }));
+  };
+
+  const handleSelectReference = (ref: ReferenceSearchResult) => {
+    setFormState((s) => ({
+      ...s,
+      referenceId: ref.id,
+      referenceName: ref.full_name,
+    }));
+    setReferenceSearch(ref.full_name);
+    setIsReferenceDropdownOpen(false); // ÖNEMLİ: seçim sonrası dropdown kapanır
+  };
+
+  const handleClearReference = () => {
+    setFormState((s) => ({
+      ...s,
+      referenceId: null,
+      referenceName: '',
+    }));
+    setReferenceSearch('');
+    setIsReferenceDropdownOpen(false);
   };
 
   return (
@@ -122,6 +182,83 @@ export function NewPatientFormCard({
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             placeholder="05XXXXXXXXX"
           />
+        </div>
+
+        {/* Referans (opsiyonel) */}
+        <div className="md:col-span-1 relative">
+          <label className="mb-1 block text-xs font-medium text-slate-600">
+            Referans (opsiyonel)
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              value={referenceSearch}
+              onChange={(e) =>
+                handleReferenceInputChange(e.target.value)
+              }
+              onFocus={() => {
+                if (referenceSearch.trim().length >= 2) {
+                  setIsReferenceDropdownOpen(true);
+                }
+              }}
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              placeholder="En az 2 harf yazın..."
+            />
+            {formState.referenceId && (
+              <button
+                type="button"
+                onClick={handleClearReference}
+                className="absolute inset-y-0 right-2 my-auto text-xs text-slate-400 hover:text-slate-600"
+              >
+                Temizle
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-[11px] text-slate-500">
+            En az 2 harf yazınca kayıtlı referanslar listelenir; biri
+            seçerseniz hasta o referansa bağlanmış olur (şimdilik
+            yalnızca form içinde tutuluyor).
+          </p>
+
+          {isReferenceDropdownOpen && (
+            <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+              {isReferenceLoading && (
+                <div className="px-3 py-2 text-[11px] text-slate-500">
+                  Referanslar yükleniyor...
+                </div>
+              )}
+              {isReferenceError && (
+                <div className="px-3 py-2 text-[11px] text-red-600">
+                  Referanslar alınırken hata oluştu.
+                </div>
+              )}
+              {!isReferenceLoading &&
+                !isReferenceError &&
+                referenceSearch.trim().length >= 2 &&
+                referenceOptions.length === 0 && (
+                  <div className="px-3 py-2 text-[11px] text-slate-500">
+                    Eşleşen referans bulunamadı.
+                  </div>
+                )}
+              {!isReferenceLoading &&
+                !isReferenceError &&
+                referenceOptions.length > 0 && (
+                  <ul className="text-xs text-slate-800">
+                    {referenceOptions.map((ref) => (
+                      <li key={ref.id}>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectReference(ref)}
+                          className="flex w-full items-center px-3 py-1.5 text-left hover:bg-slate-100"
+                        >
+                          {ref.full_name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+            </div>
+          )}
         </div>
 
         {/* SGK üçlü checkbox grubu */}
