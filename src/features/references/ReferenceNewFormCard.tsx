@@ -41,7 +41,7 @@ export function ReferenceNewFormCard({
   return (
     <InlineCreateCard
       title="Yeni Referans"
-      description="Referans kişi/kurumu kaydedin, görüşme tarihlerini planlayın."
+      description="Referans kişi/kurumu kaydedin, görüşme tarihlerini ve komisyon varsayılanlarını belirleyin."
       open={open}
       onToggle={onToggle}
       errorMessage={errorMessage}
@@ -50,6 +50,7 @@ export function ReferenceNewFormCard({
         onSubmit={handleSubmit}
         className="grid gap-3 md:grid-cols-4 md:items-start"
       >
+        {/* Ad Soyad / Kurum */}
         <div className="md:col-span-2">
           <label className="block text-xs font-medium text-slate-600 mb-1">
             Ad Soyad / Kurum
@@ -64,6 +65,7 @@ export function ReferenceNewFormCard({
           />
         </div>
 
+        {/* Grup */}
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">
             Grup
@@ -81,6 +83,83 @@ export function ReferenceNewFormCard({
           </select>
         </div>
 
+        {/* Telefon */}
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            Telefon
+          </label>
+          <input
+            type="tel"
+            value={values.phone}
+            onChange={(e) => onChange({ phone: e.target.value })}
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            placeholder="Örn. 5xx xxx xx xx"
+          />
+        </div>
+
+        {/* Komisyon tipi */}
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            Varsayılan komisyon tipi
+          </label>
+          <select
+            value={values.commissionScheme ?? ''}
+            onChange={(e) =>
+              onChange({
+                commissionScheme: (e.target.value || null) as
+                  | 'percent'
+                  | 'fixed'
+                  | null,
+              })
+            }
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          >
+            <option value="">Yok</option>
+            <option value="percent">% (satıştan)</option>
+            <option value="fixed">Sabit (TL)</option>
+          </select>
+        </div>
+
+        {/* Komisyon oranı */}
+        {values.commissionScheme === 'percent' && (
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              Varsayılan komisyon oranı (%)
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={values.commissionPercent}
+              onChange={(e) =>
+                onChange({ commissionPercent: Number(e.target.value || 0) })
+              }
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            />
+          </div>
+        )}
+
+        {/* Komisyon sabit tutar */}
+        {values.commissionScheme === 'fixed' && (
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              Varsayılan komisyon tutarı (TL)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={values.commissionFixed}
+              onChange={(e) =>
+                onChange({ commissionFixed: Number(e.target.value || 0) })
+              }
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            />
+          </div>
+        )}
+
+        {/* Son / sonraki görüşme */}
         <div className="md:col-span-2">
           <label className="block text-xs font-medium text-slate-600 mb-1">
             Son Görüşme Tarihi
@@ -105,6 +184,7 @@ export function ReferenceNewFormCard({
           />
         </div>
 
+        {/* Not */}
         <div className="md:col-span-4">
           <label className="block text-xs font-medium text-slate-600 mb-1">
             Not
@@ -118,7 +198,18 @@ export function ReferenceNewFormCard({
           />
         </div>
 
-        <div className="md:col-span-4 flex justify-end">
+        {/* Aktif / pasif */}
+        <div className="md:col-span-4 flex items-center justify-between">
+          <label className="inline-flex items-center gap-2 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={values.isActive}
+              onChange={(e) => onChange({ isActive: e.target.checked })}
+              className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+            />
+            Bu referans şu anda aktif
+          </label>
+
           <button
             type="submit"
             disabled={isSubmitting}
