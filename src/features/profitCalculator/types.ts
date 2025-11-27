@@ -6,18 +6,14 @@ export type ProfitCalcMode = 'price' | 'targetOnCost' | 'targetOnRevenue';
 export interface DeviceModelOption {
   model: string;
   brand?: string | null;
-  // Optional list price from device_model_prices (or its view); used as a default suggestion.
-  listPrice?: number | null;
 }
 
 export interface DeviceModelPriceRow {
   id: string;
   org_id: string;
-  brand: string;
   model: string;
-  effective_from: string; // date
+  effective_from: string; // date (YYYY-MM-DD)
   purchase_cost: number;
-  list_price: number | null;
 }
 
 export type ReferenceScheme = 'fixed' | 'percent' | null;
@@ -26,7 +22,7 @@ export interface ReferenceOption {
   id: string;
   name: string;
   scheme: ReferenceScheme;
-  // These are not coming from DB yet; reserved for future use:
+  // Bunlar şimdilik DB'den gelmeyecek, ileride kullanmak üzere opsiyonel:
   default_percent?: number | null;
   default_fixed?: number | null;
 }
@@ -43,7 +39,7 @@ export interface ProfitCalcInputs {
 
   // Device + date
   selectedModel: string;
-  asOfDate: string; // YYYY-MM-DD
+  asOfDate: string; // YYYY-MM-DD, ekranda sadece bilgi amaçlı
 
   // Reference
   selectedReferenceId: string | null;
