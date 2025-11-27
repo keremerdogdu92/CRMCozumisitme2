@@ -237,13 +237,10 @@ export function PatientDetailDrawer({
     nextDueDate = addMonths(p.first_due_date, paidInstallments);
   }
 
+  // Only show reference name, NEVER phone
   const referenceDisplay =
     patient.reference_name && patient.reference_name.trim().length > 0
-      ? `${patient.reference_name}${
-          patient.reference_phone
-            ? ` (${patient.reference_phone})`
-            : ''
-        }`
+      ? patient.reference_name
       : '-';
 
   return (
