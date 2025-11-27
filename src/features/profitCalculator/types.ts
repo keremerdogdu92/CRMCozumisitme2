@@ -37,9 +37,10 @@ export interface AccessoryRow {
 export interface ProfitCalcInputs {
   mode: ProfitCalcMode;
 
-  // Device + date
-  selectedModel: string;
-  asOfDate: string; // YYYY-MM-DD, ekranda sadece bilgi amaçlı
+  // Device + brand + date
+  selectedBrand: string;   // Marka filtresi (örn: REXTON)
+  selectedModel: string;   // Seçilen model
+  asOfDate: string;        // YYYY-MM-DD (varsayılan bugün, isteğe bağlı değiştirilebilir)
 
   // Reference
   selectedReferenceId: string | null;
