@@ -1,5 +1,5 @@
 // src/features/references/ReferencesTable.tsx
-// Tabular list view for references with group, phone and commission info.
+// Tabular list view for references with group, phone, commission and follow-up info.
 
 import type { ReferenceRow } from './types';
 
@@ -13,7 +13,7 @@ function formatDate(value: string | null): string {
   return new Date(value).toLocaleDateString('tr-TR');
 }
 
-function renderGroup(group: ReferenceRow['group']): string {
+function renderGroup(group: ReferenceRow['group']: ReferenceRow['group']): string {
   switch (group) {
     case 'medikal':
       return 'Medikal';
@@ -44,6 +44,49 @@ function renderStatus(r: ReferenceRow): string {
   return r.is_active ? 'Aktif' : 'Pasif';
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function computeReminderStatus(r: ReferenceRow): { label: string; className: string } {
+  if (!r.contact_interval_days || r.contact_interval_days <= 0) {
+    return { label: '-', className: 'text-slate-400' };
+  }
+
+  if (!r.last_meet_at) {
+    return {
+      label: 'Hiç görüşme yok',
+      className: 'text-amber-600 font-medium',
+    };
+  }
+
+  const last = new Date(r.last_meet_at);
+  if (Number.isNaN(last.getTime())) {
+    return { label: '-', className: 'text-slate-400' };
+  }
+
+  const next = new Date(last.getTime() + r.contact_interval_days * MS_PER_DAY);
+  const today = new Date();
+  const diffDays = Math.floor((next.getTime() - today.getTime()) / MS_PER_DAY);
+
+  if (diffDays < 0) {
+    return {
+      label: `${Math.abs(diffDays)} gün gecikti`,
+      className: 'text-red-600 font-medium',
+    };
+  }
+
+  if (diffDays <= 7) {
+    return {
+      label: `${diffDays} gün içinde`,
+      className: 'text-amber-600 font-medium',
+    };
+  }
+
+  return {
+    label: `${diffDays} gün sonra`,
+    className: 'text-emerald-700',
+  };
+}
+
 export function ReferencesTable({ items, onSelectRow }: ReferencesTableProps) {
   if (items.length === 0) {
     return (
@@ -72,48 +115,55 @@ export function ReferencesTable({ items, onSelectRow }: ReferencesTableProps) {
             <th className="px-4 py-2 text-left font-medium text-slate-600">
               Sonraki Görüşme
             </th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">Takip</th>
             <th className="px-4 py-2 text-left font-medium text-slate-600">Durum</th>
             <th className="px-4 py-2 text-left font-medium text-slate-600">Not</th>
             <th className="px-4 py-2 text-right font-medium text-slate-600">İşlemler</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((r) => (
-            <tr key={r.id} className="border-t border-slate-100">
-              <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
-                {formatDate(r.created_at)}
-              </td>
-              <td className="px-4 py-2 text-slate-800">{r.full_name ?? '-'}</td>
-              <td className="px-4 py-2 text-slate-700">{renderGroup(r.group)}</td>
-              <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
-                {r.phone ?? '-'}
-              </td>
-              <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
-                {renderCommission(r)}
-              </td>
-              <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
-                {formatDate(r.last_meet_at)}
-              </td>
-              <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
-                {formatDate(r.next_meet_at)}
-              </td>
-              <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
-                {renderStatus(r)}
-              </td>
-              <td className="px-4 py-2 text-slate-500 max-w-xs truncate">
-                {r.note ?? '-'}
-              </td>
-              <td className="px-4 py-2 text-right">
-                <button
-                  type="button"
-                  onClick={() => onSelectRow(r)}
-                  className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Detay
-                </button>
-              </td>
-            </tr>
-          ))}
+          {items.map((r) => {
+            const reminder = computeReminderStatus(r);
+            return (
+              <tr key={r.id} className="border-t border-slate-100">
+                <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                  {formatDate(r.created_at)}
+                </td>
+                <td className="px-4 py-2 text-slate-800">{r.full_name ?? '-'}</td>
+                <td className="px-4 py-2 text-slate-700">{renderGroup(r.group)}</td>
+                <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                  {r.phone ?? '-'}
+                </td>
+                <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                  {renderCommission(r)}
+                </td>
+                <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                  {formatDate(r.last_meet_at)}
+                </td>
+                <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                  {formatDate(r.next_meet_at)}
+                </td>
+                <td className="px-4 py-2 whitespace-nowrap">
+                  <span className={reminder.className}>{reminder.label}</span>
+                </td>
+                <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                  {renderStatus(r)}
+                </td>
+                <td className="px-4 py-2 text-slate-500 max-w-xs truncate">
+                  {r.note ?? '-'}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => onSelectRow(r)}
+                    className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Detay
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
