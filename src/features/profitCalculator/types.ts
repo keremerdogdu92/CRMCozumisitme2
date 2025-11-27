@@ -41,6 +41,7 @@ export interface ProfitCalcInputs {
   selectedBrand: string;   // Marka filtresi (örn: REXTON)
   selectedModel: string;   // Seçilen model
   asOfDate: string;        // YYYY-MM-DD (varsayılan bugün, isteğe bağlı değiştirilebilir)
+  deviceQuantity: number;  // Kaç cihaz satılıyor? (1, 2, ...)
 
   // Reference
   selectedReferenceId: string | null;
@@ -65,7 +66,7 @@ export interface ProfitCalcResult {
   error?: string;
 
   salePrice: number;        // S
-  deviceCost: number;       // C
+  deviceCost: number;       // C (toplam cihaz maliyeti, adet * birim maliyet)
   accessoriesCost: number;  // Ac
   totalCost: number;        // C_eff = C + Ac
 
