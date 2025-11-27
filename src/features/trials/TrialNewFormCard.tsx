@@ -250,15 +250,18 @@ export function TrialNewFormCard({
   };
 
   const referenceSearchTerm = values.referenceName ?? '';
+  const trimmedReferenceSearchTerm = referenceSearchTerm.trim();
+  const showReferenceDropdown =
+    trimmedReferenceSearchTerm.length >= 2 && !values.referenceId;
 
   const {
     data: referenceOptions = [],
     isLoading: isLoadingReferences,
     isError: isReferencesError,
   } = useQuery<{ id: string; full_name: string }[]>({
-    queryKey: ['reference-search', referenceSearchTerm],
-    queryFn: () => searchReferencesByName(referenceSearchTerm),
-    enabled: referenceSearchTerm.trim().length >= 2,
+    queryKey: ['reference-search', trimmedReferenceSearchTerm],
+    queryFn: () => searchReferencesByName(trimmedReferenceSearchTerm),
+    enabled: showReferenceDropdown,
   });
 
   // Load device brands once
@@ -397,7 +400,7 @@ export function TrialNewFormCard({
             En az 2 harf yazınca kayıtlı referanslar listelenir; birini seçerseniz bu
             deneme o referansa bağlanır.
           </p>
-          {referenceSearchTerm.trim().length >= 2 && (
+          {showReferenceDropdown && (
             <div className="mt-1 max-h-40 overflow-y-auto rounded-md border border-slate-200 bg-white text-xs shadow-sm">
               {isLoadingReferences && (
                 <div className="px-2 py-1 text-slate-500">Aranıyor...</div>
