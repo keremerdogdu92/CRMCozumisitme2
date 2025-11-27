@@ -37,6 +37,10 @@ export type NewPatientForm = {
   paymentMethod: PatientPaymentMethodFormValue;
   cardSaleTotal: string;
   cardFeeRate: string;
+
+  // Optional reference linkage – currently only UI-level, not persisted.
+  referenceId: string | null;
+  referenceName: string;
 };
 
 export type PatientSgkUpdateInput = {
