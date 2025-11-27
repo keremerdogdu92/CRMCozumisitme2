@@ -11,6 +11,10 @@ import type {
 
 export const TRIALS_QUERY_KEY = ['trials'] as const;
 
+// Trials grouped by reference
+export const TRIALS_BY_REFERENCE_QUERY_KEY = (referenceId: string) =>
+  ['trials-by-reference', referenceId] as const;
+
 // Device price lookup query keys
 export const DEVICE_BRANDS_QUERY_KEY = ['device-model-brands'] as const;
 export const DEVICE_MODELS_BY_BRAND_QUERY_KEY = (brand: string) =>
@@ -38,6 +42,40 @@ export async function fetchTrials(): Promise<TrialRow[]> {
 
   if (error) {
     console.error('Supabase trials fetch error:', error);
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+/**
+ * Fetch trials for a single reference_id.
+ */
+export async function fetchTrialsByReferenceId(
+  referenceId: string,
+): Promise<TrialRow[]> {
+  if (!referenceId) {
+    return [];
+  }
+
+  const { data, error } = await supabaseClient
+    .from('trials')
+    .select(
+      `
+      id,
+      full_name,
+      phone,
+      first_meet_at,
+      next_meet_at,
+      created_at,
+      reference_id
+    `,
+    )
+    .eq('reference_id', referenceId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Supabase trials-by-reference fetch error:', error);
     throw error;
   }
 
@@ -223,7 +261,7 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
       next_meet_at: input.nextMeetAt
         ? new Date(input.nextMeetAt).toISOString()
         : null,
-      reference_id: null, // reference selection will be added in a later iteration
+      reference_id: input.referenceId ?? null,
     })
     .select('id')
     .limit(1);
