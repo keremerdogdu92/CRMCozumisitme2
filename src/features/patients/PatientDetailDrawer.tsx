@@ -142,7 +142,14 @@ export function PatientDetailDrawer({
     setSgkRecordedToSystem(!!patient.sgk_recorded_to_system);
     setActiveTab(initialTab);
     setShowPlanForm(initialShowPlanForm);
-  }, [patient.id, patient.sgk_flag, patient.sgk_prescription_received, patient.sgk_recorded_to_system, initialTab, initialShowPlanForm]);
+  }, [
+    patient.id,
+    patient.sgk_flag,
+    patient.sgk_prescription_received,
+    patient.sgk_recorded_to_system,
+    initialTab,
+    initialShowPlanForm,
+  ]);
 
   // When we load or change the plan, sync it into the form
   useEffect(() => {
@@ -174,7 +181,7 @@ export function PatientDetailDrawer({
   };
 
   const tabs: { id: PatientDetailTabId; label: string }[] = [
-    { id: 'info', label: 'Özlük & SGK' },
+    { id: 'info', label: 'Özlük, Referans & SGK' },
     { id: 'devices', label: 'Cihazlar' },
     { id: 'meetings', label: 'Görüşmeler' },
     { id: 'payments', label: 'Ödemeler' },
@@ -230,6 +237,15 @@ export function PatientDetailDrawer({
     nextDueDate = addMonths(p.first_due_date, paidInstallments);
   }
 
+  const referenceDisplay =
+    patient.reference_name && patient.reference_name.trim().length > 0
+      ? `${patient.reference_name}${
+          patient.reference_phone
+            ? ` (${patient.reference_phone})`
+            : ''
+        }`
+      : '-';
+
   return (
     <SideDrawer
       open={open}
@@ -269,7 +285,7 @@ export function PatientDetailDrawer({
             {/* Basic info */}
             <section className="space-y-2">
               <h4 className="text-xs font-semibold uppercase text-slate-500">
-                Özlük Bilgileri
+                Özlük Bilgileri & Referans
               </h4>
               <div className="space-y-1 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
                 <div className="flex justify-between gap-2">
@@ -300,6 +316,12 @@ export function PatientDetailDrawer({
                   </span>
                   <span className="text-xs text-slate-900">
                     {formatDate(patient.last_visit_at)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-xs text-slate-500">Referans</span>
+                  <span className="text-xs text-slate-900">
+                    {referenceDisplay}
                   </span>
                 </div>
               </div>
