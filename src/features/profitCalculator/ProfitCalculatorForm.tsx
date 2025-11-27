@@ -9,11 +9,13 @@ import {
   ProfitCalcMode,
   ProfitCalcResult,
   ReferenceOption,
+  ChargerOption,
 } from "./types";
 import {
   fetchDeviceModelOptions,
   fetchEffectiveDeviceCost,
   fetchReferenceOptions,
+  fetchChargerOptions,
 } from "./api";
 
 function todayISO(): string {
@@ -187,6 +189,7 @@ export const ProfitCalculatorForm: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [deviceModels, setDeviceModels] = useState<DeviceModelOption[]>([]);
   const [references, setReferences] = useState<ReferenceOption[]>([]);
+  const [chargers, setChargers] = useState<ChargerOption[]>([]);
   const [inputs, setInputs] = useState<ProfitCalcInputs>(createEmptyInputs());
   const [unitDeviceCost, setUnitDeviceCost] = useState<number | null>(null);
   const [deviceCostLoading, setDeviceCostLoading] = useState(false);
@@ -201,18 +204,19 @@ export const ProfitCalculatorForm: React.FC = () => {
     return Array.from(set).sort();
   }, [deviceModels]);
 
-  // İlk yüklemede cihaz modelleri + referanslar
+  // İlk yüklemede cihaz modelleri + referanslar + şarj cihazları
   useEffect(() => {
     async function init() {
       setLoading(true);
       try {
-        const [models, refs] = await Promise.all([
+        const [models, refs, chargerOptions] = await Promise.all([
           fetchDeviceModelOptions(),
           fetchReferenceOptions(),
+          fetchChargerOptions(),
         ]);
         setDeviceModels(models);
-
         setReferences(refs);
+        setChargers(chargerOptions);
 
         setInputs((prev) => ({
           ...prev,
@@ -307,6 +311,26 @@ export const ProfitCalculatorForm: React.FC = () => {
       unitCost: 0,
       quantity: 1,
     };
+    setInputs((prev) => ({
+      ...prev,
+      accessories: [...prev.accessories, newRow],
+    }));
+  }
+
+  function addAccessoryFromCharger(modelKey: string) {
+    if (!modelKey) return;
+    const charger = chargers.find(
+      (c) => `${c.brand ?? ""}||${c.model}` === modelKey
+    );
+    if (!charger) return;
+
+    const newRow: AccessoryRow = {
+      id: `acc-${accessoryIdCounter++}`,
+      name: charger.brand ? `${charger.brand} - ${charger.model}` : charger.model,
+      unitCost: charger.purchaseCost,
+      quantity: 1,
+    };
+
     setInputs((prev) => ({
       ...prev,
       accessories: [...prev.accessories, newRow],
@@ -441,7 +465,8 @@ export const ProfitCalculatorForm: React.FC = () => {
             <span>Cihaz maliyeti yükleniyor...</span>
           ) : unitDeviceCost == null ? (
             <span className="text-red-600">
-              Seçilen cihaz için maliyet bulunamadı (listeye fiyat ekli mi?).
+              Seçilen cihaz için maliyet bulunamadı (listeye purchase_cost
+              veya list_price ekli mi?).
             </span>
           ) : (
             <span>
@@ -581,6 +606,45 @@ export const ProfitCalculatorForm: React.FC = () => {
           Burada sadece bu satışa ait aksesuar{" "}
           <span className="font-semibold">maliyetlerini</span> ekle.
         </p>
+
+        {/* Hazır şarj cihazı seçimi */}
+        {chargers.length > 0 && (
+          <div className="max-w-md">
+            <label className="block text-sm font-medium mb-1">
+              Hazır aksesuar ekle (şarj cihazı)
+            </label>
+            <select
+              className="w-full border rounded px-2 py-1 text-sm"
+              defaultValue=""
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value) {
+                  addAccessoryFromCharger(value);
+                  // aynı seçimi tekrar ekleyebilmek için resetle
+                  e.target.value = "";
+                }
+              }}
+            >
+              <option value="">Seçilmedi</option>
+              {chargers.map((c) => {
+                const key = `${c.brand ?? ""}||${c.model}`;
+                return (
+                  <option key={key} value={key}>
+                    {c.brand ? `${c.brand} - ${c.model}` : c.model} (
+                    {c.purchaseCost.toLocaleString("tr-TR", {
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    TL)
+                  </option>
+                );
+              })}
+            </select>
+            <p className="text-xs text-gray-600 mt-1">
+              Listeden seçtiğin şarj cihazı aşağıya maliyetiyle yeni bir satır
+              olarak eklenir. Gerekirse adını veya tutarı değiştirebilirsin.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-2">
           {inputs.accessories.map((acc) => (
@@ -787,7 +851,8 @@ export const ProfitCalculatorForm: React.FC = () => {
         {!unitDeviceCost && (
           <p className="text-sm text-red-600">
             Hesaplama için önce cihaz modeli seçmelisin ve bu model için
-            maliyet tanımlı olmalı.
+            current_device_model_prices_public içinde purchase_cost veya
+            list_price tanımlı olmalı.
           </p>
         )}
 
