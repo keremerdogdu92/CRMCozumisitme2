@@ -2,9 +2,15 @@
 // Read-only detail drawer for a reference, with placeholder tabs for patients and gifts.
 
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { SideDrawer } from '../../components/layout/SideDrawer';
 import type { ReferenceRow } from './types';
 import { renderGroupLabel } from './utils';
+import type { TrialRow } from '../trials/types';
+import {
+  TRIALS_BY_REFERENCE_QUERY_KEY,
+  fetchTrialsByReferenceId,
+} from '../trials/api';
 
 type ReferenceDetailDrawerProps = {
   reference: ReferenceRow | null;
@@ -72,6 +78,18 @@ export function ReferenceDetailDrawer({
       setActiveTab('summary');
     }
   }, [open, reference?.id]);
+
+  const referenceId = reference?.id ?? '';
+
+  const {
+    data: trialsForReference = [],
+    isLoading: isLoadingTrials,
+    isError: isTrialsError,
+  } = useQuery<TrialRow[]>({
+    queryKey: TRIALS_BY_REFERENCE_QUERY_KEY(referenceId),
+    queryFn: () => fetchTrialsByReferenceId(referenceId),
+    enabled: !!referenceId && open && activeTab === 'patients',
+  });
 
   if (!reference) {
     return null;
@@ -209,12 +227,89 @@ export function ReferenceDetailDrawer({
             <h4 className="text-xs font-semibold text-slate-500 uppercase">
               Gönderilen Hastalar
             </h4>
-            <p className="text-xs text-slate-500">
-              Bu sekmede bu referans üzerinden gelen hasta ve deneme kayıtları
-              listelenecek. Bir sonraki adımda{' '}
-              <code>patients</code> ve <code>trials</code> tablolarındaki
-              <code>reference_id</code> alanları ile bağlayacağız; sadece yöneticiler bu
-              bağlantıları güncelleyebilecek.
+
+            {isLoadingTrials && (
+              <p className="text-xs text-slate-500">Kayıtlar yükleniyor...</p>
+            )}
+
+            {isTrialsError && !isLoadingTrials && (
+              <p className="text-xs text-red-600">
+                Gönderilen kayıtlar yüklenirken bir hata oluştu.
+              </p>
+            )}
+
+            {!isLoadingTrials &&
+              !isTrialsError &&
+              trialsForReference.length === 0 && (
+                <p className="text-xs text-slate-500">
+                  Bu referansa bağlı deneme veya hasta kaydı henüz yok.
+                </p>
+              )}
+
+            {!isLoadingTrials &&
+              !isTrialsError &&
+              trialsForReference.length > 0 && (
+                <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-3 py-1.5 text-left font-medium text-slate-600">
+                          Kayıt
+                        </th>
+                        <th className="px-3 py-1.5 text-left font-medium text-slate-600">
+                          Ad Soyad
+                        </th>
+                        <th className="px-3 py-1.5 text-left font-medium text-slate-600">
+                          Telefon
+                        </th>
+                        <th className="px-3 py-1.5 text-left font-medium text-slate-600">
+                          İlk Görüşme
+                        </th>
+                        <th className="px-3 py-1.5 text-left font-medium text-slate-600">
+                          Sonraki Randevu
+                        </th>
+                        <th className="px-3 py-1.5 text-left font-medium text-slate-600">
+                          Tür
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {trialsForReference.map((t) => (
+                        <tr key={t.id} className="border-t border-slate-100">
+                          <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">
+                            {t.created_at
+                              ? new Date(t.created_at).toLocaleDateString('tr-TR')
+                              : '-'}
+                          </td>
+                          <td className="px-3 py-1.5 text-slate-800 whitespace-nowrap">
+                            {t.full_name ?? '-'}
+                          </td>
+                          <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">
+                            {t.phone ?? '-'}
+                          </td>
+                          <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">
+                            {t.first_meet_at
+                              ? new Date(t.first_meet_at).toLocaleDateString('tr-TR')
+                              : '-'}
+                          </td>
+                          <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">
+                            {t.next_meet_at
+                              ? new Date(t.next_meet_at).toLocaleDateString('tr-TR')
+                              : '-'}
+                          </td>
+                          <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">
+                            Deneme hastası
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+            <p className="text-[11px] text-slate-500">
+              İleride bu listeye normal hasta kayıtları da eklenecek. Referans
+              bağlantılarını sadece yönetici rolündeki kullanıcılar değiştirebilecek.
             </p>
           </section>
         )}
