@@ -9,19 +9,19 @@ import {
   ReferenceOption,
 } from './types';
 
-// Supabase schema names
+// Supabase table / view names
 const DEVICE_MODEL_PRICES_TABLE = 'device_model_prices';
-const REFERENCES_TABLE = 'references'; // Currently only id + full_name are used.
+const REFERENCES_TABLE = 'references'; // Şu an sadece isim + id çekiyoruz.
 
 /**
- * Device model options:
- * Builds a distinct list of models (with brand + optional list price)
- * from device_model_prices.
+ * Cihaz model seçenekleri:
+ * device_model_prices içindeki model/brand kolonlarından distinct liste üretir.
  */
 export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
   const { data, error } = await supabaseClient
+    // NOT: generic yok, şema zaten supabaseClient seviyesinde tanımlı
     .from(DEVICE_MODEL_PRICES_TABLE)
-    .select('model, brand, list_price')
+    .select('model, brand')
     .order('model', { ascending: true });
 
   if (error) {
@@ -36,14 +36,9 @@ export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
     if (!row.model) continue;
     if (seen.has(row.model)) continue;
     seen.add(row.model);
-
     result.push({
       model: row.model,
       brand: row.brand ?? null,
-      listPrice:
-        row.list_price !== null && row.list_price !== undefined
-          ? Number(row.list_price)
-          : null,
     });
   }
 
@@ -51,25 +46,25 @@ export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
 }
 
 /**
- * Returns the effective device purchase cost for a given model and date.
+ * Belirli bir model için BUGÜNE kadar geçerli olan en güncel cihaz maliyetini döndürür.
  *
- * SELECT *
- * FROM device_model_prices
- * WHERE model = X AND effective_from <= asOfDate
- * ORDER BY effective_from DESC
- * LIMIT 1;
+ * device_model_prices
+ *   WHERE model = X AND effective_from <= today
+ *   ORDER BY effective_from DESC
+ *   LIMIT 1
  */
 export async function fetchEffectiveDeviceCost(
   model: string,
-  asOfDate: string,
 ): Promise<number | null> {
-  if (!model || !asOfDate) return null;
+  if (!model) return null;
+
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
   const { data, error } = await supabaseClient
     .from(DEVICE_MODEL_PRICES_TABLE)
-    .select('id, org_id, brand, model, effective_from, purchase_cost, list_price')
+    .select('id, org_id, model, effective_from, purchase_cost')
     .eq('model', model)
-    .lte('effective_from', asOfDate)
+    .lte('effective_from', today)
     .order('effective_from', { ascending: false })
     .limit(1);
 
@@ -83,17 +78,13 @@ export async function fetchEffectiveDeviceCost(
   }
 
   const row = (data as any[])[0] as DeviceModelPriceRow;
-  if (row.purchase_cost == null) {
-    return null;
-  }
-
-  return Number(row.purchase_cost);
+  return row.purchase_cost != null ? Number(row.purchase_cost) : null;
 }
 
 /**
- * Reference list:
- * Right now we only read id + full_name from references.
- * Commission scheme is not stored in DB yet; user selects it manually.
+ * Referans listesi:
+ * Şu an sadece references tablosundan id + full_name çekiyoruz.
+ * Komisyon şeması DB'de yok; kullanıcı ekranda manuel seçiyor.
  */
 export async function fetchReferenceOptions(): Promise<ReferenceOption[]> {
   const { data, error } = await supabaseClient
