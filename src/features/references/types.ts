@@ -23,6 +23,11 @@ export type ReferenceRow = {
   commission_fixed: number | null;
   is_active: boolean;
 
+  /**
+   * Follow-up cadence in days. Null = no automatic reminder.
+   */
+  contact_interval_days: number | null;
+
   last_meet_at: string | null;
   next_meet_at: string | null;
   note: string | null;
@@ -43,6 +48,12 @@ export type NewReferenceForm = {
    * UI value in TL.
    */
   commissionFixed: number;
+
+  /**
+   * UI value for contact_interval_days as string.
+   * Empty string = no schedule.
+   */
+  contactIntervalDays: string;
 
   lastMeetAt: string;
   nextMeetAt: string;
