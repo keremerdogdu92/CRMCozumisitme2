@@ -20,6 +20,15 @@ export type PatientRow = {
   sgk_prescription_received: boolean | null;
   sgk_recorded_to_system: boolean | null;
 
+  /**
+   * Optional reference attached to the patient.
+   * Name is loaded via join for display only; phone is kept for future
+   * manager-only views and is NOT rendered in the current UI.
+   */
+  reference_id: string | null;
+  reference_name: string | null;
+  reference_phone: string | null;
+
   // Payment metadata on the patient row (optional in v1).
   payment_method: PatientPaymentMethod | null;
   card_sale_total: number | null;
@@ -40,7 +49,7 @@ export type NewPatientForm = {
 
   /**
    * Optional reference attached while creating the patient.
-   * For now only used on the UI; backend kaydı bir sonraki adımda eklenecek.
+   * Now wired to backend via patients.reference_id.
    */
   referenceId: string | null;
   referenceName: string;
