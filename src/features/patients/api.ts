@@ -68,13 +68,14 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       (row.sgk_prescription_received as boolean | null) ?? null,
     sgk_recorded_to_system:
       (row.sgk_recorded_to_system as boolean | null) ?? null,
+
     reference_id: (row.reference_id as string | null) ?? null,
     reference_name:
       (row.references?.full_name as string | null | undefined) ?? null,
     reference_phone:
       (row.references?.phone as string | null | undefined) ?? null,
-    payment_method:
-      (row.payment_method as PatientPaymentMethod | null) ?? null,
+
+    payment_method: (row.payment_method as PatientPaymentMethod | null) ?? null,
     card_sale_total:
       (row.card_sale_total as number | null | undefined) ?? null,
     card_fee_rate:
@@ -222,8 +223,8 @@ export async function createPatient(input: NewPatientForm): Promise<PatientRow> 
       sgk_recorded_to_system: input.sgkFlag
         ? input.sgkRecordedToSystem
         : false,
-      // reference_id currently not handled here; it will be wired when
-      // Yeni Hasta formuna referans seçimi eklendiğinde doldurulacak.
+      // Wire NewPatientForm.referenceId into patients.reference_id
+      reference_id: input.referenceId || null,
       payment_method,
       card_sale_total,
       card_fee_rate,
@@ -253,8 +254,8 @@ export async function createPatient(input: NewPatientForm): Promise<PatientRow> 
     throw new Error('STEP_INSERT: ' + insertError.message);
   }
 
-  // fetchPatients zaten join + normalize ediyor; burada dönen data
-  // referans alanlarını içermediği için flat casting yeterli.
+  // fetchPatients already performs the join; here we just return a flat row
+  // without reference name/phone (they'll be null until next refetch).
   return {
     id: data.id as string,
     full_name: data.full_name as string,
