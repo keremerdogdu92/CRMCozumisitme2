@@ -1,5 +1,5 @@
 // src/features/references/ReferencesTable.tsx
-// Tabular list view for references with group and meeting info.
+// Tabular list view for references with group, phone and commission info.
 
 import type { ReferenceRow } from './types';
 
@@ -28,6 +28,22 @@ function renderGroup(group: ReferenceRow['group']): string {
   }
 }
 
+function renderCommission(r: ReferenceRow): string {
+  if (r.commission_scheme === 'percent') {
+    const p = (r.commission_percent ?? 0) * 100;
+    return p ? `% ${p.toFixed(1)}` : '% 0';
+  }
+  if (r.commission_scheme === 'fixed') {
+    const v = r.commission_fixed ?? 0;
+    return `${v.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} TL`;
+  }
+  return '-';
+}
+
+function renderStatus(r: ReferenceRow): string {
+  return r.is_active ? 'Aktif' : 'Pasif';
+}
+
 export function ReferencesTable({ items, onSelectRow }: ReferencesTableProps) {
   if (items.length === 0) {
     return (
@@ -46,12 +62,17 @@ export function ReferencesTable({ items, onSelectRow }: ReferencesTableProps) {
             <th className="px-4 py-2 text-left font-medium text-slate-600">Kayıt</th>
             <th className="px-4 py-2 text-left font-medium text-slate-600">Ad Soyad</th>
             <th className="px-4 py-2 text-left font-medium text-slate-600">Grup</th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">Telefon</th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Varsayılan komisyon
+            </th>
             <th className="px-4 py-2 text-left font-medium text-slate-600">
               Son Görüşme
             </th>
             <th className="px-4 py-2 text-left font-medium text-slate-600">
               Sonraki Görüşme
             </th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">Durum</th>
             <th className="px-4 py-2 text-left font-medium text-slate-600">Not</th>
             <th className="px-4 py-2 text-right font-medium text-slate-600">İşlemler</th>
           </tr>
@@ -65,10 +86,19 @@ export function ReferencesTable({ items, onSelectRow }: ReferencesTableProps) {
               <td className="px-4 py-2 text-slate-800">{r.full_name ?? '-'}</td>
               <td className="px-4 py-2 text-slate-700">{renderGroup(r.group)}</td>
               <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                {r.phone ?? '-'}
+              </td>
+              <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                {renderCommission(r)}
+              </td>
+              <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
                 {formatDate(r.last_meet_at)}
               </td>
               <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
                 {formatDate(r.next_meet_at)}
+              </td>
+              <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                {renderStatus(r)}
               </td>
               <td className="px-4 py-2 text-slate-500 max-w-xs truncate">
                 {r.note ?? '-'}
