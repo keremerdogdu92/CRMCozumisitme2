@@ -24,6 +24,7 @@ export async function fetchReferences(): Promise<ReferenceRow[]> {
       commission_percent,
       commission_fixed,
       is_active,
+      contact_interval_days,
       last_meet_at,
       next_meet_at,
       note,
@@ -58,6 +59,11 @@ export async function fetchReferences(): Promise<ReferenceRow[]> {
           ? true
           : row.is_active,
       ),
+      contact_interval_days:
+        row.contact_interval_days !== null &&
+        row.contact_interval_days !== undefined
+          ? Number(row.contact_interval_days)
+          : null,
       last_meet_at: row.last_meet_at ?? null,
       next_meet_at: row.next_meet_at ?? null,
       note: row.note ?? null,
@@ -139,6 +145,11 @@ export async function createReference(
   const commission_fixed =
     scheme === 'fixed' ? input.commissionFixed || 0 : null;
 
+  const contactInterval =
+    input.contactIntervalDays.trim() === ''
+      ? null
+      : Number(input.contactIntervalDays);
+
   const { error: insertError } = await supabaseClient
     .from('references')
     .insert({
@@ -150,6 +161,10 @@ export async function createReference(
       commission_percent,
       commission_fixed,
       is_active: input.isActive,
+      contact_interval_days:
+        Number.isFinite(contactInterval) && contactInterval! > 0
+          ? contactInterval
+          : null,
       last_meet_at: input.lastMeetAt
         ? new Date(input.lastMeetAt).toISOString()
         : null,
