@@ -20,6 +20,9 @@ export type PatientRow = {
   sgk_prescription_received: boolean | null;
   sgk_recorded_to_system: boolean | null;
 
+  // Optional reference link (nullable, v1).
+  reference_id: string | null;
+
   // Payment metadata on the patient row (optional in v1).
   payment_method: PatientPaymentMethod | null;
   card_sale_total: number | null;
@@ -38,7 +41,7 @@ export type NewPatientForm = {
   cardSaleTotal: string;
   cardFeeRate: string;
 
-  // Optional reference linkage – currently only UI-level, not persisted.
+  // Optional reference linkage – currently only id is persisted.
   referenceId: string | null;
   referenceName: string;
 };
