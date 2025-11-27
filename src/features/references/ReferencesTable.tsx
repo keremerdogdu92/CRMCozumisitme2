@@ -13,7 +13,7 @@ function formatDate(value: string | null): string {
   return new Date(value).toLocaleDateString('tr-TR');
 }
 
-function renderGroup(group: ReferenceRow['group']: ReferenceRow['group']): string {
+function renderGroup(group: ReferenceRow['group']): string {
   switch (group) {
     case 'medikal':
       return 'Medikal';
@@ -46,7 +46,9 @@ function renderStatus(r: ReferenceRow): string {
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-function computeReminderStatus(r: ReferenceRow): { label: string; className: string } {
+function computeReminderStatus(
+  r: ReferenceRow,
+): { label: string; className: string } {
   if (!r.contact_interval_days || r.contact_interval_days <= 0) {
     return { label: '-', className: 'text-slate-400' };
   }
@@ -63,9 +65,13 @@ function computeReminderStatus(r: ReferenceRow): { label: string; className: str
     return { label: '-', className: 'text-slate-400' };
   }
 
-  const next = new Date(last.getTime() + r.contact_interval_days * MS_PER_DAY);
+  const next = new Date(
+    last.getTime() + r.contact_interval_days * MS_PER_DAY,
+  );
   const today = new Date();
-  const diffDays = Math.floor((next.getTime() - today.getTime()) / MS_PER_DAY);
+  const diffDays = Math.floor(
+    (next.getTime() - today.getTime()) / MS_PER_DAY,
+  );
 
   if (diffDays < 0) {
     return {
@@ -87,12 +93,15 @@ function computeReminderStatus(r: ReferenceRow): { label: string; className: str
   };
 }
 
-export function ReferencesTable({ items, onSelectRow }: ReferencesTableProps) {
+export function ReferencesTable({
+  items,
+  onSelectRow,
+}: ReferencesTableProps) {
   if (items.length === 0) {
     return (
       <div className="text-sm text-slate-500">
-        Filtreye uyan referans bulunamadı. Aramayı temizleyebilir veya yeni referans
-        ekleyebilirsiniz.
+        Filtreye uyan referans bulunamadı. Aramayı temizleyebilir veya
+        yeni referans ekleyebilirsiniz.
       </div>
     );
   }
@@ -102,10 +111,18 @@ export function ReferencesTable({ items, onSelectRow }: ReferencesTableProps) {
       <table className="min-w-full text-sm">
         <thead className="bg-slate-50">
           <tr>
-            <th className="px-4 py-2 text-left font-medium text-slate-600">Kayıt</th>
-            <th className="px-4 py-2 text-left font-medium text-slate-600">Ad Soyad</th>
-            <th className="px-4 py-2 text-left font-medium text-slate-600">Grup</th>
-            <th className="px-4 py-2 text-left font-medium text-slate-600">Telefon</th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Kayıt
+            </th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Ad Soyad
+            </th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Grup
+            </th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Telefon
+            </th>
             <th className="px-4 py-2 text-left font-medium text-slate-600">
               Varsayılan komisyon
             </th>
@@ -115,10 +132,18 @@ export function ReferencesTable({ items, onSelectRow }: ReferencesTableProps) {
             <th className="px-4 py-2 text-left font-medium text-slate-600">
               Sonraki Görüşme
             </th>
-            <th className="px-4 py-2 text-left font-medium text-slate-600">Takip</th>
-            <th className="px-4 py-2 text-left font-medium text-slate-600">Durum</th>
-            <th className="px-4 py-2 text-left font-medium text-slate-600">Not</th>
-            <th className="px-4 py-2 text-right font-medium text-slate-600">İşlemler</th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Takip
+            </th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Durum
+            </th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Not
+            </th>
+            <th className="px-4 py-2 text-right font-medium text-slate-600">
+              İşlemler
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -126,30 +151,36 @@ export function ReferencesTable({ items, onSelectRow }: ReferencesTableProps) {
             const reminder = computeReminderStatus(r);
             return (
               <tr key={r.id} className="border-t border-slate-100">
-                <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                <td className="whitespace-nowrap px-4 py-2 text-slate-700">
                   {formatDate(r.created_at)}
                 </td>
-                <td className="px-4 py-2 text-slate-800">{r.full_name ?? '-'}</td>
-                <td className="px-4 py-2 text-slate-700">{renderGroup(r.group)}</td>
-                <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                <td className="px-4 py-2 text-slate-800">
+                  {r.full_name ?? '-'}
+                </td>
+                <td className="px-4 py-2 text-slate-700">
+                  {renderGroup(r.group)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-2 text-slate-700">
                   {r.phone ?? '-'}
                 </td>
-                <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                <td className="whitespace-nowrap px-4 py-2 text-slate-700">
                   {renderCommission(r)}
                 </td>
-                <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                <td className="whitespace-nowrap px-4 py-2 text-slate-700">
                   {formatDate(r.last_meet_at)}
                 </td>
-                <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                <td className="whitespace-nowrap px-4 py-2 text-slate-700">
                   {formatDate(r.next_meet_at)}
                 </td>
-                <td className="px-4 py-2 whitespace-nowrap">
-                  <span className={reminder.className}>{reminder.label}</span>
+                <td className="whitespace-nowrap px-4 py-2">
+                  <span className={reminder.className}>
+                    {reminder.label}
+                  </span>
                 </td>
-                <td className="px-4 py-2 text-slate-700 whitespace-nowrap">
+                <td className="whitespace-nowrap px-4 py-2 text-slate-700">
                   {renderStatus(r)}
                 </td>
-                <td className="px-4 py-2 text-slate-500 max-w-xs truncate">
+                <td className="max-w-xs truncate px-4 py-2 text-slate-500">
                   {r.note ?? '-'}
                 </td>
                 <td className="px-4 py-2 text-right">
