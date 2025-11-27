@@ -41,7 +41,7 @@ export function ReferenceNewFormCard({
   return (
     <InlineCreateCard
       title="Yeni Referans"
-      description="Referans kişi/kurumu kaydedin, görüşme tarihlerini ve komisyon varsayılanlarını belirleyin."
+      description="Referans kişi/kurumu kaydedin, görüşme tarihlerini, takip sıklığını ve komisyon varsayılanlarını belirleyin."
       open={open}
       onToggle={onToggle}
       errorMessage={errorMessage}
@@ -159,6 +159,27 @@ export function ReferenceNewFormCard({
           </div>
         )}
 
+        {/* Görüşme sıklığı (gün) */}
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            Görüşme sıklığı (gün)
+          </label>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={values.contactIntervalDays}
+            onChange={(e) =>
+              onChange({ contactIntervalDays: e.target.value })
+            }
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            placeholder="Örn. 30 (opsiyonel)"
+          />
+          <p className="text-[11px] text-slate-500 mt-1">
+            Boş bırakırsanız bu referans için otomatik takip süresi hesaplanmaz.
+          </p>
+        </div>
+
         {/* Son / sonraki görüşme */}
         <div className="md:col-span-2">
           <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -198,7 +219,7 @@ export function ReferenceNewFormCard({
           />
         </div>
 
-        {/* Aktif / pasif */}
+        {/* Aktif / pasif + submit */}
         <div className="md:col-span-4 flex items-center justify-between">
           <label className="inline-flex items-center gap-2 text-xs text-slate-600">
             <input
