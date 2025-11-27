@@ -31,6 +31,10 @@ export type NewTrialForm = {
   firstMeetAt: string; // datetime-local string, can be empty
   nextMeetAt: string;  // datetime-local string, can be empty
 
+  // Optional reference link (who sent this trial)
+  referenceId?: string | null;
+  referenceName?: string;
+
   // Device lines for this trial
   devices: TrialDeviceFormRow[];
 };
