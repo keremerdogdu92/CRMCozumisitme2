@@ -37,6 +37,7 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       sgk_flag,
       sgk_prescription_received,
       sgk_recorded_to_system,
+      reference_id,
       payment_method,
       card_sale_total,
       card_fee_rate,
@@ -191,6 +192,8 @@ export async function createPatient(input: NewPatientForm): Promise<PatientRow> 
       sgk_recorded_to_system: input.sgkFlag
         ? input.sgkRecordedToSystem
         : false,
+      // Reference linkage (nullable, optional)
+      reference_id: input.referenceId ?? null,
       payment_method,
       card_sale_total,
       card_fee_rate,
@@ -206,6 +209,7 @@ export async function createPatient(input: NewPatientForm): Promise<PatientRow> 
       sgk_flag,
       sgk_prescription_received,
       sgk_recorded_to_system,
+      reference_id,
       payment_method,
       card_sale_total,
       card_fee_rate,
