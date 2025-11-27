@@ -34,6 +34,13 @@ export interface AccessoryRow {
   quantity: number;
 }
 
+// Hazır şarj cihazı listesi için
+export interface ChargerOption {
+  model: string;
+  brand?: string | null;
+  purchaseCost: number;
+}
+
 export interface ProfitCalcInputs {
   mode: ProfitCalcMode;
 
