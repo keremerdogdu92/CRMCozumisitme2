@@ -1,28 +1,29 @@
 // src/features/profitCalculator/api.ts
 // Summary: Supabase data access for the Profitability Calculator
-// (device models, latest price, references, chargers).
+// (device models, latest price info, chargers, references).
 
 import { supabaseClient } from '../../utils/supabaseClient';
 import {
   DeviceModelOption,
+  DeviceModelPriceRow,
+  DevicePriceInfo,
   ReferenceOption,
-  ChargerOption,
 } from './types';
 
-// Supabase table / view names
-const DEVICE_MODEL_PRICES_TABLE = 'device_model_prices';
-const CURRENT_DEVICE_MODEL_PRICES_VIEW = 'current_device_model_prices_public';
-const REFERENCES_TABLE = 'references'; // Şu an sadece isim + id çekiyoruz.
+// Supabase view / table names
+// NOTE: We use the *current* price view, not the historical table.
+const DEVICE_MODEL_PRICES_TABLE = 'current_device_model_prices_public';
+const REFERENCES_TABLE = 'references';
 
 /**
  * Cihaz model seçenekleri:
- * Denemeler ekranında kullanılan current_device_model_prices_public view'undan
- * sadece hearing_aid olan model/brand listesini çekeriz.
+ * current_device_model_prices_public içindeki
+ * item_type = 'hearing_aid' kayıtlarından marka/model listesi üretir.
  */
 export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
   const { data, error } = await supabaseClient
-    .from(CURRENT_DEVICE_MODEL_PRICES_VIEW)
-    .select('model, brand, item_type')
+    .from(DEVICE_MODEL_PRICES_TABLE)
+    .select('brand, model, item_type, list_price, purchase_price')
     .eq('item_type', 'hearing_aid')
     .order('brand', { ascending: true })
     .order('model', { ascending: true });
@@ -37,12 +38,20 @@ export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
 
   for (const row of (data ?? []) as any[]) {
     if (!row.model) continue;
-    const key = `${row.brand ?? ''}||${row.model}`;
+
+    const brand = (row.brand ?? '').trim() || null;
+    const key = `${brand ?? ''}|||${row.model}`;
+
     if (seen.has(key)) continue;
     seen.add(key);
+
     result.push({
+      brand,
       model: row.model,
-      brand: row.brand ?? null,
+      itemType: row.item_type ?? null,
+      listPrice: row.list_price != null ? Number(row.list_price) : null,
+      purchasePrice:
+        row.purchase_price != null ? Number(row.purchase_price) : null,
     });
   }
 
@@ -50,26 +59,63 @@ export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
 }
 
 /**
- * Belirli bir model için EN GÜNCEL cihaz maliyetini döndürür.
+ * Şarj cihazı (charger) model seçenekleri:
+ * item_type = 'charger' kayıtlarını aksesuar tarafında hızlı eklemek için kullanırız.
+ */
+export async function fetchChargerOptions(): Promise<DeviceModelOption[]> {
+  const { data, error } = await supabaseClient
+    .from(DEVICE_MODEL_PRICES_TABLE)
+    .select('brand, model, item_type, list_price, purchase_price')
+    .eq('item_type', 'charger')
+    .order('brand', { ascending: true })
+    .order('model', { ascending: true });
+
+  if (error) {
+    console.error('fetchChargerOptions error:', error);
+    throw error;
+  }
+
+  const result: DeviceModelOption[] = [];
+
+  for (const row of (data ?? []) as any[]) {
+    if (!row.model) continue;
+
+    const brand = (row.brand ?? '').trim() || null;
+
+    result.push({
+      brand,
+      model: row.model,
+      itemType: row.item_type ?? null,
+      listPrice: row.list_price != null ? Number(row.list_price) : null,
+      purchasePrice:
+        row.purchase_price != null ? Number(row.purchase_price) : null,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Belirli bir model için geçerli cihaz maliyetini ve liste fiyatını döndürür.
  *
- * current_device_model_prices_public
- *   WHERE model = X
- *   (view zaten org + tarih mantığını çözüyor)
- *
- * Önce purchase_cost kullanılır; yoksa geçici olarak list_price maliyet
- * gibi kullanılır. İleride satın alma maliyetini doldurduğunda bu fallback
- * davranışı kaldırabilirsin.
+ * NOT:
+ *  - Şu anda current_device_model_prices_public view'unu kullanıyoruz.
+ *  - Bu view zaten "en güncel" satırı döndürüyor; asOfDate parametresi
+ *    şimdilik sadece API uyumluluğu için var, SQL tarafında kullanılmıyor.
  */
 export async function fetchEffectiveDeviceCost(
   model: string,
-  asOfDate: string, // Şimdilik imzada dursun; view zaten "en güncel" fiyatı döner.
-): Promise<number | null> {
-  if (!model) return null;
+  asOfDate: string, // currently ignored, kept for future historical pricing
+): Promise<DevicePriceInfo> {
+  if (!model) {
+    return { deviceCost: null, listPrice: null };
+  }
 
   const { data, error } = await supabaseClient
-    .from(CURRENT_DEVICE_MODEL_PRICES_VIEW)
-    .select('purchase_cost, list_price, model')
+    .from(DEVICE_MODEL_PRICES_TABLE)
+    .select('model, item_type, list_price, purchase_price')
     .eq('model', model)
+    .eq('item_type', 'hearing_aid')
     .limit(1);
 
   if (error) {
@@ -78,24 +124,17 @@ export async function fetchEffectiveDeviceCost(
   }
 
   if (!data || data.length === 0) {
-    return null;
+    return { deviceCost: null, listPrice: null };
   }
 
-  const row = (data as any[])[0] as {
-    purchase_cost?: number | null;
-    list_price?: number | null;
-  };
+  const row = (data[0] as any) as DeviceModelPriceRow;
 
-  if (row.purchase_cost != null) {
-    return Number(row.purchase_cost);
-  }
+  const deviceCost =
+    row.purchase_price != null ? Number(row.purchase_price) : null;
+  const listPrice =
+    row.list_price != null ? Number(row.list_price) : null;
 
-  if (row.list_price != null) {
-    // [NOT]: Şimdilik list_price'ı maliyet gibi kullanıyoruz.
-    return Number(row.list_price);
-  }
-
-  return null;
+  return { deviceCost, listPrice };
 }
 
 /**
@@ -121,45 +160,4 @@ export async function fetchReferenceOptions(): Promise<ReferenceOption[]> {
     default_percent: null,
     default_fixed: null,
   }));
-}
-
-/**
- * Şarj cihazları listesi (aksesuar kısmında hazır ekleyebilmek için).
- * current_device_model_prices_public içinden item_type = 'charger' satırlarını çekeriz.
- */
-export async function fetchChargerOptions(): Promise<ChargerOption[]> {
-  const { data, error } = await supabaseClient
-    .from(CURRENT_DEVICE_MODEL_PRICES_VIEW)
-    .select('model, brand, item_type, purchase_cost, list_price')
-    .eq('item_type', 'charger')
-    .order('brand', { ascending: true })
-    .order('model', { ascending: true });
-
-  if (error) {
-    console.error('fetchChargerOptions error:', error);
-    throw error;
-  }
-
-  const result: ChargerOption[] = [];
-
-  for (const row of (data ?? []) as any[]) {
-    if (!row.model) continue;
-
-    let cost: number | null = null;
-    if (row.purchase_cost != null) {
-      cost = Number(row.purchase_cost);
-    } else if (row.list_price != null) {
-      cost = Number(row.list_price);
-    }
-
-    if (cost == null) continue; // maliyeti olmayan şarj cihazını listelemeyelim
-
-    result.push({
-      model: row.model,
-      brand: row.brand ?? null,
-      purchaseCost: cost,
-    });
-  }
-
-  return result;
 }
