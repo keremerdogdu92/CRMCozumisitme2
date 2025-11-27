@@ -6,14 +6,28 @@ export type ProfitCalcMode = 'price' | 'targetOnCost' | 'targetOnRevenue';
 export interface DeviceModelOption {
   model: string;
   brand?: string | null;
+  itemType?: string | null; // 'hearing_aid' | 'charger' | ...
+  listPrice?: number | null;
+  purchasePrice?: number | null;
 }
 
 export interface DeviceModelPriceRow {
   id: string;
   org_id: string;
+  brand: string | null;
   model: string;
-  effective_from: string; // date (YYYY-MM-DD)
-  purchase_cost: number;
+  item_type: string | null;
+  battery_type: string | null;
+  details: string | null;
+  notes: string | null;
+  valid_from: string | null; // date
+  list_price: number | null;
+  purchase_price: number | null;
+}
+
+export interface DevicePriceInfo {
+  deviceCost: number | null; // purchase_price
+  listPrice: number | null;  // list_price
 }
 
 export type ReferenceScheme = 'fixed' | 'percent' | null;
@@ -34,21 +48,15 @@ export interface AccessoryRow {
   quantity: number;
 }
 
-// Hazır şarj cihazı listesi için
-export interface ChargerOption {
-  model: string;
-  brand?: string | null;
-  purchaseCost: number;
-}
-
 export interface ProfitCalcInputs {
   mode: ProfitCalcMode;
 
-  // Device + brand + date
-  selectedBrand: string;   // Marka filtresi (örn: REXTON)
-  selectedModel: string;   // Seçilen model
-  asOfDate: string;        // YYYY-MM-DD (varsayılan bugün, isteğe bağlı değiştirilebilir)
-  deviceQuantity: number;  // Kaç cihaz satılıyor? (1, 2, ...)
+  // Device + date
+  selectedBrand: string;   // '' = Tümü
+  selectedModel: string;
+  asOfDate: string; // YYYY-MM-DD (şimdilik sadece UI için)
+
+  deviceQuantity: number; // kaç cihaz (genelde 2: sağ + sol)
 
   // Reference
   selectedReferenceId: string | null;
@@ -73,7 +81,7 @@ export interface ProfitCalcResult {
   error?: string;
 
   salePrice: number;        // S
-  deviceCost: number;       // C (toplam cihaz maliyeti, adet * birim maliyet)
+  deviceCost: number;       // C (toplam cihaz maliyeti, adet dahil)
   accessoriesCost: number;  // Ac
   totalCost: number;        // C_eff = C + Ac
 
@@ -83,4 +91,9 @@ export interface ProfitCalcResult {
 
   profitOverCost: number;    // K / C_eff
   profitOverRevenue: number; // K / S
+
+  // Optional: list price & discount info
+  listPriceTotal?: number | null;   // toplam liste fiyatı (adet dahil)
+  discountAmount?: number | null;   // liste - satış
+  discountPercent?: number | null;  // (liste - satış) / liste
 }
