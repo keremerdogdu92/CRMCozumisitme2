@@ -12,6 +12,7 @@ import {
   fetchDeviceBrands,
   fetchDeviceModelsByBrand,
 } from './api';
+import { searchReferencesByName } from '../references/api';
 
 type TrialNewFormCardProps = {
   open: boolean;
@@ -248,6 +249,18 @@ export function TrialNewFormCard({
     onSubmit();
   };
 
+  const referenceSearchTerm = values.referenceName ?? '';
+
+  const {
+    data: referenceOptions = [],
+    isLoading: isLoadingReferences,
+    isError: isReferencesError,
+  } = useQuery<{ id: string; full_name: string }[]>({
+    queryKey: ['reference-search', referenceSearchTerm],
+    queryFn: () => searchReferencesByName(referenceSearchTerm),
+    enabled: referenceSearchTerm.trim().length >= 2,
+  });
+
   // Load device brands once
   const {
     data: brandOptions = [],
@@ -360,6 +373,71 @@ export function TrialNewFormCard({
             onChange={(e) => onChange({ nextMeetAt: e.target.value })}
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            Referans (opsiyonel)
+          </label>
+          <input
+            type="text"
+            value={values.referenceName ?? ''}
+            onChange={(e) =>
+              onChange({
+                referenceName: e.target.value,
+                // Editing text clears any previously selected id;
+                // picking from the list will set it again.
+                referenceId: null,
+              })
+            }
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            placeholder="Örn. Dr. Ahmet, Medikal XYZ"
+          />
+          <p className="mt-1 text-[11px] text-slate-500">
+            En az 2 harf yazınca kayıtlı referanslar listelenir; birini seçerseniz bu
+            deneme o referansa bağlanır.
+          </p>
+          {referenceSearchTerm.trim().length >= 2 && (
+            <div className="mt-1 max-h-40 overflow-y-auto rounded-md border border-slate-200 bg-white text-xs shadow-sm">
+              {isLoadingReferences && (
+                <div className="px-2 py-1 text-slate-500">Aranıyor...</div>
+              )}
+              {isReferencesError && !isLoadingReferences && (
+                <div className="px-2 py-1 text-red-600">
+                  Referanslar yüklenemedi.
+                </div>
+              )}
+              {!isLoadingReferences &&
+                !isReferencesError &&
+                referenceOptions.length === 0 && (
+                  <div className="px-2 py-1 text-slate-500">
+                    Eşleşen referans bulunamadı.
+                  </div>
+                )}
+              {!isLoadingReferences &&
+                !isReferencesError &&
+                referenceOptions.length > 0 && (
+                  <ul>
+                    {referenceOptions.map((ref) => (
+                      <li key={ref.id}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onChange({
+                              referenceId: ref.id,
+                              referenceName: ref.full_name,
+                            })
+                          }
+                          className="flex w-full items-center justify-between px-2 py-1 hover:bg-slate-50"
+                        >
+                          <span className="truncate">{ref.full_name}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+            </div>
+          )}
         </div>
 
         {/* Divider */}
