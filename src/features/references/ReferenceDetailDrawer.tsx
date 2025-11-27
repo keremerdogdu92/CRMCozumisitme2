@@ -14,6 +14,52 @@ type ReferenceDetailDrawerProps = {
 
 type ReferenceTabId = 'summary' | 'patients' | 'gifts';
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function computeReminderStatus(ref: ReferenceRow): {
+  label: string;
+  className: string;
+} {
+  if (!ref.contact_interval_days || ref.contact_interval_days <= 0) {
+    return { label: '-', className: 'text-slate-400' };
+  }
+
+  if (!ref.last_meet_at) {
+    return {
+      label: 'Hiç görüşme yok',
+      className: 'text-amber-600 font-medium',
+    };
+  }
+
+  const last = new Date(ref.last_meet_at);
+  if (Number.isNaN(last.getTime())) {
+    return { label: '-', className: 'text-slate-400' };
+  }
+
+  const next = new Date(last.getTime() + ref.contact_interval_days * MS_PER_DAY);
+  const today = new Date();
+  const diffDays = Math.floor((next.getTime() - today.getTime()) / MS_PER_DAY);
+
+  if (diffDays < 0) {
+    return {
+      label: `${Math.abs(diffDays)} gün gecikti`,
+      className: 'text-red-600 font-medium',
+    };
+  }
+
+  if (diffDays <= 7) {
+    return {
+      label: `${diffDays} gün içinde`,
+      className: 'text-amber-600 font-medium',
+    };
+  }
+
+  return {
+    label: `${diffDays} gün sonra`,
+    className: 'text-emerald-700',
+  };
+}
+
 export function ReferenceDetailDrawer({
   reference,
   open,
@@ -48,6 +94,8 @@ export function ReferenceDetailDrawer({
     }
     return '-';
   })();
+
+  const reminderStatus = computeReminderStatus(reference);
 
   const content = (
     <div className="flex h-full flex-col">
@@ -131,6 +179,20 @@ export function ReferenceDetailDrawer({
                     : '-'}
                 </span>
               </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-xs text-slate-500">Görüşme sıklığı</span>
+                <span className="text-xs text-slate-900">
+                  {reference.contact_interval_days
+                    ? `${reference.contact_interval_days} günde bir`
+                    : '-'}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-xs text-slate-500">Takip durumu</span>
+                <span className={'text-xs ' + reminderStatus.className}>
+                  {reminderStatus.label}
+                </span>
+              </div>
               {reference.note && (
                 <div className="pt-2 border-t border-slate-200 mt-1">
                   <p className="text-xs text-slate-700 whitespace-pre-wrap">
@@ -148,9 +210,11 @@ export function ReferenceDetailDrawer({
               Gönderilen Hastalar
             </h4>
             <p className="text-xs text-slate-500">
-              Bu sekmede, <code>reference_links</code> veya benzeri bir ilişki tablosu
-              üzerinden bu referans aracılığıyla gelen hastalar listelenecek. Henüz
-              yalnızca iskelet olarak duruyor.
+              Bu sekmede bu referans üzerinden gelen hasta ve deneme kayıtları
+              listelenecek. Bir sonraki adımda{' '}
+              <code>patients</code> ve <code>trials</code> tablolarındaki
+              <code>reference_id</code> alanları ile bağlayacağız; sadece yöneticiler bu
+              bağlantıları güncelleyebilecek.
             </p>
           </section>
         )}
@@ -161,9 +225,9 @@ export function ReferenceDetailDrawer({
               Hediye / Komisyon
             </h4>
             <p className="text-xs text-slate-500">
-              Bu sekme, <code>reference_payments</code> tablosu üzerinden hediye ve
-              komisyon ödemelerini gösterecek. Şimdilik sadece açıklama metni yer
-              alıyor.
+              Bu sekme, referansa bağlı hediye ve komisyon ödemelerini gösterecek. Kâr
+              hesaplama ekranı ile entegrasyon, referans başına yapılan ödemeleri buradan
+              da takip edebileceğiniz şekilde daha sonra eklenecek.
             </p>
           </section>
         )}
