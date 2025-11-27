@@ -1,12 +1,12 @@
 // src/features/profitCalculator/api.ts
 // Summary: Supabase data access for the Profitability Calculator
-// (device models, latest price, references).
+// (device models, latest price, references, chargers).
 
 import { supabaseClient } from '../../utils/supabaseClient';
 import {
   DeviceModelOption,
-  DeviceModelPriceRow,
   ReferenceOption,
+  ChargerOption,
 } from './types';
 
 // Supabase table / view names
@@ -55,6 +55,10 @@ export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
  * current_device_model_prices_public
  *   WHERE model = X
  *   (view zaten org + tarih mantığını çözüyor)
+ *
+ * Önce purchase_cost kullanılır; yoksa geçici olarak list_price maliyet
+ * gibi kullanılır. İleride satın alma maliyetini doldurduğunda bu fallback
+ * davranışı kaldırabilirsin.
  */
 export async function fetchEffectiveDeviceCost(
   model: string,
@@ -64,7 +68,7 @@ export async function fetchEffectiveDeviceCost(
 
   const { data, error } = await supabaseClient
     .from(CURRENT_DEVICE_MODEL_PRICES_VIEW)
-    .select('purchase_cost, model')
+    .select('purchase_cost, list_price, model')
     .eq('model', model)
     .limit(1);
 
@@ -77,15 +81,21 @@ export async function fetchEffectiveDeviceCost(
     return null;
   }
 
-  const row = (data as any[])[0] as Partial<DeviceModelPriceRow> & {
-    purchase_cost?: number;
+  const row = (data as any[])[0] as {
+    purchase_cost?: number | null;
+    list_price?: number | null;
   };
 
-  if (row.purchase_cost == null) {
-    return null;
+  if (row.purchase_cost != null) {
+    return Number(row.purchase_cost);
   }
 
-  return Number(row.purchase_cost);
+  if (row.list_price != null) {
+    // [NOT]: Şimdilik list_price'ı maliyet gibi kullanıyoruz.
+    return Number(row.list_price);
+  }
+
+  return null;
 }
 
 /**
@@ -111,4 +121,45 @@ export async function fetchReferenceOptions(): Promise<ReferenceOption[]> {
     default_percent: null,
     default_fixed: null,
   }));
+}
+
+/**
+ * Şarj cihazları listesi (aksesuar kısmında hazır ekleyebilmek için).
+ * current_device_model_prices_public içinden item_type = 'charger' satırlarını çekeriz.
+ */
+export async function fetchChargerOptions(): Promise<ChargerOption[]> {
+  const { data, error } = await supabaseClient
+    .from(CURRENT_DEVICE_MODEL_PRICES_VIEW)
+    .select('model, brand, item_type, purchase_cost, list_price')
+    .eq('item_type', 'charger')
+    .order('brand', { ascending: true })
+    .order('model', { ascending: true });
+
+  if (error) {
+    console.error('fetchChargerOptions error:', error);
+    throw error;
+  }
+
+  const result: ChargerOption[] = [];
+
+  for (const row of (data ?? []) as any[]) {
+    if (!row.model) continue;
+
+    let cost: number | null = null;
+    if (row.purchase_cost != null) {
+      cost = Number(row.purchase_cost);
+    } else if (row.list_price != null) {
+      cost = Number(row.list_price);
+    }
+
+    if (cost == null) continue; // maliyeti olmayan şarj cihazını listelemeyelim
+
+    result.push({
+      model: row.model,
+      brand: row.brand ?? null,
+      purchaseCost: cost,
+    });
+  }
+
+  return result;
 }
