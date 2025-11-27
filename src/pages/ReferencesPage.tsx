@@ -24,6 +24,7 @@ const initialFormState: NewReferenceForm = {
   commissionScheme: null,
   commissionPercent: 0,
   commissionFixed: 0,
+  contactIntervalDays: '',
   lastMeetAt: '',
   nextMeetAt: '',
   note: '',
@@ -79,8 +80,8 @@ export default function ReferencesPage() {
   if (!profile || profile.role !== 'admin') {
     return (
       <div className="p-8 text-sm text-slate-500">
-        Bu sayfa sadece yöneticilere özeldir. Referans listesi ve komisyon
-        ayarlarına yalnızca yönetici hesapları erişebilir.
+        Bu sayfa sadece yöneticilere özeldir. Referans listesi, komisyon ayarları
+        ve takip hatırlatmalarına yalnızca yönetici hesapları erişebilir.
       </div>
     );
   }
