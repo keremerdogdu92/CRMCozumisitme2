@@ -27,6 +27,7 @@ function createEmptyInputs(): ProfitCalcInputs {
     selectedBrand: "REXTON",
     selectedModel: "",
     asOfDate: todayISO(),
+    deviceQuantity: 2, // Çoğunlukla iki cihaz satıldığı için varsayılan 2
 
     selectedReferenceId: null,
     referenceScheme: null,
@@ -52,9 +53,9 @@ function calcAccessoriesCost(accessories: AccessoryRow[]): number {
 
 function calculateResult(
   inputs: ProfitCalcInputs,
-  deviceCost: number | null
+  unitDeviceCost: number | null
 ): ProfitCalcResult | null {
-  if (deviceCost == null || deviceCost < 0) {
+  if (unitDeviceCost == null || unitDeviceCost < 0) {
     return null;
   }
 
@@ -68,9 +69,13 @@ function calculateResult(
     salePrice,
     targetOnCostPercent,
     targetOnRevenuePercent,
+    deviceQuantity,
   } = inputs;
 
-  const C = deviceCost;
+  const quantity = deviceQuantity && deviceQuantity > 0 ? deviceQuantity : 1;
+
+  // Cihaz toplam maliyeti (adet * birim maliyet)
+  const C = unitDeviceCost * quantity;
   const Ac = calcAccessoriesCost(accessories);
   const C_eff = C + Ac;
   const t = taxRate;
@@ -165,7 +170,7 @@ function calculateResult(
   return {
     valid: true,
     salePrice: S,
-    deviceCost: C,
+    deviceCost: C, // toplam cihaz maliyeti
     accessoriesCost: Ac,
     totalCost: C_eff,
     referenceCommission: R,
@@ -183,7 +188,7 @@ export const ProfitCalculatorForm: React.FC = () => {
   const [deviceModels, setDeviceModels] = useState<DeviceModelOption[]>([]);
   const [references, setReferences] = useState<ReferenceOption[]>([]);
   const [inputs, setInputs] = useState<ProfitCalcInputs>(createEmptyInputs());
-  const [deviceCost, setDeviceCost] = useState<number | null>(null);
+  const [unitDeviceCost, setUnitDeviceCost] = useState<number | null>(null);
   const [deviceCostLoading, setDeviceCostLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -227,11 +232,11 @@ export const ProfitCalculatorForm: React.FC = () => {
     init();
   }, []);
 
-  // Seçili model veya tarih değişince cihaz maliyetini çek
+  // Seçili model veya tarih değişince cihaz birim maliyetini çek
   useEffect(() => {
     async function loadCost() {
-      if (!inputs.selectedModel || !inputs.asOfDate) {
-        setDeviceCost(null);
+      if (!inputs.selectedModel) {
+        setUnitDeviceCost(null);
         return;
       }
       setDeviceCostLoading(true);
@@ -240,10 +245,10 @@ export const ProfitCalculatorForm: React.FC = () => {
           inputs.selectedModel,
           inputs.asOfDate
         );
-        setDeviceCost(cost);
+        setUnitDeviceCost(cost);
       } catch (err) {
         console.error("loadCost error:", err);
-        setDeviceCost(null);
+        setUnitDeviceCost(null);
       } finally {
         setDeviceCostLoading(false);
       }
@@ -252,8 +257,8 @@ export const ProfitCalculatorForm: React.FC = () => {
   }, [inputs.selectedModel, inputs.asOfDate]);
 
   const result = useMemo(
-    () => calculateResult(inputs, deviceCost),
-    [inputs, deviceCost]
+    () => calculateResult(inputs, unitDeviceCost),
+    [inputs, unitDeviceCost]
   );
 
   function handleChange<K extends keyof ProfitCalcInputs>(
@@ -332,14 +337,18 @@ export const ProfitCalculatorForm: React.FC = () => {
     inputs.selectedBrand ? m.brand === inputs.selectedBrand : true
   );
 
+  const deviceQuantity = inputs.deviceQuantity || 1;
+  const totalDeviceCost =
+    unitDeviceCost != null ? unitDeviceCost * deviceQuantity : null;
+
   return (
     <div className="space-y-6 max-w-3xl">
       <h1 className="text-2xl font-semibold">Karlılık Hesaplama Aracı</h1>
 
-      {/* Device + brand + (optional) date */}
+      {/* Device + brand + (optional) date + quantity */}
       <section className="border rounded-lg p-4 space-y-4">
         <h2 className="font-semibold">1. Cihaz</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">
               Marka
@@ -375,6 +384,28 @@ export const ProfitCalculatorForm: React.FC = () => {
               ))}
             </select>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Cihaz adedi
+            </label>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              className="w-full border rounded px-2 py-1 text-sm"
+              value={deviceQuantity}
+              onChange={(e) =>
+                handleChange(
+                  "deviceQuantity",
+                  Math.max(1, Number(e.target.value || 1))
+                )
+              }
+            />
+            <p className="text-xs text-gray-600 mt-1">
+              Çoğu durumda 2 (sağ + sol kulak).
+            </p>
+          </div>
         </div>
 
         <button
@@ -399,8 +430,8 @@ export const ProfitCalculatorForm: React.FC = () => {
               onChange={(e) => handleChange("asOfDate", e.target.value)}
             />
             <p className="text-xs text-gray-600 mt-1">
-              Varsayılan olarak bugün gelir. İstersen geriye dönük farklı bir
-              tarih için maliyet hesabı yapabilirsin.
+              Varsayılan olarak bugün gelir. View en güncel fiyatı döndüğü için
+              genelde değiştirmen gerekmez.
             </p>
           </div>
         )}
@@ -408,15 +439,22 @@ export const ProfitCalculatorForm: React.FC = () => {
         <div className="text-sm mt-2">
           {deviceCostLoading ? (
             <span>Cihaz maliyeti yükleniyor...</span>
-          ) : deviceCost == null ? (
+          ) : unitDeviceCost == null ? (
             <span className="text-red-600">
-              Seçilen tarih için cihaz maliyeti bulunamadı.
+              Seçilen cihaz için maliyet bulunamadı (listeye fiyat ekli mi?).
             </span>
           ) : (
             <span>
-              Cihaz maliyeti (C):{" "}
+              Birim cihaz maliyeti:{" "}
               <span className="font-semibold">
-                {deviceCost.toLocaleString("tr-TR", {
+                {unitDeviceCost.toLocaleString("tr-TR", {
+                  maximumFractionDigits: 2,
+                })}{" "}
+                TL
+              </span>{" "}
+              | Toplam cihaz maliyeti ({deviceQuantity} adet):{" "}
+              <span className="font-semibold">
+                {totalDeviceCost!.toLocaleString("tr-TR", {
                   maximumFractionDigits: 2,
                 })}{" "}
                 TL
@@ -746,9 +784,10 @@ export const ProfitCalculatorForm: React.FC = () => {
       <section className="border rounded-lg p-4 space-y-4">
         <h2 className="font-semibold">5. Sonuç</h2>
 
-        {!deviceCost && (
+        {!unitDeviceCost && (
           <p className="text-sm text-red-600">
-            Hesaplama için önce cihaz modeli ve geçerli bir tarih seçmelisin.
+            Hesaplama için önce cihaz modeli seçmelisin ve bu model için
+            maliyet tanımlı olmalı.
           </p>
         )}
 
