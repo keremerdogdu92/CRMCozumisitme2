@@ -88,7 +88,8 @@ function calculateResult(
       const r = referencePercent;
       const denom = 1 - r - t;
       if (denom <= 0) {
-        error = "Seçilen hedef + referans + vergi oranı matematiksel olarak imkânsız (1 - r - t ≤ 0).";
+        error =
+          "Seçilen hedef + referans + vergi oranı matematiksel olarak imkânsız (1 - r - t ≤ 0).";
       } else {
         S = (K + C_eff * (1 - t)) / denom;
       }
@@ -202,6 +203,12 @@ export const ProfitCalculatorForm: React.FC = () => {
     init();
   }, []);
 
+  const selectedDeviceMeta = useMemo(
+    () =>
+      deviceModels.find((m) => m.model === inputs.selectedModel) ?? null,
+    [deviceModels, inputs.selectedModel]
+  );
+
   useEffect(() => {
     async function loadCost() {
       if (!inputs.selectedModel || !inputs.asOfDate) {
@@ -237,6 +244,24 @@ export const ProfitCalculatorForm: React.FC = () => {
     setInputs((prev) => ({
       ...prev,
       [key]: value,
+    }));
+  }
+
+  function handleDeviceModelChange(model: string) {
+    const meta =
+      deviceModels.find((m) => m.model === model) ?? null;
+
+    setInputs((prev) => ({
+      ...prev,
+      selectedModel: model,
+      // If user is in "price" mode and hasn't entered a price yet,
+      // use the list price as a starting point (if available).
+      salePrice:
+        prev.mode === "price" &&
+        prev.salePrice == null &&
+        meta?.listPrice != null
+          ? meta.listPrice
+          : prev.salePrice,
     }));
   }
 
@@ -300,7 +325,7 @@ export const ProfitCalculatorForm: React.FC = () => {
             <select
               className="w-full border rounded px-2 py-1 text-sm"
               value={inputs.selectedModel}
-              onChange={(e) => handleChange("selectedModel", e.target.value)}
+              onChange={(e) => handleDeviceModelChange(e.target.value)}
             >
               <option value="">Seçiniz</option>
               {deviceModels.map((m) => (
@@ -324,15 +349,15 @@ export const ProfitCalculatorForm: React.FC = () => {
           </div>
         </div>
 
-        <div className="text-sm mt-2">
+        <div className="text-sm mt-2 space-y-1">
           {deviceCostLoading ? (
-            <span>Cihaz maliyeti yükleniyor...</span>
+            <div>Cihaz maliyeti yükleniyor...</div>
           ) : deviceCost == null ? (
-            <span className="text-red-600">
+            <div className="text-red-600">
               Seçilen tarih için cihaz maliyeti bulunamadı.
-            </span>
+            </div>
           ) : (
-            <span>
+            <div>
               Cihaz maliyeti (C):{" "}
               <span className="font-semibold">
                 {deviceCost.toLocaleString("tr-TR", {
@@ -340,7 +365,21 @@ export const ProfitCalculatorForm: React.FC = () => {
                 })}{" "}
                 TL
               </span>
-            </span>
+            </div>
+          )}
+
+          {selectedDeviceMeta?.listPrice != null && (
+            <div className="text-xs text-gray-700">
+              Liste fiyatı (bilgi amaçlı):{" "}
+              <span className="font-semibold">
+                {selectedDeviceMeta.listPrice.toLocaleString("tr-TR", {
+                  maximumFractionDigits: 2,
+                })}{" "}
+                TL
+              </span>
+              {" "}— Satış fiyatını gir modunda, fiyat boşsa bu değer başlangıç
+              olarak kullanılır.
+            </div>
           )}
         </div>
       </section>
@@ -601,6 +640,16 @@ export const ProfitCalculatorForm: React.FC = () => {
                   )
                 }
               />
+              {selectedDeviceMeta?.listPrice != null && (
+                <p className="text-xs text-gray-600 mt-1">
+                  Liste fiyatı:{" "}
+                  {selectedDeviceMeta.listPrice.toLocaleString("tr-TR", {
+                    maximumFractionDigits: 2,
+                  })}{" "}
+                  TL. İstersen buradan yukarıya kopyalayıp üzerinden pazarlık
+                  yapabilirsin.
+                </p>
+              )}
             </div>
           </div>
         )}
