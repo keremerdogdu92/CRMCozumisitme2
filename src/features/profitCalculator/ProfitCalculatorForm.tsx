@@ -1,5 +1,6 @@
 // src/features/profitCalculator/ProfitCalculatorForm.tsx
 // Summary: React UI + calculation logic for the Profitability Calculator.
+// Uses current_device_model_prices_public for device & charger prices.
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -9,13 +10,12 @@ import {
   ProfitCalcMode,
   ProfitCalcResult,
   ReferenceOption,
-  ChargerOption,
 } from "./types";
 import {
+  fetchChargerOptions,
   fetchDeviceModelOptions,
   fetchEffectiveDeviceCost,
   fetchReferenceOptions,
-  fetchChargerOptions,
 } from "./api";
 
 function todayISO(): string {
@@ -29,7 +29,8 @@ function createEmptyInputs(): ProfitCalcInputs {
     selectedBrand: "REXTON",
     selectedModel: "",
     asOfDate: todayISO(),
-    deviceQuantity: 2, // Çoğunlukla iki cihaz satıldığı için varsayılan 2
+
+    deviceQuantity: 2, // çoğu durumda sağ + sol
 
     selectedReferenceId: null,
     referenceScheme: null,
@@ -55,7 +56,8 @@ function calcAccessoriesCost(accessories: AccessoryRow[]): number {
 
 function calculateResult(
   inputs: ProfitCalcInputs,
-  unitDeviceCost: number | null
+  unitDeviceCost: number | null,
+  unitListPrice: number | null
 ): ProfitCalcResult | null {
   if (unitDeviceCost == null || unitDeviceCost < 0) {
     return null;
@@ -74,10 +76,13 @@ function calculateResult(
     deviceQuantity,
   } = inputs;
 
-  const quantity = deviceQuantity && deviceQuantity > 0 ? deviceQuantity : 1;
+  const qty = Math.max(1, deviceQuantity || 1);
 
-  // Cihaz toplam maliyeti (adet * birim maliyet)
-  const C = unitDeviceCost * quantity;
+  const C_unit = unitDeviceCost;
+  const C = C_unit * qty; // toplam cihaz maliyeti
+  const listTotal =
+    unitListPrice != null ? unitListPrice * qty : null;
+
   const Ac = calcAccessoriesCost(accessories);
   const C_eff = C + Ac;
   const t = taxRate;
@@ -91,7 +96,7 @@ function calculateResult(
     }
     S = salePrice;
   } else if (mode === "targetOnCost") {
-    const K = targetOnCostPercent * C_eff;
+    const K_target = targetOnCostPercent * C_eff;
 
     if (referenceScheme === "percent") {
       const r = referencePercent;
@@ -100,7 +105,7 @@ function calculateResult(
         error =
           "Seçilen hedef + referans + vergi oranı matematiksel olarak imkânsız (1 - r - t ≤ 0).";
       } else {
-        S = (K + C_eff * (1 - t)) / denom;
+        S = (K_target + C_eff * (1 - t)) / denom;
       }
     } else {
       const R_fixed = referenceScheme === "fixed" ? referenceFixed : 0;
@@ -108,7 +113,7 @@ function calculateResult(
       if (denom <= 0) {
         error = "Vergi oranı 100% veya üzeri. Geçerli değil.";
       } else {
-        S = (K + C_eff * (1 - t) + R_fixed) / denom;
+        S = (K_target + C_eff * (1 - t) + R_fixed) / denom;
       }
     }
   } else if (mode === "targetOnRevenue") {
@@ -148,6 +153,9 @@ function calculateResult(
       netProfit: 0,
       profitOverCost: 0,
       profitOverRevenue: 0,
+      listPriceTotal: listTotal,
+      discountAmount: null,
+      discountPercent: null,
     };
   }
 
@@ -169,10 +177,19 @@ function calculateResult(
   const profitOverCost = C_eff > 0 ? K / C_eff : 0;
   const profitOverRevenue = S > 0 ? K / S : 0;
 
+  let discountAmount: number | null = null;
+  let discountPercent: number | null = null;
+
+  if (listTotal != null) {
+    discountAmount = listTotal - S;
+    discountPercent =
+      listTotal > 0 ? (discountAmount / listTotal) : null;
+  }
+
   return {
     valid: true,
     salePrice: S,
-    deviceCost: C, // toplam cihaz maliyeti
+    deviceCost: C,
     accessoriesCost: Ac,
     totalCost: C_eff,
     referenceCommission: R,
@@ -180,6 +197,9 @@ function calculateResult(
     netProfit: K,
     profitOverCost,
     profitOverRevenue,
+    listPriceTotal: listTotal,
+    discountAmount,
+    discountPercent,
   };
 }
 
@@ -188,44 +208,41 @@ let accessoryIdCounter = 1;
 export const ProfitCalculatorForm: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [deviceModels, setDeviceModels] = useState<DeviceModelOption[]>([]);
+  const [chargerModels, setChargerModels] = useState<DeviceModelOption[]>([]);
   const [references, setReferences] = useState<ReferenceOption[]>([]);
-  const [chargers, setChargers] = useState<ChargerOption[]>([]);
   const [inputs, setInputs] = useState<ProfitCalcInputs>(createEmptyInputs());
-  const [unitDeviceCost, setUnitDeviceCost] = useState<number | null>(null);
+  const [deviceUnitCost, setDeviceUnitCost] = useState<number | null>(null);
+  const [deviceListPrice, setDeviceListPrice] = useState<number | null>(null);
   const [deviceCostLoading, setDeviceCostLoading] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showDate, setShowDate] = useState(false);
+  const [selectedChargerModel, setSelectedChargerModel] = useState<string>("");
 
-  // Marka listesi (distinct)
-  const brandOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const m of deviceModels) {
-      if (m.brand) set.add(m.brand);
-    }
-    return Array.from(set).sort();
-  }, [deviceModels]);
-
-  // İlk yüklemede cihaz modelleri + referanslar + şarj cihazları
   useEffect(() => {
     async function init() {
       setLoading(true);
       try {
-        const [models, refs, chargerOptions] = await Promise.all([
+        const [models, refs, chargers] = await Promise.all([
           fetchDeviceModelOptions(),
           fetchReferenceOptions(),
           fetchChargerOptions(),
         ]);
+
         setDeviceModels(models);
         setReferences(refs);
-        setChargers(chargerOptions);
+        setChargerModels(chargers);
 
+        // Default brand: REXTON, if exists
+        const brands = Array.from(
+          new Set(
+            models
+              .map((m) => (m.brand ?? "").trim())
+              .filter((b) => b.length > 0)
+          )
+        );
+        const hasRexton = brands.includes("REXTON");
         setInputs((prev) => ({
           ...prev,
-          asOfDate: todayISO(),
-          // Eğer default REXTON yoksa, ilk markayı seç
-          selectedBrand:
-            prev.selectedBrand ||
-            models.find((m) => m.brand)?.brand ||
-            "",
+          selectedBrand: hasRexton ? "REXTON" : "",
         }));
       } catch (err) {
         console.error("ProfitCalculator init error:", err);
@@ -236,23 +253,25 @@ export const ProfitCalculatorForm: React.FC = () => {
     init();
   }, []);
 
-  // Seçili model veya tarih değişince cihaz birim maliyetini çek
   useEffect(() => {
     async function loadCost() {
       if (!inputs.selectedModel) {
-        setUnitDeviceCost(null);
+        setDeviceUnitCost(null);
+        setDeviceListPrice(null);
         return;
       }
       setDeviceCostLoading(true);
       try {
-        const cost = await fetchEffectiveDeviceCost(
+        const info = await fetchEffectiveDeviceCost(
           inputs.selectedModel,
           inputs.asOfDate
         );
-        setUnitDeviceCost(cost);
+        setDeviceUnitCost(info.deviceCost);
+        setDeviceListPrice(info.listPrice);
       } catch (err) {
         console.error("loadCost error:", err);
-        setUnitDeviceCost(null);
+        setDeviceUnitCost(null);
+        setDeviceListPrice(null);
       } finally {
         setDeviceCostLoading(false);
       }
@@ -260,10 +279,32 @@ export const ProfitCalculatorForm: React.FC = () => {
     loadCost();
   }, [inputs.selectedModel, inputs.asOfDate]);
 
+  const brandOptions = useMemo(() => {
+    const brands = new Set<string>();
+    for (const m of deviceModels) {
+      const b = (m.brand ?? "").trim();
+      if (b) brands.add(b);
+    }
+    return Array.from(brands).sort();
+  }, [deviceModels]);
+
+  const filteredModels = useMemo(() => {
+    return deviceModels.filter((m) => {
+      if (!inputs.selectedBrand) return true; // Tümü
+      const b = (m.brand ?? "").trim();
+      return b === inputs.selectedBrand;
+    });
+  }, [deviceModels, inputs.selectedBrand]);
+
   const result = useMemo(
-    () => calculateResult(inputs, unitDeviceCost),
-    [inputs, unitDeviceCost]
+    () => calculateResult(inputs, deviceUnitCost, deviceListPrice),
+    [inputs, deviceUnitCost, deviceListPrice]
   );
+
+  const totalDeviceCost =
+    deviceUnitCost != null
+      ? deviceUnitCost * Math.max(1, inputs.deviceQuantity || 1)
+      : null;
 
   function handleChange<K extends keyof ProfitCalcInputs>(
     key: K,
@@ -277,18 +318,20 @@ export const ProfitCalculatorForm: React.FC = () => {
 
   function handleBrandChange(brand: string) {
     setInputs((prev) => {
-      const allowedModels = deviceModels.filter(
-        (m) => !brand || m.brand === brand
-      );
-      const hasCurrent =
-        prev.selectedModel &&
-        allowedModels.some((m) => m.model === prev.selectedModel);
-
-      return {
+      const next: ProfitCalcInputs = {
         ...prev,
         selectedBrand: brand,
-        selectedModel: hasCurrent ? prev.selectedModel : "",
       };
+
+      // Eğer seçili model yeni brand filtresine uymuyorsa temizle
+      const stillValid = filteredModels.some(
+        (m) => m.model === prev.selectedModel
+      );
+      if (!stillValid) {
+        next.selectedModel = "";
+      }
+
+      return next;
     });
   }
 
@@ -304,11 +347,11 @@ export const ProfitCalculatorForm: React.FC = () => {
     }));
   }
 
-  function addAccessoryRow() {
+  function addAccessoryRow(preset?: { name: string; unitCost: number }) {
     const newRow: AccessoryRow = {
       id: `acc-${accessoryIdCounter++}`,
-      name: "",
-      unitCost: 0,
+      name: preset?.name ?? "",
+      unitCost: preset?.unitCost ?? 0,
       quantity: 1,
     };
     setInputs((prev) => ({
@@ -317,24 +360,19 @@ export const ProfitCalculatorForm: React.FC = () => {
     }));
   }
 
-  function addAccessoryFromCharger(modelKey: string) {
-    if (!modelKey) return;
-    const charger = chargers.find(
-      (c) => `${c.brand ?? ""}||${c.model}` === modelKey
+  function addChargerFromSelection() {
+    if (!selectedChargerModel) return;
+    const charger = chargerModels.find(
+      (c) => c.model === selectedChargerModel
     );
     if (!charger) return;
 
-    const newRow: AccessoryRow = {
-      id: `acc-${accessoryIdCounter++}`,
-      name: charger.brand ? `${charger.brand} - ${charger.model}` : charger.model,
-      unitCost: charger.purchaseCost,
-      quantity: 1,
-    };
+    addAccessoryRow({
+      name: charger.model,
+      unitCost: charger.purchasePrice ?? 0,
+    });
 
-    setInputs((prev) => ({
-      ...prev,
-      accessories: [...prev.accessories, newRow],
-    }));
+    setSelectedChargerModel("");
   }
 
   function updateAccessoryRow(id: string, patch: Partial<AccessoryRow>) {
@@ -357,22 +395,14 @@ export const ProfitCalculatorForm: React.FC = () => {
     return <div className="p-4">Yükleniyor...</div>;
   }
 
-  const filteredModels = deviceModels.filter((m) =>
-    inputs.selectedBrand ? m.brand === inputs.selectedBrand : true
-  );
-
-  const deviceQuantity = inputs.deviceQuantity || 1;
-  const totalDeviceCost =
-    unitDeviceCost != null ? unitDeviceCost * deviceQuantity : null;
-
   return (
     <div className="space-y-6 max-w-3xl">
       <h1 className="text-2xl font-semibold">Karlılık Hesaplama Aracı</h1>
 
-      {/* Device + brand + (optional) date + quantity */}
+      {/* Device + date */}
       <section className="border rounded-lg p-4 space-y-4">
         <h2 className="font-semibold">1. Cihaz</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div>
             <label className="block text-sm font-medium mb-1">
               Marka
@@ -403,7 +433,7 @@ export const ProfitCalculatorForm: React.FC = () => {
               <option value="">Seçiniz</option>
               {filteredModels.map((m) => (
                 <option key={`${m.brand ?? ""}-${m.model}`} value={m.model}>
-                  {m.brand ? `${m.brand} - ${m.model}` : m.model}
+                  {m.brand ? `${m.brand.trim()} - ${m.model}` : m.model}
                 </option>
               ))}
             </select>
@@ -416,9 +446,10 @@ export const ProfitCalculatorForm: React.FC = () => {
             <input
               type="number"
               min={1}
+              max={4}
               step={1}
               className="w-full border rounded px-2 py-1 text-sm"
-              value={deviceQuantity}
+              value={inputs.deviceQuantity}
               onChange={(e) =>
                 handleChange(
                   "deviceQuantity",
@@ -434,18 +465,16 @@ export const ProfitCalculatorForm: React.FC = () => {
 
         <button
           type="button"
-          className="text-xs text-gray-600 underline"
-          onClick={() => setShowDatePicker((v) => !v)}
+          className="mt-2 text-xs text-blue-700 underline"
+          onClick={() => setShowDate((v) => !v)}
         >
-          {showDatePicker
-            ? "Tarih ayarını gizle"
-            : "Tarih ayarını göster (opsiyonel)"}
+          Tarih ayarını {showDate ? "gizle" : "göster"} (opsiyonel)
         </button>
 
-        {showDatePicker && (
+        {showDate && (
           <div className="mt-2 max-w-xs">
             <label className="block text-sm font-medium mb-1">
-              Fiyat geçerlilik tarihi
+              Tarih (şimdilik sadece bilgi amaçlı)
             </label>
             <input
               type="date"
@@ -453,37 +482,40 @@ export const ProfitCalculatorForm: React.FC = () => {
               value={inputs.asOfDate}
               onChange={(e) => handleChange("asOfDate", e.target.value)}
             />
-            <p className="text-xs text-gray-600 mt-1">
-              Varsayılan olarak bugün gelir. View en güncel fiyatı döndüğü için
-              genelde değiştirmen gerekmez.
-            </p>
           </div>
         )}
 
         <div className="text-sm mt-2">
           {deviceCostLoading ? (
             <span>Cihaz maliyeti yükleniyor...</span>
-          ) : unitDeviceCost == null ? (
+          ) : totalDeviceCost == null ? (
             <span className="text-red-600">
-              Seçilen cihaz için maliyet bulunamadı (listeye purchase_cost
-              veya list_price ekli mi?).
+              Seçilen cihaz için maliyet bulunamadı (listeye{" "}
+              <span className="font-semibold">purchase_price</span> ve
+              tercihen <span className="font-semibold">list_price</span>{" "}
+              ekli mi?).
             </span>
           ) : (
             <span>
-              Birim cihaz maliyeti:{" "}
+              Cihaz maliyeti (C):{" "}
               <span className="font-semibold">
-                {unitDeviceCost.toLocaleString("tr-TR", {
-                  maximumFractionDigits: 2,
-                })}{" "}
-                TL
-              </span>{" "}
-              | Toplam cihaz maliyeti ({deviceQuantity} adet):{" "}
-              <span className="font-semibold">
-                {totalDeviceCost!.toLocaleString("tr-TR", {
+                {totalDeviceCost.toLocaleString("tr-TR", {
                   maximumFractionDigits: 2,
                 })}{" "}
                 TL
               </span>
+              {deviceUnitCost != null && (
+                <>
+                  {" "}
+                  <span className="text-gray-600">
+                    (adet başı{" "}
+                    {deviceUnitCost.toLocaleString("tr-TR", {
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    TL)
+                  </span>
+                </>
+              )}
             </span>
           )}
         </div>
@@ -607,44 +639,36 @@ export const ProfitCalculatorForm: React.FC = () => {
           <span className="font-semibold">maliyetlerini</span> ekle.
         </p>
 
-        {/* Hazır şarj cihazı seçimi */}
-        {chargers.length > 0 && (
-          <div className="max-w-md">
+        {/* Charger quick-add from price list */}
+        <div className="grid grid-cols-12 gap-2 items-end">
+          <div className="col-span-9 md:col-span-10">
             <label className="block text-sm font-medium mb-1">
-              Hazır aksesuar ekle (şarj cihazı)
+              Şarj aleti hızlı ekleme (listeye kayıtlı olanlar)
             </label>
             <select
               className="w-full border rounded px-2 py-1 text-sm"
-              defaultValue=""
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value) {
-                  addAccessoryFromCharger(value);
-                  // aynı seçimi tekrar ekleyebilmek için resetle
-                  e.target.value = "";
-                }
-              }}
+              value={selectedChargerModel}
+              onChange={(e) => setSelectedChargerModel(e.target.value)}
             >
               <option value="">Seçilmedi</option>
-              {chargers.map((c) => {
-                const key = `${c.brand ?? ""}||${c.model}`;
-                return (
-                  <option key={key} value={key}>
-                    {c.brand ? `${c.brand} - ${c.model}` : c.model} (
-                    {c.purchaseCost.toLocaleString("tr-TR", {
-                      maximumFractionDigits: 2,
-                    })}{" "}
-                    TL)
-                  </option>
-                );
-              })}
+              {chargerModels.map((c) => (
+                <option key={`${c.brand ?? ""}-${c.model}`} value={c.model}>
+                  {c.brand ? `${c.brand.trim()} - ${c.model}` : c.model}
+                </option>
+              ))}
             </select>
-            <p className="text-xs text-gray-600 mt-1">
-              Listeden seçtiğin şarj cihazı aşağıya maliyetiyle yeni bir satır
-              olarak eklenir. Gerekirse adını veya tutarı değiştirebilirsin.
-            </p>
           </div>
-        )}
+          <div className="col-span-3 md:col-span-2">
+            <button
+              type="button"
+              className="w-full text-sm px-3 py-1 border rounded"
+              onClick={addChargerFromSelection}
+              disabled={!selectedChargerModel}
+            >
+              + Ekle
+            </button>
+          </div>
+        </div>
 
         <div className="space-y-2">
           {inputs.accessories.map((acc) => (
@@ -706,7 +730,7 @@ export const ProfitCalculatorForm: React.FC = () => {
         <button
           type="button"
           className="text-sm px-3 py-1 border rounded"
-          onClick={addAccessoryRow}
+          onClick={() => addAccessoryRow()}
         >
           + Aksesuar satırı ekle
         </button>
@@ -848,11 +872,9 @@ export const ProfitCalculatorForm: React.FC = () => {
       <section className="border rounded-lg p-4 space-y-4">
         <h2 className="font-semibold">5. Sonuç</h2>
 
-        {!unitDeviceCost && (
+        {totalDeviceCost == null && (
           <p className="text-sm text-red-600">
-            Hesaplama için önce cihaz modeli seçmelisin ve bu model için
-            current_device_model_prices_public içinde purchase_cost veya
-            list_price tanımlı olmalı.
+            Hesaplama için önce cihaz modeli ve geçerli bir maliyet seçmelisin.
           </p>
         )}
 
@@ -936,6 +958,33 @@ export const ProfitCalculatorForm: React.FC = () => {
                 })}{" "}
                 TL
               </div>
+              {result.listPriceTotal != null && (
+                <>
+                  <div>
+                    Liste fiyatı (toplam):{" "}
+                    {result.listPriceTotal.toLocaleString("tr-TR", {
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    TL
+                  </div>
+                  {result.discountAmount != null &&
+                    result.discountPercent != null && (
+                      <div>
+                        Listeye göre indirim:{" "}
+                        {result.discountAmount.toLocaleString("tr-TR", {
+                          maximumFractionDigits: 2,
+                        })}{" "}
+                        TL{" "}
+                        <span className="text-gray-700">
+                          (
+                          {result.discountPercent.toFixed(1)}
+                          {" %"}
+                          )
+                        </span>
+                      </div>
+                    )}
+                </>
+              )}
             </div>
           </>
         )}
