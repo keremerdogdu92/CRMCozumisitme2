@@ -13,20 +13,6 @@ function formatDate(value: string | null): string {
   return new Date(value).toLocaleDateString('tr-TR');
 }
 
-function formatPrice(amount: number | null | undefined): string {
-  if (amount == null || Number.isNaN(amount)) return '-';
-  try {
-    return (
-      amount.toLocaleString('tr-TR', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-      }) + ' ₺'
-    );
-  } catch {
-    return `${amount} ₺`;
-  }
-}
-
 function formatSgkWarning(p: PatientRow): string | null {
   if (!p.sgk_flag) return null;
   const needsPrescription = !p.sgk_prescription_received;
@@ -39,6 +25,20 @@ function formatSgkWarning(p: PatientRow): string | null {
   }
   if (needsPrescription) return 'Reçete bekleniyor';
   return 'Sisteme işlenecek';
+}
+
+function formatPrice(amount: number | null): string {
+  if (amount == null || Number.isNaN(amount)) return '-';
+  try {
+    return amount.toLocaleString('tr-TR', {
+      style: 'currency',
+      currency: 'TRY',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+  } catch {
+    return `${amount}`;
+  }
 }
 
 export function PatientsTable({ patients, onSelectPatient }: PatientsTableProps) {
@@ -80,6 +80,9 @@ export function PatientsTable({ patients, onSelectPatient }: PatientsTableProps)
             <th className="px-4 py-2 text-center font-medium text-slate-600">
               SGK
             </th>
+            <th className="px-4 py-2 text-left font-medium text-slate-600">
+              Arşiv Kodu
+            </th>
             <th className="px-4 py-2 text-right font-medium text-slate-600">
               İşlemler
             </th>
@@ -91,8 +94,8 @@ export function PatientsTable({ patients, onSelectPatient }: PatientsTableProps)
             const hasSgkWarning = !!warning;
 
             const deviceLabel =
-              p.device_brand && p.device_model
-                ? `${p.device_brand} ${p.device_model}`
+              p.device_brand || p.device_model
+                ? [p.device_brand, p.device_model].filter(Boolean).join(' ')
                 : '-';
 
             return (
@@ -124,11 +127,9 @@ export function PatientsTable({ patients, onSelectPatient }: PatientsTableProps)
                   {formatPrice(p.device_total_price)}
                 </td>
 
-                {/* Memnuniyet */}
-                <td className="px-4 py-2 text-center text-slate-700">
-                  {p.satisfaction_10 != null
-                    ? p.satisfaction_10
-                    : '-'}
+                {/* Memnuniyet – v1: henüz bağlı değil */}
+                <td className="px-4 py-2 text-center italic text-slate-500">
+                  -
                 </td>
 
                 {/* Son Görüşme */}
@@ -155,6 +156,9 @@ export function PatientsTable({ patients, onSelectPatient }: PatientsTableProps)
                     )}
                   </div>
                 </td>
+
+                {/* Arşiv Kodu – v1: placeholder */}
+                <td className="px-4 py-2 italic text-slate-500">-</td>
 
                 {/* İşlemler – Detay çekmecesi */}
                 <td className="px-4 py-2 text-right">
