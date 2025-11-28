@@ -16,6 +16,7 @@ import type {
 import { PatientsTable } from '../features/patients/PatientsTable';
 import { NewPatientFormCard } from '../features/patients/NewPatientFormCard';
 import { PatientDetailDrawer } from '../features/patients/PatientDetailDrawer';
+import { PageHeader } from '../components/layout/PageHeader';
 
 type PatientDetailTabId =
   | 'info'
@@ -123,17 +124,11 @@ export default function PatientsPage() {
 
   return (
     <div className="space-y-5 px-3 py-4 sm:px-4 sm:py-6 lg:px-8 lg:py-8">
-      {/* Başlık + sayım */}
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
-            Hastalar
-          </h2>
-          <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs">
-            Toplam {patients.length} kayıt
-          </p>
-        </div>
-      </div>
+      {/* Başlık */}
+      <PageHeader
+        title="Hastalar"
+        subtitle={`Toplam ${patients.length} kayıt`}
+      />
 
       {/* Filtreler + arama + yeni hasta butonu */}
       <div className="space-y-3 rounded-lg border border-slate-100 bg-slate-50/70 p-3 shadow-sm sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:space-y-0 sm:bg-slate-50">
