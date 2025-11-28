@@ -182,3 +182,38 @@ export async function createReference(
     throw new Error('REF_STEP_INSERT: ' + insertError.message);
   }
 }
+
+/**
+ * Lightweight single-reference loader for detail views (trials, patients).
+ * Only id + full_name döner; RLS org_id üzerinden zaten kısıtlı.
+ */
+export type ReferenceLiteForTrial = {
+  id: string;
+  full_name: string | null;
+};
+
+export async function fetchReferenceLiteById(
+  id: string,
+): Promise<ReferenceLiteForTrial | null> {
+  if (!id) return null;
+
+  const { data, error } = await supabaseClient
+    .from('references')
+    .select('id, full_name')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Supabase reference-lite fetch error:', error);
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: data.id as string,
+    full_name: (data.full_name ?? null) as string | null,
+  };
+}
