@@ -47,7 +47,50 @@ export async function createPatient(
     throw new Error('STEP_NO_ORG: Profile org_id is missing');
   }
 
+  const orgId = profile.org_id as string;
+
+  // ---------------------------------------------------------------------------
+  // Archive code generation: YYYY-MM-N format per org and per month
+  // ---------------------------------------------------------------------------
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1–12
+  const monthStr = String(month).padStart(2, '0');
+  const yearMonth = `${year}-${monthStr}`;
+
+  const monthStart = `${yearMonth}-01`;
+
+  const nextMonthYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextMonthStr = String(nextMonth).padStart(2, '0');
+  const nextMonthStart = `${nextMonthYear}-${nextMonthStr}-01`;
+
+  const {
+    count: monthPatientCount,
+    error: countError,
+  } = await supabaseClient
+    .from('patients')
+    .select('id', { count: 'exact', head: true })
+    .eq('org_id', orgId)
+    .gte('created_at', monthStart)
+    .lt('created_at', nextMonthStart);
+
+  if (countError) {
+    console.error(
+      'Failed to count patients for archive_code (STEP_ARCHIVE_COUNT):',
+      countError,
+    );
+    throw new Error(
+      'STEP_ARCHIVE_COUNT: ' + countError.message,
+    );
+  }
+
+  const archiveIndex = (monthPatientCount ?? 0) + 1;
+  const archiveCode = `${yearMonth}-${archiveIndex}`;
+
+  // ---------------------------------------------------------------------------
   // Payment metadata on patient row
+  // ---------------------------------------------------------------------------
   let payment_method: PatientPaymentMethod | null = null;
   let card_sale_total: number | null = null;
   let card_fee_rate: number | null = null;
@@ -81,7 +124,7 @@ export async function createPatient(
   const { data, error: insertError } = await supabaseClient
     .from('patients')
     .insert({
-      org_id: profile.org_id,
+      org_id: orgId,
       full_name: input.fullName.trim(),
       phone: input.phone.trim() || null,
       sgk_flag: input.sgkFlag,
@@ -104,7 +147,7 @@ export async function createPatient(
       national_id: null,
       address: null,
       kin_phone: null,
-      archive_code: null,
+      archive_code: archiveCode,
     })
     .select(
       `
@@ -211,6 +254,6 @@ export async function updatePatientSgkFields(
       'Failed to update patient SGK fields (STEP_UPDATE_SGK):',
       error,
     );
-  throw new Error('STEP_UPDATE_SGK: ' + error.message);
+    throw new Error('STEP_UPDATE_SGK: ' + error.message);
   }
 }
