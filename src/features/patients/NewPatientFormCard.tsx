@@ -14,6 +14,7 @@ import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
 import { NewPatientReferenceField } from './NewPatientReferenceField';
 import { NewPatientSgkSection } from './NewPatientSgkSection';
 import { NewPatientPaymentSection } from './NewPatientPaymentSection';
+import { FormSection } from '../../components/layout/FormSection';
 
 type NewPatientFormCardProps = {
   open: boolean;
@@ -109,11 +110,10 @@ export function NewPatientFormCard({
     >
       <form className="space-y-4" onSubmit={handleSubmit}>
         {/* Özlük bilgileri bloğu */}
-        <section className="space-y-3 rounded-md border border-slate-100 bg-slate-50 px-3 py-3">
-          <h4 className="text-xs font-semibold uppercase text-slate-500">
-            Özlük Bilgileri
-          </h4>
-
+        <FormSection
+          title="Özlük Bilgileri"
+          description='Bu bilgiler hasta detayında "Özlük Bilgileri" bölümünde görüntülenir. Doldurmak zorunlu değildir; gerektiğinde daha sonra da güncellenebilir.'
+        >
           {/* Row 1: Ad Soyad / T.C. / Telefon */}
           <div className="grid gap-3 md:grid-cols-12">
             {/* Ad Soyad */}
@@ -215,19 +215,10 @@ export function NewPatientFormCard({
               />
             </div>
           </div>
-
-          <p className="text-[11px] text-slate-500">
-            Bu bilgiler hasta detayında &quot;Özlük Bilgileri&quot; bölümünde
-            görüntülenir. Doldurmak zorunlu değildir; gerektiğinde daha sonra da
-            güncellenebilir.
-          </p>
-        </section>
+        </FormSection>
 
         {/* SGK + Ödeme bloğu */}
-        <section className="space-y-3 rounded-md border border-slate-100 bg-slate-50 px-3 py-3">
-          <h4 className="text-xs font-semibold uppercase text-slate-500">
-            SGK ve Ödeme
-          </h4>
+        <FormSection title="SGK ve Ödeme">
           <div className="grid gap-3 md:grid-cols-12 md:items-start">
             {/* SGK üçlüsü */}
             <div className="md:col-span-4">
@@ -278,7 +269,7 @@ export function NewPatientFormCard({
               />
             </div>
           </div>
-        </section>
+        </FormSection>
 
         {/* Submit button */}
         <div className="flex justify-end">
