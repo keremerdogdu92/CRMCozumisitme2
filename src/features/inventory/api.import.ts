@@ -3,6 +3,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
+import { parseSimpleCsv } from '../../utils/csvUtils';
 import type {
   InventoryImportSummary,
   InventoryItemRow,
@@ -11,40 +12,6 @@ import type {
 } from './types';
 import { INVENTORY_QUERY_KEY } from './api.keys';
 import { parsePriceOrNull } from './inventoryPriceUtils';
-
-/**
- * Simple CSV parser that accepts "," or ";" as delimiter.
- */
-function parseCsv(text: string): { headers: string[]; rows: string[][] } {
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-
-  if (lines.length === 0) {
-    return { headers: [], rows: [] };
-  }
-
-  const headerLine = lines[0];
-  const commaCount = (headerLine.match(/,/g) ?? []).length;
-  const semiCount = (headerLine.match(/;/g) ?? []).length;
-  const delimiter = semiCount > commaCount ? ';' : ',';
-
-  const headers = headerLine
-    .split(delimiter)
-    .map((h) => h.trim().toLowerCase());
-
-  const rows: string[][] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line) continue;
-    const cols = line.split(delimiter).map((c) => c.trim());
-    if (cols.every((c) => !c)) continue;
-    rows.push(cols);
-  }
-
-  return { headers, rows };
-}
 
 type CsvRowObj = {
   [key: string]: string;
@@ -101,7 +68,7 @@ export async function importInventoryFromCsv(
   file: File,
 ): Promise<InventoryImportSummary> {
   const text = await file.text();
-  const { headers, rows } = parseCsv(text);
+  const { headers, rows } = parseSimpleCsv(text);
 
   if (headers.length === 0 || rows.length === 0) {
     throw new Error('CSV dosyası boş görünüyor.');
