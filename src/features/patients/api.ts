@@ -76,20 +76,7 @@ export async function fetchPatientsByReferenceId(
 
 /**
  * Full patient list with device + reference info.
- * Backed by the patient_list_with_device view:
- *
- *   SELECT
- *     p.*,
- *     v.device_brand,
- *     v.device_model,
- *     v.device_total_price,
- *     r.full_name AS reference_name,
- *     r.phone     AS reference_phone
- *   FROM public.patients p
- *   LEFT JOIN public.patient_device_latest_sale v
- *     ON v.patient_id = p.id
- *   LEFT JOIN public.references r
- *     ON r.id = p.reference_id;
+ * Backed by the patient_list_with_device view.
  */
 export async function fetchPatients(): Promise<PatientRow[]> {
   const { data, error } = await supabaseClient
@@ -101,7 +88,6 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       phone,
       created_at,
       last_visit_at,
-      -- SGK + memnuniyet + kimlik alanları
       sgk_flag,
       sgk_prescription_no,
       sgk_docs_received,
@@ -109,21 +95,17 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       satisfaction_10,
       sgk_prescription_received,
       sgk_recorded_to_system,
-      -- Kimlik / adres / yakın
       national_id,
       address,
       kin_phone,
-      -- Referans
       reference_id,
       reference_name,
       reference_phone,
-      -- Arşiv / kart ve ödeme meta
       archive_code,
       payment_method,
       card_sale_total,
       card_fee_rate,
       card_fee_amount,
-      -- Cihaz özeti
       device_brand,
       device_model,
       device_total_price
@@ -153,19 +135,14 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       sgk_processed:
         (row.sgk_processed as boolean | null | undefined) ?? null,
       satisfaction_10:
-        row.satisfaction_10 != null
-          ? Number(row.satisfaction_10)
-          : null,
+        row.satisfaction_10 != null ? Number(row.satisfaction_10) : null,
       sgk_prescription_received:
-        (row.sgk_prescription_received as boolean | null | undefined) ??
-        null,
+        (row.sgk_prescription_received as boolean | null | undefined) ?? null,
       sgk_recorded_to_system:
-        (row.sgk_recorded_to_system as boolean | null | undefined) ??
-        null,
+        (row.sgk_recorded_to_system as boolean | null | undefined) ?? null,
 
       // Kimlik / adres / yakın
-      national_id:
-        (row.national_id as string | null | undefined) ?? null,
+      national_id: (row.national_id as string | null | undefined) ?? null,
       address: (row.address as string | null | undefined) ?? null,
       kin_phone: (row.kin_phone as string | null | undefined) ?? null,
 
@@ -177,8 +154,7 @@ export async function fetchPatients(): Promise<PatientRow[]> {
         (row.reference_phone as string | null | undefined) ?? null,
 
       // Arşiv + kart satış
-      archive_code:
-        (row.archive_code as string | null | undefined) ?? null,
+      archive_code: (row.archive_code as string | null | undefined) ?? null,
       payment_method:
         (row.payment_method as PatientPaymentMethod | null) ?? null,
       card_sale_total:
@@ -189,10 +165,8 @@ export async function fetchPatients(): Promise<PatientRow[]> {
         (row.card_fee_amount as number | null | undefined) ?? null,
 
       // Cihaz özeti
-      device_brand:
-        (row.device_brand as string | null | undefined) ?? null,
-      device_model:
-        (row.device_model as string | null | undefined) ?? null,
+      device_brand: (row.device_brand as string | null | undefined) ?? null,
+      device_model: (row.device_model as string | null | undefined) ?? null,
       device_total_price:
         (row.device_total_price as number | null | undefined) ?? null,
     };
@@ -405,18 +379,13 @@ export async function createPatient(
     sgk_processed:
       (data.sgk_processed as boolean | null | undefined) ?? null,
     satisfaction_10:
-      data.satisfaction_10 != null
-        ? Number(data.satisfaction_10)
-        : null,
+      data.satisfaction_10 != null ? Number(data.satisfaction_10) : null,
     sgk_prescription_received:
-      (data.sgk_prescription_received as boolean | null | undefined) ??
-      null,
+      (data.sgk_prescription_received as boolean | null | undefined) ?? null,
     sgk_recorded_to_system:
-      (data.sgk_recorded_to_system as boolean | null | undefined) ??
-      null,
+      (data.sgk_recorded_to_system as boolean | null | undefined) ?? null,
 
-    national_id:
-      (data.national_id as string | null | undefined) ?? null,
+    national_id: (data.national_id as string | null | undefined) ?? null,
     address: (data.address as string | null | undefined) ?? null,
     kin_phone: (data.kin_phone as string | null | undefined) ?? null,
 
@@ -424,8 +393,7 @@ export async function createPatient(
     reference_name: null,
     reference_phone: null,
 
-    archive_code:
-      (data.archive_code as string | null | undefined) ?? null,
+    archive_code: (data.archive_code as string | null | undefined) ?? null,
 
     device_brand: null,
     device_model: null,
@@ -452,16 +420,13 @@ export async function createPatient(
 export async function updatePatientSgkFields(
   params: PatientSgkUpdateInput,
 ): Promise<void> {
-  const { id, sgkFlag, sgkPrescriptionReceived, sgkRecordedToSystem } =
-    params;
+  const { id, sgkFlag, sgkPrescriptionReceived, sgkRecordedToSystem } = params;
 
   const { error } = await supabaseClient
     .from('patients')
     .update({
       sgk_flag: sgkFlag,
-      sgk_prescription_received: sgkFlag
-        ? sgkPrescriptionReceived
-        : false,
+      sgk_prescription_received: sgkFlag ? sgkPrescriptionReceived : false,
       sgk_recorded_to_system: sgkFlag ? sgkRecordedToSystem : false,
     })
     .eq('id', id);
