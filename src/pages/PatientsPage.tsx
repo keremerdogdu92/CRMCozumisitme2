@@ -1,6 +1,5 @@
 // src/pages/PatientsPage.tsx
-// Container page for Patients: fetches data, manages filters and orchestrates
-// NewPatientFormCard, PatientsTable and PatientDetailDrawer.
+// Container page for Patients with responsive layout and filters.
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -69,7 +68,7 @@ export default function PatientsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-8 text-sm text-slate-500">
+      <div className="p-4 text-sm text-slate-500 sm:p-8">
         Hastalar yükleniyor...
       </div>
     );
@@ -77,7 +76,7 @@ export default function PatientsPage() {
 
   if (isError) {
     return (
-      <div className="p-8 text-sm text-red-600">
+      <div className="p-4 text-sm text-red-600 sm:p-8">
         Hasta verileri alınırken bir hata oluştu. Lütfen Supabase
         bağlantısını ve RLS ayarlarını kontrol edin.
       </div>
@@ -123,20 +122,27 @@ export default function PatientsPage() {
   };
 
   return (
-    <div className="space-y-6 p-8">
-      {/* Başlık + filtreler + arama + yeni hasta butonu */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div className="space-y-5 px-3 py-4 sm:px-4 sm:py-6 lg:px-8 lg:py-8">
+      {/* Başlık + sayım */}
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Hastalar</h2>
-          <p className="mt-1 text-xs text-slate-500">
+          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
+            Hastalar
+          </h2>
+          <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs">
             Toplam {patients.length} kayıt
           </p>
         </div>
+      </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      {/* Filtreler + arama + yeni hasta butonu */}
+      <div className="space-y-3 rounded-lg border border-slate-100 bg-slate-50/70 p-3 shadow-sm sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:space-y-0 sm:bg-slate-50">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {/* SGK filtresi */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">SGK filtre:</span>
+            <span className="text-[11px] text-slate-500 sm:text-xs">
+              SGK filtre:
+            </span>
             <select
               value={sgkFilter}
               onChange={(e) =>
@@ -151,7 +157,9 @@ export default function PatientsPage() {
               <option value="non-sgk">SGK’sız</option>
             </select>
           </div>
+        </div>
 
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
           {/* Arama */}
           <input
             type="text"
