@@ -72,7 +72,9 @@ export default function ReferencesPage() {
 
   if (profileLoading || isLoading) {
     return (
-      <div className="p-8 text-sm text-slate-500">Referanslar yükleniyor...</div>
+      <div className="p-8 text-sm text-slate-500">
+        Referanslar yükleniyor...
+      </div>
     );
   }
 
@@ -80,8 +82,9 @@ export default function ReferencesPage() {
   if (!profile || profile.role !== 'admin') {
     return (
       <div className="p-8 text-sm text-slate-500">
-        Bu sayfa sadece yöneticilere özeldir. Referans listesi, komisyon ayarları
-        ve takip hatırlatmalarına yalnızca yönetici hesapları erişebilir.
+        Bu sayfa sadece yöneticilere özeldir. Referans listesi, komisyon
+        ayarları ve takip hatırlatmalarına yalnızca yönetici hesapları
+        erişebilir.
       </div>
     );
   }
@@ -89,8 +92,8 @@ export default function ReferencesPage() {
   if (isError) {
     return (
       <div className="p-8 text-sm text-red-600">
-        Referans verileri alınırken bir hata oluştu. Lütfen Supabase bağlantısını ve RLS
-        ayarlarını kontrol edin.
+        Referans verileri alınırken bir hata oluştu. Lütfen Supabase
+        bağlantısını ve RLS ayarlarını kontrol edin.
       </div>
     );
   }
@@ -98,12 +101,16 @@ export default function ReferencesPage() {
   const totalCount = references.length;
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="space-y-6 p-8">
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Referanslar</h2>
-          <p className="text-xs text-slate-500 mt-1">Toplam {totalCount} kayıt</p>
+          <h2 className="text-lg font-semibold text-slate-900">
+            Referanslar
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Toplam {totalCount} kayıt
+          </p>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
