@@ -86,6 +86,15 @@ export type NewPatientForm = {
    */
   referenceId: string | null;
   referenceName: string;
+
+  /**
+   * Identity / contact details captured at creation time.
+   * Satisfaction and archive_code are intentionally excluded from
+   * the new patient form; they are handled in later flows.
+   */
+  nationalId: string;
+  kinPhone: string;
+  address: string;
 };
 
 export type PatientSgkUpdateInput = {
