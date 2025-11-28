@@ -88,9 +88,7 @@ export type NewPatientForm = {
   referenceName: string;
 
   /**
-   * Identity / contact details captured at creation time.
-   * Satisfaction and archive_code are intentionally excluded from
-   * the new patient form; they are handled in later flows.
+   * Identity / contact / address fields collected on create.
    */
   nationalId: string;
   kinPhone: string;
