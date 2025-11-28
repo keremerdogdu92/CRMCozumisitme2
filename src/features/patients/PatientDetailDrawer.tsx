@@ -243,6 +243,11 @@ export function PatientDetailDrawer({
       ? patient.reference_name
       : '-';
 
+  const satisfactionDisplay =
+    patient.satisfaction_10 != null
+      ? `${patient.satisfaction_10} / 10`
+      : '-';
+
   return (
     <SideDrawer
       open={open}
@@ -321,6 +326,55 @@ export function PatientDetailDrawer({
                     {referenceDisplay}
                   </span>
                 </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-xs text-slate-500">
+                    Memnuniyet (1–10)
+                  </span>
+                  <span className="text-xs text-slate-900">
+                    {satisfactionDisplay}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-xs text-slate-500">
+                    Arşiv Kodu
+                  </span>
+                  <span className="text-xs text-slate-900">
+                    {patient.archive_code ?? '-'}
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            {/* Extended info */}
+            <section className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase text-slate-500">
+                Ek Bilgiler
+              </h4>
+              <div className="space-y-1 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
+                <div className="flex justify-between gap-2">
+                  <span className="text-xs text-slate-500">
+                    T.C. Kimlik No
+                  </span>
+                  <span className="text-xs text-slate-900">
+                    {patient.national_id ?? '-'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-xs text-slate-500">
+                    Yakın Telefonu
+                  </span>
+                  <span className="text-xs text-slate-900">
+                    {patient.kin_phone ?? '-'}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-500">Adres</span>
+                  <span className="text-xs text-slate-900 whitespace-pre-line">
+                    {patient.address && patient.address.trim().length > 0
+                      ? patient.address
+                      : '-'}
+                  </span>
+                </div>
               </div>
             </section>
 
@@ -345,7 +399,7 @@ export function PatientDetailDrawer({
                     }}
                     className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                   />
-                  <label
+                <label
                     htmlFor="detail-sgk-flag"
                     className="select-none text-xs font-medium text-slate-700"
                   >
@@ -529,14 +583,14 @@ export function PatientDetailDrawer({
                     {isPlanSaveError && (
                       <p className="text-[11px] text-red-700">
                         Plan kaydedilirken hata:{' '}
-                        {(planSaveError as Error)?.message ??
+                        {(planSaveError as Error)?.message ?? 
                           'Bilinmeyen hata'}
                       </p>
                     )}
                     {isPlanError && (
                       <p className="text-[11px] text-red-700">
                         Plan yüklenirken hata:{' '}
-                        {(planError as Error)?.message ??
+                        {(planError as Error)?.message ?? 
                           'Bilinmeyen hata'}
                       </p>
                     )}
