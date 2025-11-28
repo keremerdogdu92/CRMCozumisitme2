@@ -16,9 +16,25 @@ export type PatientRow = {
   phone: string | null;
   created_at: string;
   last_visit_at: string | null;
+
+  // SGK flags used in the main list coloring logic
   sgk_flag: boolean | null;
   sgk_prescription_received: boolean | null;
   sgk_recorded_to_system: boolean | null;
+
+  // Patient satisfaction score (1–10), synced from meetings.
+  satisfaction_10: number | null;
+
+  // Extended patient metadata
+  national_id: string | null;
+  address: string | null;
+  kin_phone: string | null;
+  archive_code: string | null;
+
+  // Device + price summary from patient_device_latest_sale view
+  device_brand: string | null;
+  device_model: string | null;
+  device_total_price: number | null;
 
   /**
    * Optional reference attached to the patient row.
