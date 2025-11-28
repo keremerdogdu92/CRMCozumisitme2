@@ -13,6 +13,10 @@ import { parseMoneyToNumber } from './api.core';
 /**
  * Create a new patient row with org_id taken from the current profile.
  * Returns the inserted PatientRow so that callers can immediately open the detail drawer.
+ *
+ * Archive code generation is intentionally not handled here; it is assumed to be
+ * managed by Supabase (trigger / function) at a later stage such as sale or
+ * senet completion.
  */
 export async function createPatient(
   input: NewPatientForm,
@@ -48,45 +52,6 @@ export async function createPatient(
   }
 
   const orgId = profile.org_id as string;
-
-  // ---------------------------------------------------------------------------
-  // Archive code generation: YYYY-MM-N format per org and per month
-  // ---------------------------------------------------------------------------
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1; // 1–12
-  const monthStr = String(month).padStart(2, '0');
-  const yearMonth = `${year}-${monthStr}`;
-
-  const monthStart = `${yearMonth}-01`;
-
-  const nextMonthYear = month === 12 ? year + 1 : year;
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextMonthStr = String(nextMonth).padStart(2, '0');
-  const nextMonthStart = `${nextMonthYear}-${nextMonthStr}-01`;
-
-  const {
-    count: monthPatientCount,
-    error: countError,
-  } = await supabaseClient
-    .from('patients')
-    .select('id', { count: 'exact', head: true })
-    .eq('org_id', orgId)
-    .gte('created_at', monthStart)
-    .lt('created_at', nextMonthStart);
-
-  if (countError) {
-    console.error(
-      'Failed to count patients for archive_code (STEP_ARCHIVE_COUNT):',
-      countError,
-    );
-    throw new Error(
-      'STEP_ARCHIVE_COUNT: ' + countError.message,
-    );
-  }
-
-  const archiveIndex = (monthPatientCount ?? 0) + 1;
-  const archiveCode = `${yearMonth}-${archiveIndex}`;
 
   // ---------------------------------------------------------------------------
   // Payment metadata on patient row
@@ -139,15 +104,16 @@ export async function createPatient(
       card_sale_total,
       card_fee_rate,
       card_fee_amount,
-      // New extended fields start as null, updated by dedicated forms later.
+      // Extended fields: initial values from the new patient form.
       sgk_prescription_no: null,
       sgk_docs_received: null,
       sgk_processed: null,
       satisfaction_10: null,
-      national_id: null,
-      address: null,
-      kin_phone: null,
-      archive_code: archiveCode,
+      national_id: input.nationalId.trim() || null,
+      address: input.address.trim() || null,
+      kin_phone: input.kinPhone.trim() || null,
+      // archive_code is intentionally omitted here; Supabase is expected
+      // to assign it when sale / senet is finalized.
     })
     .select(
       `
