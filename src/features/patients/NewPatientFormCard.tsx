@@ -10,6 +10,7 @@ import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
 import { NewPatientReferenceField } from './NewPatientReferenceField';
 import { NewPatientSgkSection } from './NewPatientSgkSection';
 import { NewPatientPaymentSection } from './NewPatientPaymentSection';
+import { NewPatientIdentitySection } from './NewPatientIdentitySection';
 
 type NewPatientFormCardProps = {
   open: boolean;
@@ -37,6 +38,9 @@ export function NewPatientFormCard({
     cardFeeRate: '',
     referenceId: null,
     referenceName: '',
+    nationalId: '',
+    kinPhone: '',
+    address: '',
   });
 
   const handleSubmit = (e: FormEvent) => {
@@ -58,6 +62,9 @@ export function NewPatientFormCard({
       cardFeeRate: formState.cardFeeRate,
       referenceId: formState.referenceId,
       referenceName: formState.referenceName,
+      nationalId: formState.nationalId,
+      kinPhone: formState.kinPhone,
+      address: formState.address,
     });
 
     setFormState({
@@ -71,6 +78,9 @@ export function NewPatientFormCard({
       cardFeeRate: '',
       referenceId: null,
       referenceName: '',
+      nationalId: '',
+      kinPhone: '',
+      address: '',
     });
   };
 
@@ -89,7 +99,7 @@ export function NewPatientFormCard({
   return (
     <InlineCreateCard
       title="Yeni Hasta Ekle"
-      description="Yeni kayıt için kısa form. SGK ve ödeme tipi bilgileri ana listede uyarıları tetikler."
+      description="Yeni kayıt için kısa form. Özlük, SGK ve ödeme tipi bilgileri ana listede uyarıları tetikler."
       open={open}
       onToggle={onToggle}
       errorMessage={errorMessage}
@@ -175,6 +185,24 @@ export function NewPatientFormCard({
                 ...s,
                 sgkRecordedToSystem: value,
               }))
+            }
+          />
+        </div>
+
+        {/* Identity / address block */}
+        <div className="md:col-span-4">
+          <NewPatientIdentitySection
+            nationalId={formState.nationalId}
+            kinPhone={formState.kinPhone}
+            address={formState.address}
+            onChangeNationalId={(value) =>
+              setFormState((s) => ({ ...s, nationalId: value }))
+            }
+            onChangeKinPhone={(value) =>
+              setFormState((s) => ({ ...s, kinPhone: value }))
+            }
+            onChangeAddress={(value) =>
+              setFormState((s) => ({ ...s, address: value }))
             }
           />
         </div>
