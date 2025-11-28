@@ -21,6 +21,21 @@ export type PatientRow = {
   sgk_recorded_to_system: boolean | null;
 
   /**
+   * Extra SGK / satisfaction fields stored on patients.
+   */
+  sgk_prescription_no: string | null;
+  sgk_docs_received: boolean | null;
+  sgk_processed: boolean | null;
+  satisfaction_10: number | null;
+
+  /**
+   * Extra identity / contact info.
+   */
+  national_id: string | null;
+  address: string | null;
+  kin_phone: string | null;
+
+  /**
    * Optional reference attached to the patient row.
    * Filled when the patient is created with a reference or later updated.
    */
@@ -31,6 +46,11 @@ export type PatientRow = {
    */
   reference_name: string | null;
   reference_phone: string | null;
+
+  /**
+   * Archive code for physical file / folder mapping.
+   */
+  archive_code: string | null;
 
   /**
    * Aggregated device info from patient_list_with_device view.
