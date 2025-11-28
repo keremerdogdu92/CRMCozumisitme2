@@ -21,11 +21,14 @@ export type PatientRow = {
   sgk_recorded_to_system: boolean | null;
 
   /**
-   * Optional reference attached to the patient.
-   * Name is loaded via join for display only; phone is kept for future
-   * manager-only views and is NOT rendered in the current UI.
+   * Optional reference attached to the patient row.
+   * Filled when the patient is created with a reference or later updated.
    */
   reference_id: string | null;
+  /**
+   * Convenience fields coming from the joined references table.
+   * UI-only; backend always stores only reference_id.
+   */
   reference_name: string | null;
   reference_phone: string | null;
 
@@ -49,7 +52,7 @@ export type NewPatientForm = {
 
   /**
    * Optional reference attached while creating the patient.
-   * Now wired to backend via patients.reference_id.
+   * Now fully wired to backend via patients.reference_id.
    */
   referenceId: string | null;
   referenceName: string;
