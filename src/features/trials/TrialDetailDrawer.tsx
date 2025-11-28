@@ -10,6 +10,10 @@ import {
   TRIAL_DEVICES_BY_TRIAL_QUERY_KEY,
 } from './api';
 import { openTrialOfferPrint } from './printTrialOffer';
+import {
+  fetchReferenceLiteById,
+  type ReferenceLiteForTrial,
+} from '../references/api';
 
 type TrialDetailDrawerProps = {
   trial: TrialRow | null;
@@ -32,7 +36,11 @@ function formatPrice(amount: number | null | undefined): string {
   }
 }
 
-export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerProps) {
+export function TrialDetailDrawer({
+  trial,
+  open,
+  onClose,
+}: TrialDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<TrialTabId>('summary');
 
   // Stabil key için trialId'yi yukarıda hesaplıyoruz
@@ -46,6 +54,19 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
     queryKey: TRIAL_DEVICES_BY_TRIAL_QUERY_KEY(trialId ?? 'none'),
     queryFn: () => fetchTrialDevicesByTrialId(trialId as string),
     enabled: !!trialId && open,
+  });
+
+  // Referans adını çekmek için hafif sorgu
+  const referenceId = trial?.reference_id ?? null;
+
+  const {
+    data: referenceLite,
+    isLoading: isReferenceLoading,
+    isError: isReferenceError,
+  } = useQuery<ReferenceLiteForTrial | null>({
+    queryKey: ['reference-lite-by-id', referenceId],
+    queryFn: () => fetchReferenceLiteById(referenceId as string),
+    enabled: !!referenceId && open,
   });
 
   useEffect(() => {
@@ -112,7 +133,9 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 text-sm">
         {activeTab === 'summary' && (
           <section className="space-y-2">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase">Özet</h4>
+            <h4 className="text-xs font-semibold text-slate-500 uppercase">
+              Özet
+            </h4>
             <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 space-y-1">
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Ad Soyad</span>
@@ -122,7 +145,9 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
               </div>
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Telefon</span>
-                <span className="text-xs text-slate-900">{trial.phone ?? '-'}</span>
+                <span className="text-xs text-slate-900">
+                  {trial.phone ?? '-'}
+                </span>
               </div>
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Kayıt Tarihi</span>
@@ -146,6 +171,18 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
                     : '-'}
                 </span>
               </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-xs text-slate-500">Referans</span>
+                <span className="text-xs text-slate-900">
+                  {!referenceId
+                    ? '-'
+                    : isReferenceLoading
+                    ? 'Yükleniyor...'
+                    : isReferenceError
+                    ? 'Referans yüklenemedi'
+                    : referenceLite?.full_name ?? '-'}
+                </span>
+              </div>
             </div>
           </section>
         )}
@@ -166,61 +203,65 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
               </p>
             )}
 
-            {!isDevicesLoading && !isDevicesError && typedDevices.length === 0 && (
-              <p className="text-xs text-slate-500">
-                Bu deneme için kayıtlı cihaz satırı bulunmuyor.
-              </p>
-            )}
+            {!isDevicesLoading &&
+              !isDevicesError &&
+              typedDevices.length === 0 && (
+                <p className="text-xs text-slate-500">
+                  Bu deneme için kayıtlı cihaz satırı bulunmuyor.
+                </p>
+              )}
 
-            {!isDevicesLoading && !isDevicesError && typedDevices.length > 0 && (
-              <div className="space-y-2">
-                <table className="min-w-full border border-slate-200 text-[11px]">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
-                        #
-                      </th>
-                      <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
-                        Marka
-                      </th>
-                      <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
-                        Model
-                      </th>
-                      <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
-                        Kulak
-                      </th>
-                      <th className="border-b border-slate-200 px-2 py-1 text-right font-medium text-slate-600">
-                        Teklif (Satır)
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {typedDevices.map((d, index) => (
-                      <tr key={d.id}>
-                        <td className="border-b border-slate-100 px-2 py-1">
-                          {index + 1}
-                        </td>
-                        <td className="border-b border-slate-100 px-2 py-1">
-                          {d.brand ?? '-'}
-                        </td>
-                        <td className="border-b border-slate-100 px-2 py-1">
-                          {d.model ?? '-'}
-                        </td>
-                        <td className="border-b border-slate-100 px-2 py-1">
-                          {d.side ?? '-'}
-                        </td>
-                        <td className="border-b border-slate-100 px-2 py-1 text-right">
-                          {formatPrice(d.quote_price)}
-                        </td>
+            {!isDevicesLoading &&
+              !isDevicesError &&
+              typedDevices.length > 0 && (
+                <div className="space-y-2">
+                  <table className="min-w-full border border-slate-200 text-[11px]">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                          #
+                        </th>
+                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                          Marka
+                        </th>
+                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                          Model
+                        </th>
+                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                          Kulak
+                        </th>
+                        <th className="border-b border-slate-200 px-2 py-1 text-right font-medium text-slate-600">
+                          Teklif (Satır)
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {/* Toplam teklif satırı bilinçli olarak kaldırıldı; hasta genelde
-                    bu satırlardan yalnızca birini seçeceği için kafa karışıklığı
-                    yaratmaması adına gösterilmiyor. */}
-              </div>
-            )}
+                    </thead>
+                    <tbody>
+                      {typedDevices.map((d, index) => (
+                        <tr key={d.id}>
+                          <td className="border-b border-slate-100 px-2 py-1">
+                            {index + 1}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1">
+                            {d.brand ?? '-'}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1">
+                            {d.model ?? '-'}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1">
+                            {d.side ?? '-'}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1 text-right">
+                            {formatPrice(d.quote_price)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {/* Toplam teklif satırı bilinçli olarak kaldırıldı; hasta genelde
+                      bu satırlardan yalnızca birini seçeceği için kafa karışıklığı
+                      yaratmaması adına gösterilmiyor. */}
+                </div>
+              )}
           </section>
         )}
 
@@ -230,9 +271,9 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
               Görüşmeler
             </h4>
             <p className="text-xs text-slate-500">
-              Bu sekmede tarih bazlı görüşme listesi, not alanı, memnuniyet ve sonraki
-              randevu bilgileri gösterilecek. <code>meetings</code> tablosu{' '}
-              <code>trial_id</code> üzerinden bağlanacak.
+              Bu sekmede tarih bazlı görüşme listesi, not alanı, memnuniyet ve
+              sonraki randevu bilgileri gösterilecek. <code>meetings</code>{' '}
+              tablosu <code>trial_id</code> üzerinden bağlanacak.
             </p>
           </section>
         )}
