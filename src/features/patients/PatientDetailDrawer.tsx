@@ -399,7 +399,7 @@ export function PatientDetailDrawer({
                     }}
                     className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                   />
-                <label
+                  <label
                     htmlFor="detail-sgk-flag"
                     className="select-none text-xs font-medium text-slate-700"
                   >
@@ -583,14 +583,14 @@ export function PatientDetailDrawer({
                     {isPlanSaveError && (
                       <p className="text-[11px] text-red-700">
                         Plan kaydedilirken hata:{' '}
-                        {(planSaveError as Error)?.message ?? 
+                        {(planSaveError as Error)?.message ??
                           'Bilinmeyen hata'}
                       </p>
                     )}
                     {isPlanError && (
                       <p className="text-[11px] text-red-700">
                         Plan yüklenirken hata:{' '}
-                        {(planError as Error)?.message ?? 
+                        {(planError as Error)?.message ??
                           'Bilinmeyen hata'}
                       </p>
                     )}
