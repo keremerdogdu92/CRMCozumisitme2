@@ -79,7 +79,7 @@ export async function fetchPatientsByReferenceId(
 
 export async function fetchPatients(): Promise<PatientRow[]> {
   const { data, error } = await supabaseClient
-    .from('patients')
+    .from('patient_list_with_device')
     .select(
       `
       id,
@@ -91,15 +91,15 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       sgk_prescription_received,
       sgk_recorded_to_system,
       reference_id,
-      references!patients_reference_id_fkey (
-        id,
-        full_name,
-        phone
-      ),
       payment_method,
       card_sale_total,
       card_fee_rate,
-      card_fee_amount
+      card_fee_amount,
+      device_brand,
+      device_model,
+      device_total_price,
+      reference_name,
+      reference_phone
     `,
     )
     .order('created_at', { ascending: false });
@@ -109,7 +109,6 @@ export async function fetchPatients(): Promise<PatientRow[]> {
     throw error;
   }
 
-  // Normalize nested reference into flat fields for the UI.
   return (data ?? []).map((row: any) => ({
     id: row.id as string,
     full_name: row.full_name as string,
@@ -123,9 +122,15 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       (row.sgk_recorded_to_system as boolean | null) ?? null,
     reference_id: (row.reference_id as string | null) ?? null,
     reference_name:
-      (row.references?.full_name as string | null | undefined) ?? null,
+      (row.reference_name as string | null | undefined) ?? null,
     reference_phone:
-      (row.references?.phone as string | null | undefined) ?? null,
+      (row.reference_phone as string | null | undefined) ?? null,
+    device_brand:
+      (row.device_brand as string | null | undefined) ?? null,
+    device_model:
+      (row.device_model as string | null | undefined) ?? null,
+    device_total_price:
+      (row.device_total_price as number | null | undefined) ?? null,
     payment_method:
       (row.payment_method as PatientPaymentMethod | null) ?? null,
     card_sale_total:
@@ -305,7 +310,7 @@ export async function createPatient(input: NewPatientForm): Promise<PatientRow> 
     throw new Error('STEP_INSERT: ' + insertError.message);
   }
 
-  // fetchPatients already joins + normalizes; here we only return the flat row.
+  // New patient won't have device or reference data yet; keep them null.
   return {
     id: data.id as string,
     full_name: data.full_name as string,
@@ -320,6 +325,9 @@ export async function createPatient(input: NewPatientForm): Promise<PatientRow> 
     reference_id: (data.reference_id as string | null) ?? null,
     reference_name: null,
     reference_phone: null,
+    device_brand: null,
+    device_model: null,
+    device_total_price: null,
     payment_method:
       (data.payment_method as PatientPaymentMethod | null) ?? null,
     card_sale_total:
@@ -330,6 +338,9 @@ export async function createPatient(input: NewPatientForm): Promise<PatientRow> 
       (data.card_fee_amount as number | null | undefined) ?? null,
   };
 }
+
+// ... dosyanın geri kalanı (SGK update, payments, installment plan) senin attığın haliyle aynen devam ediyor ...
+
 
 // Update SGK-related fields for a given patient.
 export async function updatePatientSgkFields(
