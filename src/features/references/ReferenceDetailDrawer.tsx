@@ -1,5 +1,5 @@
 // src/features/references/ReferenceDetailDrawer.tsx
-// Read-only detail drawer for a reference, with placeholder tabs for patients and gifts.
+// Read-only detail drawer for a reference, with tabs for summary, patients and gifts.
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -88,11 +88,9 @@ export function ReferenceDetailDrawer({
     }
   }, [open, reference?.id]);
 
-  if (!reference) {
-    return null;
-  }
-
-  const referenceId = reference.id;
+  // Hook'lar her zaman aynı sırada çalışsın diye referenceId'yi
+  // null-safe şekilde hesaplıyoruz ve enabled flag'i ile kontrol ediyoruz.
+  const referenceId = reference?.id ?? '';
 
   const {
     data: trialsForReference = [],
@@ -113,6 +111,11 @@ export function ReferenceDetailDrawer({
     queryFn: () => fetchPatientsByReferenceId(referenceId),
     enabled: !!referenceId && open && activeTab === 'patients',
   });
+
+  // Hook'lardan SONRA erken dönüş yapıyoruz; bu React hook kurallarına uygun.
+  if (!reference) {
+    return null;
+  }
 
   const tabs: { id: ReferenceTabId; label: string }[] = [
     { id: 'summary', label: 'Özet' },
@@ -279,8 +282,7 @@ export function ReferenceDetailDrawer({
               !isLoadingPatients &&
               !isLoadingTrials && (
                 <p className="text-xs text-red-600">
-                  Bu referansa bağlı kayıtlar yüklenirken bir hata
-                  oluştu.
+                  Bu referansa bağlı kayıtlar yüklenirken bir hata oluştu.
                 </p>
               )}
 
@@ -291,8 +293,7 @@ export function ReferenceDetailDrawer({
               patientsForReference.length === 0 &&
               trialsForReference.length === 0 && (
                 <p className="text-xs text-slate-500">
-                  Bu referansa bağlı hasta veya deneme kaydı henüz
-                  yok.
+                  Bu referansa bağlı hasta veya deneme kaydı henüz yok.
                 </p>
               )}
 
@@ -458,9 +459,8 @@ export function ReferenceDetailDrawer({
 
             <p className="text-[11px] text-slate-500">
               İleride denemeden kalıcı hastaya dönüşen kayıtlar, trial
-              tablosunda ayrıca işaretlenerek bu alt listeden
-              otomatik çıkarılabilir. Şu anda tüm deneme kayıtları
-              gösterilmektedir.
+              tablosunda ayrıca işaretlenerek bu alt listeden otomatik
+              çıkarılabilir. Şu anda tüm deneme kayıtları gösterilmektedir.
             </p>
           </section>
         )}
@@ -473,8 +473,8 @@ export function ReferenceDetailDrawer({
             <p className="text-xs text-slate-500">
               Bu sekme, referansa bağlı hediye ve komisyon ödemelerini
               gösterecek. Kâr hesaplama ekranı ile entegrasyon, referans
-              başına yapılan ödemeleri buradan da takip
-              edebileceğiniz şekilde daha sonra eklenecek.
+              başına yapılan ödemeleri buradan da takip edebileceğiniz
+              şekilde daha sonra eklenecek.
             </p>
           </section>
         )}
