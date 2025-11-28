@@ -11,16 +11,20 @@ type PageHeaderProps = {
 
 export function PageHeader({ title, subtitle, right }: PageHeaderProps) {
   return (
-    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div>
-        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+        <h2 className="text-base font-semibold text-slate-900 md:text-lg">
+          {title}
+        </h2>
         {subtitle && (
-          <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
+          <p className="mt-0.5 text-[11px] text-slate-500 md:text-xs">
+            {subtitle}
+          </p>
         )}
       </div>
 
       {right && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {right}
         </div>
       )}
