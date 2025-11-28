@@ -2,6 +2,7 @@
 // Patients listing table with responsive layout: mobile cards + desktop table.
 
 import type { PatientRow } from './types';
+import { ResponsiveTableShell } from '../../components/layout/ResponsiveTableShell';
 
 type PatientsTableProps = {
   patients: PatientRow[];
@@ -172,7 +173,7 @@ export function PatientsTable({
       </div>
 
       {/* Desktop: classic table (md ve üzeri) */}
-      <div className="hidden overflow-x-auto rounded-lg border border-slate-200 bg-white md:block">
+      <ResponsiveTableShell className="hidden md:block">
         <table className="min-w-full text-xs lg:text-sm">
           <thead className="bg-slate-50">
             <tr>
@@ -300,7 +301,7 @@ export function PatientsTable({
             })}
           </tbody>
         </table>
-      </div>
+      </ResponsiveTableShell>
     </div>
   );
 }
