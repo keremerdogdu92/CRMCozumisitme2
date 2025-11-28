@@ -284,7 +284,7 @@ export function PatientDetailDrawer({
       <div className="mt-4 space-y-4 text-sm">
         {activeTab === 'info' && (
           <>
-            {/* Basic info */}
+            {/* Basic info + extended info merged */}
             <section className="space-y-2">
               <h4 className="text-xs font-semibold uppercase text-slate-500">
                 Özlük Bilgileri & Referans
@@ -342,16 +342,9 @@ export function PatientDetailDrawer({
                     {patient.archive_code ?? '-'}
                   </span>
                 </div>
-              </div>
-            </section>
 
-            {/* Extended info */}
-            <section className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase text-slate-500">
-                Ek Bilgiler
-              </h4>
-              <div className="space-y-1 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
-                <div className="flex justify-between gap-2">
+                {/* Identity / kin / address moved here */}
+                <div className="flex justify-between gap-2 pt-1 mt-1 border-t border-slate-200">
                   <span className="text-xs text-slate-500">
                     T.C. Kimlik No
                   </span>
@@ -583,30 +576,27 @@ export function PatientDetailDrawer({
                     {isPlanSaveError && (
                       <p className="text-[11px] text-red-700">
                         Plan kaydedilirken hata:{' '}
-                        {(planSaveError as Error)?.message ??
-                          'Bilinmeyen hata'}
+                        {(planSaveError as Error)?.message ?? 'Bilinmeyen hata'}
                       </p>
                     )}
                     {isPlanError && (
                       <p className="text-[11px] text-red-700">
                         Plan yüklenirken hata:{' '}
-                        {(planError as Error)?.message ??
-                          'Bilinmeyen hata'}
+                        {(planError as Error)?.message ?? 'Bilinmeyen hata'}
                       </p>
                     )}
 
                     <button
                       type="button"
                       onClick={async () => {
-                        const payload: UpsertPatientInstallmentPlanInput =
-                          {
-                            patientId: patient.id,
-                            saleTotal,
-                            upfrontPaid,
-                            installmentCount,
-                            firstDueDate,
-                            dayOfMonth,
-                          };
+                        const payload: UpsertPatientInstallmentPlanInput = {
+                          patientId: patient.id,
+                          saleTotal,
+                          upfrontPaid,
+                          installmentCount,
+                          firstDueDate,
+                          dayOfMonth,
+                        };
                         await upsertPlan(payload);
                       }}
                       disabled={isPlanSaving}
@@ -663,8 +653,7 @@ export function PatientDetailDrawer({
                       <span>Peşinat</span>
                       <span className="font-semibold">
                         {formatAmount(
-                          (plan as PatientInstallmentPlanRow)
-                            .upfront_paid,
+                          (plan as PatientInstallmentPlanRow).upfront_paid,
                         )}
                       </span>
                     </div>
