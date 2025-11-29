@@ -1,8 +1,6 @@
 // src/features/patients/NewPatientSgkSection.tsx
 // SGK block used in the NewPatientFormCard: flag + checkboxes +
-// SGK profile dropdown + expected reimbursement + month selector.
-// SGK profile now drives a fixed net amount and a fixed forecast month,
-// both read-only to prevent accidental edits.
+// SGK profile dropdown + expected reimbursement (locked) + month (locked).
 
 import { SGK_PROFILES } from './sgkProfiles';
 
@@ -12,7 +10,7 @@ type NewPatientSgkSectionProps = {
   sgkRecordedToSystem: boolean;
   sgkProfileId: string;
   sgkExpectedReimbursement: string;
-  sgkExpectedMonth: string; // "yyyy-MM"
+  sgkExpectedMonth: string;
   onChangeSgkFlag: (value: boolean) => void;
   onChangeSgkPrescriptionReceived: (value: boolean) => void;
   onChangeSgkRecordedToSystem: (value: boolean) => void;
@@ -52,24 +50,20 @@ export function NewPatientSgkSection({
 
     const profile = SGK_PROFILES.find((p) => p.id === value);
     if (profile) {
-      // Third column in SGK_PROFILES: net amount the firm expects to receive from SGK.
-      // UI stores it as a TL string; we keep it read-only in the form.
+      // 3rd column: net amount that SGK is expected to pay to the firm.
+      // Keep it as a TL string; allow comma in UI.
       const asString = profile.netToFirm.toString().replace('.', ',');
       onChangeSgkExpectedReimbursement(asString);
 
-      // First time a profile is chosen, set the forecast month automatically:
-      // "current month + 3 months", format "yyyy-MM".
-      // Example: 2025-11-30 → 2026-02 (payment around the 15th of that month).
-      if (!sgkExpectedMonth) {
-        const now = new Date();
-        now.setMonth(now.getMonth() + 3);
-        const yyyy = now.getFullYear();
-        const mm = String(now.getMonth() + 1).padStart(2, '0');
-        onChangeSgkExpectedMonth(`${yyyy}-${mm}`); // type="month" format
-      }
+      // Default expected month = 3 months after "now".
+      const base = new Date();
+      base.setMonth(base.getMonth() + 3);
+      const yyyy = base.getFullYear();
+      const mm = String(base.getMonth() + 1).padStart(2, '0');
+      onChangeSgkExpectedMonth(`${yyyy}-${mm}`); // type="month" format (yyyy-MM)
     } else {
       onChangeSgkExpectedReimbursement('');
-      // Do not touch sgkExpectedMonth here; if it bir kez set edildiyse sabit kalır.
+      onChangeSgkExpectedMonth('');
     }
   };
 
@@ -119,7 +113,7 @@ export function NewPatientSgkSection({
         </label>
       </div>
 
-      {/* SGK profile selection + fixed expected reimbursement + fixed forecast month */}
+      {/* SGK profil seçimi + beklenen ödeme (kilitli) */}
       <div className="mt-2 flex flex-col gap-2 text-xs">
         <label className="flex flex-col gap-1">
           <span className="text-xs text-slate-700">SGK Profili</span>
@@ -144,12 +138,11 @@ export function NewPatientSgkSection({
           </span>
           <input
             type="text"
-            disabled // always non-editable in UI
+            disabled={!sgkFlag}
             readOnly
             value={sgkExpectedReimbursement}
-            className="w-full rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-xs text-slate-900 shadow-sm"
-            placeholder="Profil seçildiğinde otomatik hesaplanır"
-            tabIndex={-1}
+            className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
+            placeholder="Profil seçince otomatik hesaplanır"
           />
         </label>
 
@@ -159,13 +152,18 @@ export function NewPatientSgkSection({
           </span>
           <input
             type="month"
-            disabled // always non-editable in UI
+            disabled={!sgkFlag}
             readOnly
             value={sgkExpectedMonth}
-            className="w-full rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-xs text-slate-900 shadow-sm"
-            tabIndex={-1}
+            className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
           />
         </label>
+
+        <p className="mt-1 text-[11px] text-slate-500">
+          Profil seçildiğinde beklenen ödeme tutarı ve ayı sistem tarafından
+          otomatik hesaplanır (yaklaşık 3 ay sonrası). Bu alanlar sonradan
+          elle değiştirilmez.
+        </p>
       </div>
     </div>
   );
