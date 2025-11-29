@@ -31,6 +31,18 @@ export type PatientRow = {
   satisfaction_10?: number | null;
 
   /**
+   * SGK profile-based reimbursement metadata.
+   * Optional for backward compatibility; existing rows may not have them.
+   *
+   * - sgk_profile: code such as 'SGK_0_4_CALISAN'
+   * - sgk_expected_reimbursement: net TL amount expected from SGK
+   * - sgk_expected_reimbursement_month: ISO date (yyyy-MM-01) for forecast
+   */
+  sgk_profile?: string | null;
+  sgk_expected_reimbursement?: number | null;
+  sgk_expected_reimbursement_month?: string | null;
+
+  /**
    * Extra identity / contact info.
    */
   national_id?: string | null;
@@ -86,6 +98,15 @@ export type NewPatientForm = {
   sgkFlag: boolean;
   sgkPrescriptionReceived: boolean;
   sgkRecordedToSystem: boolean;
+
+  /**
+   * SGK profile selection for this patient.
+   * Optional for now so that older forms/flows still compile; when we wire
+   * the dropdown, it will be populated with a code from SgkProfileId.
+   */
+  sgkProfileId?: string;               // e.g. 'SGK_0_4_CALISAN'
+  sgkExpectedReimbursement?: string;   // TL string; parsed on submit
+  sgkExpectedMonth?: string;           // 'yyyy-MM-01' or ''
 
   paymentMethod: PatientPaymentMethodFormValue;
   cardSaleTotal: string;
