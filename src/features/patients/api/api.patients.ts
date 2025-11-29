@@ -10,11 +10,6 @@ import type {
 } from '../types';
 import { parseMoneyToNumber } from './api.core';
 
-export type UpdatePatientInvoiceStatusInput = {
-  id: string;
-  invoiceIssued: boolean;
-};
-
 /**
  * Create a new patient row with org_id taken from the current profile.
  * Returns the inserted PatientRow so that callers can immediately open the detail drawer.
@@ -22,15 +17,9 @@ export type UpdatePatientInvoiceStatusInput = {
  * Archive code generation is intentionally not handled here; it is assumed to be
  * managed by Supabase (trigger / function) at a later stage such as sale or
  * senet completion.
- *
- * options:
- *  - setInvoiceIssuedTrue: when true (CSV import vb.), the new patient is
- *    created as "invoice issued" with invoice_issued_at = now().
- *    When omitted/false, DB defaults are used (invoice_issued = false).
  */
 export async function createPatient(
   input: NewPatientForm,
-  options?: { setInvoiceIssuedTrue?: boolean },
 ): Promise<PatientRow> {
   const { data: userData, error: userError } =
     await supabaseClient.auth.getUser();
@@ -54,6 +43,7 @@ export async function createPatient(
       'Failed to load profile for org_id (STEP_PROFILE):',
       profileError,
     );
+    throw new Error('STEP_PROFILE: ' + profileError.message);
   }
 
   if (!profile?.org_id) {
@@ -96,15 +86,6 @@ export async function createPatient(
     }
   }
 
-  // Invoice defaults for this creation.
-  const shouldSetInvoiceIssued =
-    options?.setInvoiceIssuedTrue === true ? true : false;
-
-  const invoiceIssuedForInsert = shouldSetInvoiceIssued ? true : undefined;
-  const invoiceIssuedAtForInsert = shouldSetInvoiceIssued
-    ? new Date().toISOString()
-    : undefined;
-
   const { data, error: insertError } = await supabaseClient
     .from('patients')
     .insert({
@@ -131,10 +112,9 @@ export async function createPatient(
       national_id: input.nationalId.trim() || null,
       address: input.address.trim() || null,
       kin_phone: input.kinPhone.trim() || null,
-      // Invoice status: only override when explicitly requested
-      // (CSV import). Otherwise DB default (false) is used.
-      invoice_issued: invoiceIssuedForInsert,
-      invoice_issued_at: invoiceIssuedAtForInsert,
+      // Invoice metadata: new patients start as "invoice not issued".
+      invoice_issued: false,
+      invoice_issued_at: null,
       // archive_code is intentionally omitted here; Supabase is expected
       // to assign it when sale / senet is finalized.
     })
@@ -231,8 +211,13 @@ export async function createPatient(
 export async function updatePatientSgkFields(
   params: PatientSgkUpdateInput,
 ): Promise<void> {
-  const { id, sgkFlag, sgkPrescriptionReceived, sgkRecordedToSystem } =
-    params;
+  const {
+    id,
+    sgkFlag,
+    sgkPrescriptionReceived,
+    sgkRecordedToSystem,
+    sgkPrescriptionNo,
+  } = params;
 
   const { error } = await supabaseClient
     .from('patients')
@@ -242,6 +227,7 @@ export async function updatePatientSgkFields(
         ? sgkPrescriptionReceived
         : false,
       sgk_recorded_to_system: sgkFlag ? sgkRecordedToSystem : false,
+      sgk_prescription_no: sgkPrescriptionNo.trim() || null,
     })
     .eq('id', id);
 
@@ -255,23 +241,23 @@ export async function updatePatientSgkFields(
 }
 
 /**
- * Toggle / update invoice status for a given patient.
- * If invoiceIssued is true, invoice_issued_at is set to now().
- * If false, invoice_issued_at is cleared to null.
+ * Update invoice status for a given patient.
+ * Returns the latest invoice_issued/invoice_issued_at values.
  */
-export async function updatePatientInvoiceStatus(
-  params: UpdatePatientInvoiceStatusInput,
-): Promise<{ invoice_issued: boolean; invoice_issued_at: string | null }> {
+export async function updatePatientInvoiceStatus(params: {
+  id: string;
+  invoiceIssued: boolean;
+}): Promise<{ invoice_issued: boolean; invoice_issued_at: string | null }> {
   const { id, invoiceIssued } = params;
 
-  const patch = {
-    invoice_issued: invoiceIssued,
-    invoice_issued_at: invoiceIssued ? new Date().toISOString() : null,
-  };
+  const nextIssuedAt = invoiceIssued ? new Date().toISOString() : null;
 
   const { data, error } = await supabaseClient
     .from('patients')
-    .update(patch)
+    .update({
+      invoice_issued: invoiceIssued,
+      invoice_issued_at: invoiceIssued ? nextIssuedAt : null,
+    })
     .eq('id', id)
     .select('invoice_issued, invoice_issued_at')
     .single();
