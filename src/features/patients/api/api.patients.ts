@@ -114,6 +114,7 @@ export async function createPatient(
       kin_phone: input.kinPhone.trim() || null,
       // archive_code is intentionally omitted here; Supabase is expected
       // to assign it when sale / senet is finalized.
+      // invoice_issued / invoice_issued_at rely on DB defaults.
     })
     .select(
       `
@@ -134,6 +135,8 @@ export async function createPatient(
       kin_phone,
       reference_id,
       archive_code,
+      invoice_issued,
+      invoice_issued_at,
       payment_method,
       card_sale_total,
       card_fee_rate,
@@ -178,6 +181,11 @@ export async function createPatient(
 
     archive_code: (data.archive_code as string | null | undefined) ?? null,
 
+    invoice_issued:
+      (data.invoice_issued as boolean | null | undefined) ?? null,
+    invoice_issued_at:
+      (data.invoice_issued_at as string | null | undefined) ?? null,
+
     device_brand: null,
     device_model: null,
     device_total_price: null,
@@ -221,5 +229,31 @@ export async function updatePatientSgkFields(
       error,
     );
     throw new Error('STEP_UPDATE_SGK: ' + error.message);
+  }
+}
+
+/**
+ * Update invoice status for a given patient.
+ * When invoice_issued is set to true, invoice_issued_at is stamped with "now".
+ * When set back to false, invoice_issued_at is cleared.
+ */
+export async function updatePatientInvoiceStatus(
+  patientId: string,
+  issued: boolean,
+): Promise<void> {
+  const { error } = await supabaseClient
+    .from('patients')
+    .update({
+      invoice_issued: issued,
+      invoice_issued_at: issued ? new Date().toISOString() : null,
+    })
+    .eq('id', patientId);
+
+  if (error) {
+    console.error(
+      'Failed to update patient invoice status (STEP_UPDATE_INVOICE):',
+      error,
+    );
+    throw new Error('STEP_UPDATE_INVOICE: ' + error.message);
   }
 }
