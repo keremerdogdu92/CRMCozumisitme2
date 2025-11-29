@@ -109,11 +109,6 @@ export function PatientsTable({
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  {p.archive_code && (
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700">
-                      Arşiv: {p.archive_code}
-                    </span>
-                  )}
                   <button
                     type="button"
                     onClick={() => onSelectPatient(p)}
@@ -170,6 +165,20 @@ export function PatientsTable({
                   </span>
                   <span className="font-medium">{satisfactionDisplay}</span>
                 </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Fatura
+                  </span>
+                  <span
+                    className={
+                      p.invoice_issued
+                        ? 'inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700'
+                        : 'inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500'
+                    }
+                  >
+                    {p.invoice_issued ? 'Kesildi' : 'Yok'}
+                  </span>
+                </div>
               </div>
 
               {sgkWarning && (
@@ -217,7 +226,7 @@ export function PatientsTable({
                 SGK
               </th>
               <th className="px-4 py-2 text-left font-medium text-slate-600">
-                Arşiv Kodu
+                Fatura
               </th>
               <th className="px-4 py-2 text-right font-medium text-slate-600">
                 İşlemler
@@ -301,9 +310,24 @@ export function PatientsTable({
                     </div>
                   </td>
 
-                  {/* Arşiv Kodu */}
+                  {/* Fatura durumu */}
                   <td className="px-4 py-2 text-slate-700">
-                    {p.archive_code ?? '-'}
+                    <div className="flex flex-col items-start gap-0.5">
+                      <span
+                        className={
+                          p.invoice_issued
+                            ? 'inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700'
+                            : 'inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500'
+                        }
+                      >
+                        {p.invoice_issued ? 'Kesildi' : 'Yok'}
+                      </span>
+                      {p.invoice_issued_at && (
+                        <span className="text-[10px] text-slate-500">
+                          {formatDate(p.invoice_issued_at)}
+                        </span>
+                      )}
+                    </div>
                   </td>
 
                   {/* İşlemler – Detay çekmecesi */}
