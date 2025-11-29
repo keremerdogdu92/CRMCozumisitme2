@@ -7,6 +7,7 @@ import type { PatientRow } from './types';
 import { SideDrawer } from '../../components/layout/SideDrawer';
 import { PatientDetailInfoTab } from './PatientDetailInfoTab';
 import { PatientDetailPaymentsTab } from './PatientDetailPaymentsTab';
+import { PatientDetailDevicesTab } from './PatientDetailDevicesTab';
 import { PATIENTS_QUERY_KEY } from './api/api.core';
 import { updatePatientInvoiceStatus } from './api/api.patients';
 
@@ -213,17 +214,7 @@ export function PatientDetailDrawer({
         )}
 
         {activeTab === 'devices' && (
-          <section className="space-y-2">
-            <h4 className="text-xs font-semibold uppercase text-slate-500">
-              Cihazlar
-            </h4>
-            <p className="text-xs text-slate-500">
-              Bir sonraki adımda bu sekmede hastanın aktif cihazları, kulak
-              tarafı (sağ/sol/çift), model, seri numarası ve garanti
-              bilgileri listelenecek. Şimdilik sadece iskelet olarak
-              duruyor.
-            </p>
-          </section>
+          <PatientDetailDevicesTab patient={patient} />
         )}
 
         {activeTab === 'meetings' && (
