@@ -1,5 +1,5 @@
 // src/features/patients/PatientDetailInfoTab.tsx
-// Info tab for patient detail drawer: identity, contact, reference and SGK flags.
+// Info tab for patient detail drawer: identity, contact, reference, SGK flags and invoice status.
 
 import type { PatientRow } from './types';
 import { formatDate } from './patientFormatUtils';
@@ -12,6 +12,11 @@ type PatientDetailInfoTabProps = {
   onChangeSgkFlag: (value: boolean) => void;
   onChangeSgkPrescriptionReceived: (value: boolean) => void;
   onChangeSgkRecordedToSystem: (value: boolean) => void;
+
+  // Invoice status (controlled by drawer)
+  invoiceIssued: boolean;
+  invoiceIssuedAt: string | null;
+  onChangeInvoiceIssued: (value: boolean) => void;
 };
 
 export function PatientDetailInfoTab({
@@ -22,6 +27,9 @@ export function PatientDetailInfoTab({
   onChangeSgkFlag,
   onChangeSgkPrescriptionReceived,
   onChangeSgkRecordedToSystem,
+  invoiceIssued,
+  invoiceIssuedAt,
+  onChangeInvoiceIssued,
 }: PatientDetailInfoTabProps) {
   const referenceDisplay =
     patient.reference_name && patient.reference_name.trim().length > 0
@@ -33,16 +41,13 @@ export function PatientDetailInfoTab({
       ? `${patient.satisfaction_10} / 10`
       : '-';
 
-  const invoiceStatusLabel = patient.invoice_issued ? 'Kesildi' : 'Bekliyor';
-  const invoiceDateDisplay = patient.invoice_issued_at
-    ? formatDate(patient.invoice_issued_at)
-    : '-';
+  const invoiceStatusLabel = invoiceIssued
+    ? 'Fatura kesildi'
+    : 'Fatura henüz kesilmedi';
 
-  const prescriptionNoDisplay =
-    patient.sgk_prescription_no &&
-    patient.sgk_prescription_no.trim().length > 0
-      ? patient.sgk_prescription_no
-      : '-';
+  const invoiceDateDisplay = invoiceIssuedAt
+    ? formatDate(invoiceIssuedAt)
+    : '-';
 
   return (
     <>
@@ -96,18 +101,6 @@ export function PatientDetailInfoTab({
               {patient.archive_code ?? '-'}
             </span>
           </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-xs text-slate-500">Fatura Durumu</span>
-            <span className="text-xs text-slate-900">
-              {invoiceStatusLabel}
-            </span>
-          </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-xs text-slate-500">Fatura Tarihi</span>
-            <span className="text-xs text-slate-900">
-              {invoiceDateDisplay}
-            </span>
-          </div>
 
           {/* Identity / kin / address included under Özlük */}
           <div className="mt-1 border-t border-slate-200 pt-1 flex justify-between gap-2">
@@ -133,10 +126,10 @@ export function PatientDetailInfoTab({
         </div>
       </section>
 
-      {/* SGK fields */}
+      {/* SGK fields + Invoice status */}
       <section className="space-y-2">
         <h4 className="text-xs font-semibold uppercase text-slate-500">
-          SGK ve Evrak Takibi
+          SGK, Evrak ve Fatura Takibi
         </h4>
         <div className="space-y-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
           <div className="flex items-center gap-2">
@@ -183,18 +176,45 @@ export function PatientDetailInfoTab({
             </label>
           </div>
 
-          <div className="mt-1 flex justify-between gap-2 text-xs">
-            <span className="text-slate-500">Reçete No</span>
-            <span className="text-slate-900">
-              {prescriptionNoDisplay}
-            </span>
-          </div>
-
           <p className="mt-1 text-[11px] text-slate-500">
             Bu alanlar ana listede satırları renklendirir ve
             &quot;Reçete bekleniyor / Sisteme işlenecek&quot; uyarılarını
             tetikler.
           </p>
+
+          <div className="mt-3 border-t border-slate-200 pt-2">
+            <div className="flex items-center justify-between gap-2">
+              <label className="flex items-center gap-2 text-xs text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={invoiceIssued}
+                  onChange={(e) =>
+                    onChangeInvoiceIssued(e.target.checked)
+                  }
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span>Fatura kesildi mi?</span>
+              </label>
+              <span
+                className={
+                  'text-[11px] font-medium ' +
+                  (invoiceIssued ? 'text-emerald-700' : 'text-amber-700')
+                }
+              >
+                {invoiceStatusLabel}
+              </span>
+            </div>
+            <div className="mt-1 flex justify-between gap-2 text-[11px] text-slate-600">
+              <span>Fatura Tarihi</span>
+              <span>{invoiceDateDisplay}</span>
+            </div>
+            {!invoiceIssued && (
+              <p className="mt-1 text-[11px] text-amber-700">
+                Fatura henüz kesilmediyse hasta listesinde uyarı olarak
+                görünecektir.
+              </p>
+            )}
+          </div>
         </div>
       </section>
     </>
