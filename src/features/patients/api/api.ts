@@ -1,4 +1,4 @@
-// src/features/patients/api.ts
+// src/features/patients/api/api.ts
 // Public barrel for Patients API helpers; re-exports domain modules.
 
 export * from './api.core';
