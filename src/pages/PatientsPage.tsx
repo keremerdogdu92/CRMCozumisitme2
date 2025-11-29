@@ -211,6 +211,7 @@ export default function PatientsPage() {
               sgkFlag: values.sgkFlag,
               sgkPrescriptionReceived: values.sgkPrescriptionReceived,
               sgkRecordedToSystem: values.sgkRecordedToSystem,
+              sgkPrescriptionNo: values.sgkPrescriptionNo,
             })
           }
           isSaving={sgkUpdateMutation.isPending}
