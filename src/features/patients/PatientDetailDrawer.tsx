@@ -8,11 +8,13 @@ import { SideDrawer } from '../../components/layout/SideDrawer';
 import { PatientDetailInfoTab } from './PatientDetailInfoTab';
 import { PatientDetailPaymentsTab } from './PatientDetailPaymentsTab';
 import { PatientDetailDevicesTab } from './PatientDetailDevicesTab';
+import { PatientDetailSgkInvoiceTab } from './PatientDetailSgkInvoiceTab';
 import { PATIENTS_QUERY_KEY } from './api/api.core';
 import { updatePatientInvoiceStatus } from './api/api.patients';
 
 type PatientDetailTabId =
   | 'info'
+  | 'sgkInvoice'
   | 'devices'
   | 'meetings'
   | 'payments'
@@ -129,7 +131,8 @@ export function PatientDetailDrawer({
   };
 
   const tabs: { id: PatientDetailTabId; label: string }[] = [
-    { id: 'info', label: 'Özlük, Referans & SGK' },
+    { id: 'info', label: 'Özlük' },
+    { id: 'sgkInvoice', label: 'SGK & Fatura' },
     { id: 'devices', label: 'Cihazlar' },
     { id: 'meetings', label: 'Görüşmeler' },
     { id: 'payments', label: 'Ödemeler' },
@@ -190,8 +193,10 @@ export function PatientDetailDrawer({
 
       {/* Tab contents */}
       <div className="mt-4 space-y-4 text-sm">
-        {activeTab === 'info' && (
-          <PatientDetailInfoTab
+        {activeTab === 'info' && <PatientDetailInfoTab patient={patient} />}
+
+        {activeTab === 'sgkInvoice' && (
+          <PatientDetailSgkInvoiceTab
             patient={patient}
             sgkFlag={sgkFlag}
             sgkPrescriptionReceived={sgkPrescriptionReceived}
