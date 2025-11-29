@@ -2,10 +2,13 @@
 // Tabbed patient detail drawer using the shared SideDrawer shell and per-tab components.
 
 import { useEffect, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { PatientRow } from './types';
 import { SideDrawer } from '../../components/layout/SideDrawer';
 import { PatientDetailInfoTab } from './PatientDetailInfoTab';
 import { PatientDetailPaymentsTab } from './PatientDetailPaymentsTab';
+import { PATIENTS_QUERY_KEY } from './api/api.core';
+import { updatePatientInvoiceStatus } from './api/api.patients';
 
 type PatientDetailTabId =
   | 'info'
@@ -49,16 +52,57 @@ export function PatientDetailDrawer({
   const [activeTab, setActiveTab] =
     useState<PatientDetailTabId>(initialTab);
 
+  // Invoice state is handled locally here and synced with Supabase
+  // via updatePatientInvoiceStatus.
+  const [invoiceIssued, setInvoiceIssued] = useState<boolean>(
+    patient.invoice_issued === true,
+  );
+  const [invoiceIssuedAt, setInvoiceIssuedAt] = useState<string | null>(
+    (patient.invoice_issued_at as string | null) ?? null,
+  );
+
+  const queryClient = useQueryClient();
+
+  const invoiceMutation = useMutation({
+    mutationFn: (nextValue: boolean) =>
+      updatePatientInvoiceStatus({
+        id: patient.id,
+        invoiceIssued: nextValue,
+      }),
+    onSuccess: (data) => {
+      setInvoiceIssued(!!data.invoice_issued);
+      setInvoiceIssuedAt(data.invoice_issued_at);
+      // Hasta listesi ve detay drawer'ı güncel kalsın diye cache'i tazele.
+      void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
+    },
+    onError: () => {
+      // Hata durumunda bir sonraki render'da SGK kaydet butonundan bağımsız
+      // olarak kullanıcıya tekrar deneme imkanı veriyoruz.
+      // Burada sadece optimistic değişikliği geri alıyoruz.
+      setInvoiceIssued(patient.invoice_issued === true);
+      setInvoiceIssuedAt(
+        (patient.invoice_issued_at as string | null) ?? null,
+      );
+    },
+  });
+
   useEffect(() => {
     setSgkFlag(!!patient.sgk_flag);
     setSgkPrescriptionReceived(!!patient.sgk_prescription_received);
     setSgkRecordedToSystem(!!patient.sgk_recorded_to_system);
     setActiveTab(initialTab);
+
+    setInvoiceIssued(patient.invoice_issued === true);
+    setInvoiceIssuedAt(
+      (patient.invoice_issued_at as string | null) ?? null,
+    );
   }, [
     patient.id,
     patient.sgk_flag,
     patient.sgk_prescription_received,
     patient.sgk_recorded_to_system,
+    patient.invoice_issued,
+    patient.invoice_issued_at,
     initialTab,
   ]);
 
@@ -70,6 +114,12 @@ export function PatientDetailDrawer({
         : false,
       sgkRecordedToSystem: sgkFlag ? sgkRecordedToSystem : false,
     });
+  };
+
+  const handleChangeInvoiceIssued = (nextValue: boolean) => {
+    // Optimistic update; onError revert to last known backend state.
+    setInvoiceIssued(nextValue);
+    invoiceMutation.mutate(nextValue);
   };
 
   const tabs: { id: PatientDetailTabId; label: string }[] = [
@@ -143,66 +193,4 @@ export function PatientDetailDrawer({
             onChangeSgkFlag={(value) => {
               setSgkFlag(value);
               if (!value) {
-                setSgkPrescriptionReceived(false);
-                setSgkRecordedToSystem(false);
-              }
-            }}
-            onChangeSgkPrescriptionReceived={setSgkPrescriptionReceived}
-            onChangeSgkRecordedToSystem={setSgkRecordedToSystem}
-          />
-        )}
-
-        {activeTab === 'devices' && (
-          <section className="space-y-2">
-            <h4 className="text-xs font-semibold uppercase text-slate-500">
-              Cihazlar
-            </h4>
-            <p className="text-xs text-slate-500">
-              Bir sonraki adımda bu sekmede hastanın aktif cihazları, kulak
-              tarafı (sağ/sol/çift), model, seri numarası ve garanti
-              bilgileri listelenecek. Şimdilik sadece iskelet olarak
-              duruyor.
-            </p>
-          </section>
-        )}
-
-        {activeTab === 'meetings' && (
-          <section className="space-y-2">
-            <h4 className="text-xs font-semibold uppercase text-slate-500">
-              Görüşmeler
-            </h4>
-            <p className="text-xs text-slate-500">
-              Buraya tarih bazlı ziyaret listesi, not alanı ve
-              &quot;Ödeme / Tamir / Aksesuar&quot; alt etiketleri
-              eklenecek. Referans amaçlı görüşmeler bu sekmede, ancak ana
-              listede personel için gizli tutulacak.
-            </p>
-          </section>
-        )}
-
-        {activeTab === 'payments' && (
-          <PatientDetailPaymentsTab patientId={patient.id} open={open} />
-        )}
-
-        {activeTab === 'audiogram' && (
-          <section className="space-y-2">
-            <h4 className="text-xs font-semibold uppercase text-slate-500">
-              Audiogram
-            </h4>
-            <p className="text-xs text-slate-500">
-              Audiogram sonuçları ve işitme testleri bu sekmede tutulacak.
-              İleride grafikli bir görünüm ve &quot;önce / sonra&quot;
-              karşılaştırma seçenekleri eklenebilir.
-            </p>
-          </section>
-        )}
-
-        {errorMsg && (
-          <p className="text-[11px] text-red-600">
-            Kaydetme sırasında bir hata oluştu. Detay: {errorMsg}
-          </p>
-        )}
-      </div>
-    </SideDrawer>
-  );
-}
+                setSgk
