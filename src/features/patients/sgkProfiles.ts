@@ -1,4 +1,7 @@
 // src/features/patients/sgkProfiles.ts
+// Static SGK profile definitions for hearing-aid reimbursements.
+// These can later be moved to a Supabase table. For now we keep
+// them versioned with a validFrom date.
 
 export type SgkProfileId =
   | 'SGK_0_4_CALISAN'
@@ -13,12 +16,12 @@ export type SgkProfileId =
 export type SgkProfileDefinition = {
   id: SgkProfileId;
   label: string;
-  gross: number;          // SGK'nın karşıladığı brüt
+  gross: number;          // SGK'nın karşıladığı brüt tutar
   netToFirm: number;      // Firmaya SGK tarafından ödenecek net tutar (3. sütun)
   employeeShare?: number; // Çalışan katılım payı (varsa)
   retireeShare?: number;  // Emekli katılım payı (varsa)
   retireeNetAfterShare?: number; // Emekli için fiili ödeme (varsa)
-  validFrom: string;      // "2024-08-13" – tabloda yazan tarih
+  validFrom: string;      // "2024-08-13" – resmi tablodaki tarih
 };
 
 export const SGK_PROFILES: SgkProfileDefinition[] = [
@@ -91,3 +94,13 @@ export const SGK_PROFILES: SgkProfileDefinition[] = [
     validFrom: '2024-08-13',
   },
 ];
+
+/**
+ * Helper to get the label for a stored sgk_profile code.
+ * Falls back to the raw code if no match is found.
+ */
+export function getSgkProfileLabel(profileId: string | null | undefined): string {
+  if (!profileId) return '-';
+  const profile = SGK_PROFILES.find((p) => p.id === profileId);
+  return profile ? profile.label : profileId;
+}
