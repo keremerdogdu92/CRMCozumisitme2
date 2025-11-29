@@ -193,4 +193,69 @@ export function PatientDetailDrawer({
             onChangeSgkFlag={(value) => {
               setSgkFlag(value);
               if (!value) {
-                setSgk
+                setSgkPrescriptionReceived(false);
+                setSgkRecordedToSystem(false);
+              }
+            }}
+            onChangeSgkPrescriptionReceived={setSgkPrescriptionReceived}
+            onChangeSgkRecordedToSystem={setSgkRecordedToSystem}
+            invoiceIssued={invoiceIssued}
+            invoiceIssuedAt={invoiceIssuedAt}
+            onChangeInvoiceIssued={handleChangeInvoiceIssued}
+          />
+        )}
+
+        {activeTab === 'devices' && (
+          <section className="space-y-2">
+            <h4 className="text-xs font-semibold uppercase text-slate-500">
+              Cihazlar
+            </h4>
+            <p className="text-xs text-slate-500">
+              Bir sonraki adımda bu sekmede hastanın aktif cihazları, kulak
+              tarafı (sağ/sol/çift), model, seri numarası ve garanti
+              bilgileri listelenecek. Şimdilik sadece iskelet olarak
+              duruyor.
+            </p>
+          </section>
+        )}
+
+        {activeTab === 'meetings' && (
+          <section className="space-y-2">
+            <h4 className="text-xs font-semibold uppercase text-slate-500">
+              Görüşmeler
+            </h4>
+            <p className="text-xs text-slate-500">
+              Buraya tarih bazlı ziyaret listesi, not alanı ve
+              &quot;Ödeme / Tamir / Aksesuar&quot; alt etiketleri
+              eklenecek. Referans amaçlı görüşmeler bu sekmede, ancak ana
+              listede personel için gizli tutulacak.
+            </p>
+          </section>
+        )}
+
+        {activeTab === 'payments' && (
+          <PatientDetailPaymentsTab patientId={patient.id} open={open} />
+        )}
+
+        {activeTab === 'audiogram' && (
+          <section className="space-y-2">
+            <h4 className="text-xs font-semibold uppercase text-slate-500">
+              Audiogram
+            </h4>
+            <p className="text-xs text-slate-500">
+              Audiogram sonuçları ve işitme testleri bu sekmede tutulacak.
+              İleride grafikli bir görünüm ve &quot;önce / sonra&quot;
+              karşılaştırma seçenekleri eklenebilir.
+            </p>
+          </section>
+        )}
+
+        {errorMsg && (
+          <p className="text-[11px] text-red-600">
+            Kaydetme sırasında bir hata oluştu. Detay: {errorMsg}
+          </p>
+        )}
+      </div>
+    </SideDrawer>
+  );
+}
