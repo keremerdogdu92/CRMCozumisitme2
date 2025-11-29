@@ -49,6 +49,10 @@ export type PatientsImportSummary = {
  *   - payment_method
  *   - card_sale_total
  *   - card_fee_rate
+ *
+ * CSV'den gelen hastalar, iş akışı gereği fiilen "faturası kesilmiş" kabul
+ * edildiği için createPatient(...) çağrısına setInvoiceIssuedTrue: true
+ * opsiyonu ile gidiyoruz.
  */
 export async function importPatientsFromCsv(
   file: File,
@@ -107,7 +111,10 @@ export async function importPatientsFromCsv(
 
     try {
       // Existing flow; this will apply all validations + Supabase insert.
-      await createPatient(formValues as NewPatientForm);
+      // Import ile gelen hastalar, varsayılan olarak "faturası kesildi" kabul edilir.
+      await createPatient(formValues as NewPatientForm, {
+        setInvoiceIssuedTrue: true,
+      });
       importedCount += 1;
     } catch (e) {
       const message =
