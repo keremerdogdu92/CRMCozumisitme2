@@ -55,13 +55,6 @@ export type PatientRow = {
   archive_code?: string | null;
 
   /**
-   * Invoice metadata on the patient row.
-   * Optional to tolerate views that don't yet project these columns.
-   */
-  invoice_issued?: boolean | null;
-  invoice_issued_at?: string | null;
-
-  /**
    * Aggregated device info from patient_list_with_device view.
    * For now brand/model may be null until stock module is fully wired.
    */
@@ -74,6 +67,17 @@ export type PatientRow = {
   card_sale_total: number | null;
   card_fee_rate: number | null;
   card_fee_amount: number | null;
+
+  /**
+   * Invoice status tracking.
+   * - invoice_issued: whether an invoice has been issued.
+   * - invoice_issued_at: timestamp of the invoice issuance.
+   *
+   * Optional to stay compatible with older views/selects that do not
+   * populate these fields yet.
+   */
+  invoice_issued?: boolean | null;
+  invoice_issued_at?: string | null;
 };
 
 export type NewPatientForm = {
