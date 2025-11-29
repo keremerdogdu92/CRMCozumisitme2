@@ -75,6 +75,7 @@ export function PatientsTable({
           const deviceLabel = getDeviceLabel(p);
           const satisfactionDisplay =
             p.satisfaction_10 != null ? `${p.satisfaction_10} / 10` : '-';
+          const invoiceIssued = !!p.invoice_issued;
 
           return (
             <div
@@ -160,6 +161,21 @@ export function PatientsTable({
                   </span>
                   <span className="font-medium">{satisfactionDisplay}</span>
                 </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Fatura
+                  </span>
+                  <span
+                    className={
+                      'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ' +
+                      (invoiceIssued
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-slate-50 text-slate-500')
+                    }
+                  >
+                    {invoiceIssued ? 'Kesildi' : 'Bekliyor'}
+                  </span>
+                </div>
               </div>
 
               {warning && (
@@ -201,6 +217,9 @@ export function PatientsTable({
               <th className="px-4 py-2 text-center font-medium text-slate-600">
                 SGK
               </th>
+              <th className="px-4 py-2 text-center font-medium text-slate-600">
+                Fatura
+              </th>
               <th className="px-4 py-2 text-left font-medium text-slate-600">
                 Arşiv Kodu
               </th>
@@ -215,8 +234,8 @@ export function PatientsTable({
               const deviceLabel = getDeviceLabel(p);
               const satisfactionDisplay =
                 p.satisfaction_10 != null ? `${p.satisfaction_10} / 10` : '-';
-
               const hasSgkWarning = !!warning;
+              const invoiceIssued = !!p.invoice_issued;
 
               return (
                 <tr
@@ -279,6 +298,20 @@ export function PatientsTable({
                         </span>
                       )}
                     </div>
+                  </td>
+
+                  {/* Fatura */}
+                  <td className="px-4 py-2 text-center">
+                    <span
+                      className={
+                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ' +
+                        (invoiceIssued
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-slate-50 text-slate-500')
+                      }
+                    >
+                      {invoiceIssued ? 'Kesildi' : 'Bekliyor'}
+                    </span>
                   </td>
 
                   {/* Arşiv Kodu */}
