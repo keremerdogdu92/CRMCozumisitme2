@@ -2,12 +2,12 @@
 // Payment and installment-plan APIs and React Query hooks.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabaseClient } from '../../utils/supabaseClient';
+import { supabaseClient } from '../../../utils/supabaseClient';
 import type {
   PatientPaymentRow,
   PatientInstallmentPlanRow,
   UpsertPatientInstallmentPlanInput,
-} from './types';
+} from '../types';
 import {
   PATIENT_PAYMENTS_BY_PATIENT_QUERY_KEY,
   PATIENT_INSTALLMENT_PLAN_BY_PATIENT_QUERY_KEY,
