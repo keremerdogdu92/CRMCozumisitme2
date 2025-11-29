@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   PATIENTS_QUERY_KEY,
   fetchPatients,
-  createPatient,
+  createPatientFromForm,
   updatePatientSgkFields,
 } from '../features/patients/api';
 import type {
@@ -46,7 +46,7 @@ export default function PatientsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: createPatient,
+    mutationFn: createPatientFromForm,
     onSuccess: (createdPatient, variables) => {
       void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
       setShowCreateForm(false);
