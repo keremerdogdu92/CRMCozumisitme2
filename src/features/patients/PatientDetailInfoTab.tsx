@@ -33,6 +33,17 @@ export function PatientDetailInfoTab({
       ? `${patient.satisfaction_10} / 10`
       : '-';
 
+  const invoiceStatusLabel = patient.invoice_issued ? 'Kesildi' : 'Bekliyor';
+  const invoiceDateDisplay = patient.invoice_issued_at
+    ? formatDate(patient.invoice_issued_at)
+    : '-';
+
+  const prescriptionNoDisplay =
+    patient.sgk_prescription_no &&
+    patient.sgk_prescription_no.trim().length > 0
+      ? patient.sgk_prescription_no
+      : '-';
+
   return (
     <>
       {/* Basic + extended info merged under Özlük */}
@@ -83,6 +94,18 @@ export function PatientDetailInfoTab({
             <span className="text-xs text-slate-500">Arşiv Kodu</span>
             <span className="text-xs text-slate-900">
               {patient.archive_code ?? '-'}
+            </span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-xs text-slate-500">Fatura Durumu</span>
+            <span className="text-xs text-slate-900">
+              {invoiceStatusLabel}
+            </span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-xs text-slate-500">Fatura Tarihi</span>
+            <span className="text-xs text-slate-900">
+              {invoiceDateDisplay}
             </span>
           </div>
 
@@ -158,6 +181,13 @@ export function PatientDetailInfoTab({
               />
               <span>Sisteme işlendi mi?</span>
             </label>
+          </div>
+
+          <div className="mt-1 flex justify-between gap-2 text-xs">
+            <span className="text-slate-500">Reçete No</span>
+            <span className="text-slate-900">
+              {prescriptionNoDisplay}
+            </span>
           </div>
 
           <p className="mt-1 text-[11px] text-slate-500">
