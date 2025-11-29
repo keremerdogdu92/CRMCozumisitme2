@@ -10,6 +10,14 @@ import type {
 } from '../types';
 import { parseMoneyToNumber } from './api.core';
 
+export type CreatePatientOptions = {
+  /**
+   * If true, the patient will be created as "invoice already issued".
+   * Used mainly for CSV imports where historical patients are loaded.
+   */
+  setInvoiceIssuedTrue?: boolean;
+};
+
 /**
  * Create a new patient row with org_id taken from the current profile.
  * Returns the inserted PatientRow so that callers can immediately open the detail drawer.
@@ -20,6 +28,7 @@ import { parseMoneyToNumber } from './api.core';
  */
 export async function createPatient(
   input: NewPatientForm,
+  options?: CreatePatientOptions,
 ): Promise<PatientRow> {
   const { data: userData, error: userError } =
     await supabaseClient.auth.getUser();
@@ -43,10 +52,6 @@ export async function createPatient(
       'Failed to load profile for org_id (STEP_PROFILE):',
       profileError,
     );
-  ...
-  // [DEĞİŞMEYEN KISIMLARI OLDUĞU GİBİ BIRAKIYORUM]
-  ...
-  if (profileError) {
     throw new Error('STEP_PROFILE: ' + profileError.message);
   }
 
@@ -90,27 +95,9 @@ export async function createPatient(
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // SGK profile-based expected reimbursement
-  // ---------------------------------------------------------------------------
-  let sgk_profile: string | null = null;
-  let sgk_expected_reimbursement: number | null = null;
-  let sgk_expected_reimbursement_month: string | null = null;
-
-  if (input.sgkProfileId) {
-    sgk_profile = input.sgkProfileId;
-
-    if (input.sgkExpectedReimbursement && input.sgkExpectedReimbursement.trim().length > 0) {
-      sgk_expected_reimbursement = parseMoneyToNumber(
-        input.sgkExpectedReimbursement,
-        'SGK_EXPECTED_REIMBURSEMENT',
-      );
-    }
-
-    if (input.sgkExpectedMonth && input.sgkExpectedMonth.trim().length > 0) {
-      sgk_expected_reimbursement_month = input.sgkExpectedMonth.trim();
-    }
-  }
+  // Decide initial invoice state.
+  const shouldMarkInvoiceIssued =
+    options?.setInvoiceIssuedTrue === true;
 
   const { data, error: insertError } = await supabaseClient
     .from('patients')
@@ -138,13 +125,11 @@ export async function createPatient(
       national_id: input.nationalId.trim() || null,
       address: input.address.trim() || null,
       kin_phone: input.kinPhone.trim() || null,
-      // SGK profile-based expected reimbursement.
-      sgk_profile,
-      sgk_expected_reimbursement,
-      sgk_expected_reimbursement_month,
-      // Invoice metadata: new patients start as "invoice not issued".
-      invoice_issued: false,
-      invoice_issued_at: null,
+      // Invoice metadata.
+      invoice_issued: shouldMarkInvoiceIssued,
+      invoice_issued_at: shouldMarkInvoiceIssued
+        ? new Date().toISOString()
+        : null,
       // archive_code is intentionally omitted here; Supabase is expected
       // to assign it when sale / senet is finalized.
     })
@@ -162,9 +147,6 @@ export async function createPatient(
       satisfaction_10,
       sgk_prescription_received,
       sgk_recorded_to_system,
-      sgk_profile,
-      sgk_expected_reimbursement,
-      sgk_expected_reimbursement_month,
       national_id,
       address,
       kin_phone,
@@ -206,14 +188,6 @@ export async function createPatient(
     sgk_recorded_to_system:
       (data.sgk_recorded_to_system as boolean | null | undefined) ?? null,
 
-    sgk_profile:
-      (data.sgk_profile as string | null | undefined) ?? null,
-    sgk_expected_reimbursement:
-      (data.sgk_expected_reimbursement as number | null | undefined) ?? null,
-    sgk_expected_reimbursement_month:
-      (data.sgk_expected_reimbursement_month as string | null | undefined) ??
-      null,
-
     national_id: (data.national_id as string | null | undefined) ?? null,
     address: (data.address as string | null | undefined) ?? null,
     kin_phone: (data.kin_phone as string | null | undefined) ?? null,
@@ -244,4 +218,75 @@ export async function createPatient(
   };
 
   return inserted;
+}
+
+/**
+ * Update SGK-related fields for a given patient.
+ */
+export async function updatePatientSgkFields(
+  params: PatientSgkUpdateInput,
+): Promise<void> {
+  const {
+    id,
+    sgkFlag,
+    sgkPrescriptionReceived,
+    sgkRecordedToSystem,
+    sgkPrescriptionNo,
+  } = params;
+
+  const { error } = await supabaseClient
+    .from('patients')
+    .update({
+      sgk_flag: sgkFlag,
+      sgk_prescription_received: sgkFlag
+        ? sgkPrescriptionReceived
+        : false,
+      sgk_recorded_to_system: sgkFlag ? sgkRecordedToSystem : false,
+      sgk_prescription_no: sgkPrescriptionNo.trim() || null,
+    })
+    .eq('id', id);
+
+  if (error) {
+    console.error(
+      'Failed to update patient SGK fields (STEP_UPDATE_SGK):',
+      error,
+    );
+    throw new Error('STEP_UPDATE_SGK: ' + error.message);
+  }
+}
+
+/**
+ * Update invoice status for a given patient.
+ * Returns the latest invoice_issued/invoice_issued_at values.
+ */
+export async function updatePatientInvoiceStatus(params: {
+  id: string;
+  invoiceIssued: boolean;
+}): Promise<{ invoice_issued: boolean; invoice_issued_at: string | null }> {
+  const { id, invoiceIssued } = params;
+
+  const nextIssuedAt = invoiceIssued ? new Date().toISOString() : null;
+
+  const { data, error } = await supabaseClient
+    .from('patients')
+    .update({
+      invoice_issued: invoiceIssued,
+      invoice_issued_at: invoiceIssued ? nextIssuedAt : null,
+    })
+    .eq('id', id)
+    .select('invoice_issued, invoice_issued_at')
+    .single();
+
+  if (error) {
+    console.error(
+      'Failed to update patient invoice status (STEP_UPDATE_INVOICE):',
+      error,
+    );
+    throw new Error('STEP_UPDATE_INVOICE: ' + error.message);
+  }
+
+  return {
+    invoice_issued: !!data.invoice_issued,
+    invoice_issued_at: (data.invoice_issued_at as string | null) ?? null,
+  };
 }
