@@ -1,10 +1,10 @@
-// src/features/references/components/ReferenceAutocompleteInput.tsx
+// src/features/trials/components/ReferenceAutocompleteInput.tsx
 // Summary: Shared reference autocomplete input with dropdown suggestions.
 // Used in trial and meeting forms to select an existing reference by name.
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { searchReferencesByName } from '../api';
+import { searchReferencesByName } from '../../references/api';
 
 type ReferenceAutocompleteInputProps = {
   value: string;
