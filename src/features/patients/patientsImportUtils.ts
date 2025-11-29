@@ -2,7 +2,7 @@
 // Pure helpers for Patients CSV import: row normalization and mapping to NewPatientForm.
 // This does NOT touch Supabase or React Query, so it is easy to reuse & test.
 
-import type { NewPatientForm } from './types';
+import type { NewPatientForm, PatientPaymentMethodFormValue } from './types';
 
 export type PatientsCsvRowObj = {
   [key: string]: string;
@@ -39,6 +39,55 @@ function parseBoolLike(raw: string | undefined): boolean | null {
   if (['0', 'false', 'hayir', 'hayır', 'no'].includes(v)) return false;
 
   return null;
+}
+
+/**
+ * Normalize a raw payment method string coming from CSV
+ * into a valid PatientPaymentMethodFormValue union.
+ * Unknown / empty values fall back to '' (no selection).
+ */
+function parsePaymentMethod(
+  raw: string | undefined,
+): PatientPaymentMethodFormValue {
+  if (!raw) return '';
+  const v = raw.trim().toLowerCase();
+  if (!v) return '';
+
+  // Allow a few TR + EN variants that map to our union literals.
+  if (v === 'tim') return 'Tim';
+  if (v === 'sivantos') return 'Sivantos';
+
+  // Card / credit card mappings
+  if (
+    v === 'kredi_kartı' ||
+    v === 'kredi kartı' ||
+    v === 'kredi karti' ||
+    v === 'kart' ||
+    v === 'card' ||
+    v === 'credit' ||
+    v === 'credit_card' ||
+    v === 'credit card'
+  ) {
+    return 'Kredi_Kartı';
+  }
+
+  // Cash mappings
+  if (v === 'nakit' || v === 'cash') {
+    return 'Nakit';
+  }
+
+  // Installment / senet mappings
+  if (
+    v === 'senet' ||
+    v === 'taksit' ||
+    v === 'installment' ||
+    v === 'installments'
+  ) {
+    return 'Senet';
+  }
+
+  // Fallback: leave as "no selection" and let UI/validation handle it.
+  return '';
 }
 
 /**
@@ -96,7 +145,9 @@ export function mapCsvRowToNewPatientForm(params: {
   // Varsayılan: SGK yok → false
   const sgkFlag = sgkFlagParsed ?? false;
 
-  const paymentMethod = (row['payment_method'] ?? '').trim();
+  const paymentMethodRaw = row['payment_method'];
+  const paymentMethod = parsePaymentMethod(paymentMethodRaw);
+
   const cardSaleTotal = (row['card_sale_total'] ?? '').trim();
   const cardFeeRate = (row['card_fee_rate'] ?? '').trim();
 
@@ -107,7 +158,7 @@ export function mapCsvRowToNewPatientForm(params: {
     sgkFlag,
     sgkPrescriptionReceived: sgkFlag ? !!sgkPrescriptionParsed : false,
     sgkRecordedToSystem: sgkFlag ? !!sgkRecordedParsed : false,
-    // Ödeme bilgileri (createPatient bunları zaten string olarak bekliyor)
+    // Payment info
     paymentMethod,
     cardSaleTotal,
     cardFeeRate,
