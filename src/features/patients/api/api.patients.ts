@@ -95,6 +95,51 @@ export async function createPatient(
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // SGK profile-based expected reimbursement (optional)
+  // ---------------------------------------------------------------------------
+  let sgk_profile: string | null = null;
+  let sgk_expected_reimbursement: number | null = null;
+  let sgk_expected_reimbursement_month: string | null = null;
+
+  if (input.sgkFlag) {
+    // Code of the SGK profile (e.g. 'SGK_0_4_CALISAN')
+    if (input.sgkProfileId && input.sgkProfileId.trim().length > 0) {
+      sgk_profile = input.sgkProfileId.trim();
+    }
+
+    // Expected reimbursement as money-like string ("6104,45")
+    if (input.sgkExpectedReimbursement) {
+      sgk_expected_reimbursement = parseMoneyToNumber(
+        input.sgkExpectedReimbursement,
+        'SGK_EXPECTED_REIMBURSEMENT',
+      );
+    }
+
+    // Expected reimbursement month – always persisted as the 15th of that month.
+    // UI sends "yyyy-MM"; we convert to "yyyy-MM-15".
+    if (input.sgkExpectedMonth) {
+      const [yearStr, monthStr] = input.sgkExpectedMonth.split('-');
+      const year = Number(yearStr);
+      const month = Number(monthStr);
+
+      if (
+        !Number.isFinite(year) ||
+        !Number.isFinite(month) ||
+        month < 1 ||
+        month > 12
+      ) {
+        throw new Error(
+          'SGK_EXPECTED_MONTH: Geçerli bir ay seçin (yyyy-AA).',
+        );
+      }
+
+      // Use UTC to avoid timezone shifts and always store the 15th.
+      const date = new Date(Date.UTC(year, month - 1, 15));
+      sgk_expected_reimbursement_month = date.toISOString().slice(0, 10); // "yyyy-MM-15"
+    }
+  }
+
   // Decide initial invoice state.
   const shouldMarkInvoiceIssued =
     options?.setInvoiceIssuedTrue === true;
@@ -125,6 +170,10 @@ export async function createPatient(
       national_id: input.nationalId.trim() || null,
       address: input.address.trim() || null,
       kin_phone: input.kinPhone.trim() || null,
+      // SGK profile-based reimbursement metadata.
+      sgk_profile,
+      sgk_expected_reimbursement,
+      sgk_expected_reimbursement_month,
       // Invoice metadata.
       invoice_issued: shouldMarkInvoiceIssued,
       invoice_issued_at: shouldMarkInvoiceIssued
@@ -156,6 +205,9 @@ export async function createPatient(
       card_sale_total,
       card_fee_rate,
       card_fee_amount,
+      sgk_profile,
+      sgk_expected_reimbursement,
+      sgk_expected_reimbursement_month,
       invoice_issued,
       invoice_issued_at
     `,
@@ -197,6 +249,17 @@ export async function createPatient(
     reference_phone: null,
 
     archive_code: (data.archive_code as string | null | undefined) ?? null,
+
+    // SGK profile-based reimbursement metadata
+    sgk_profile:
+      (data.sgk_profile as string | null | undefined) ?? null,
+    sgk_expected_reimbursement:
+      data.sgk_expected_reimbursement != null
+        ? Number(data.sgk_expected_reimbursement)
+        : null,
+    sgk_expected_reimbursement_month:
+      (data.sgk_expected_reimbursement_month as string | null | undefined) ??
+      null,
 
     device_brand: null,
     device_model: null,
