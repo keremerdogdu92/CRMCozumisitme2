@@ -111,6 +111,7 @@ export type PatientSgkUpdateInput = {
   sgkFlag: boolean;
   sgkPrescriptionReceived: boolean;
   sgkRecordedToSystem: boolean;
+  sgkPrescriptionNo: string;
 };
 
 /**
