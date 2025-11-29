@@ -17,9 +17,15 @@ import { parseMoneyToNumber } from './api.core';
  * Archive code generation is intentionally not handled here; it is assumed to be
  * managed by Supabase (trigger / function) at a later stage such as sale or
  * senet completion.
+ *
+ * Options:
+ *  - setInvoiceIssuedTrue: when true, the patient is created as "invoice issued"
+ *    and invoice_issued_at is set to the current timestamp. This is used by the
+ *    CSV import flow where patients are already invoiced in the legacy system.
  */
 export async function createPatient(
   input: NewPatientForm,
+  opts?: { setInvoiceIssuedTrue?: boolean },
 ): Promise<PatientRow> {
   const { data: userData, error: userError } =
     await supabaseClient.auth.getUser();
@@ -52,6 +58,10 @@ export async function createPatient(
   }
 
   const orgId = profile.org_id as string;
+
+  // Import senaryosu için "bu hasta zaten faturalanmış" işaretini
+  // opsiyonel olarak dışarıdan alıyoruz.
+  const markInvoiceIssued = opts?.setInvoiceIssuedTrue === true;
 
   // ---------------------------------------------------------------------------
   // Payment metadata on patient row
@@ -86,6 +96,8 @@ export async function createPatient(
     }
   }
 
+  const nowIso = new Date().toISOString();
+
   const { data, error: insertError } = await supabaseClient
     .from('patients')
     .insert({
@@ -112,9 +124,11 @@ export async function createPatient(
       national_id: input.nationalId.trim() || null,
       address: input.address.trim() || null,
       kin_phone: input.kinPhone.trim() || null,
-      // Invoice metadata: new patients start as "invoice not issued".
-      invoice_issued: false,
-      invoice_issued_at: null,
+      // Invoice metadata:
+      // - Normal "Yeni Hasta" formu ile gelenler: invoice_issued = false.
+      // - CSV import ile gelenler: setInvoiceIssuedTrue = true ise true + now.
+      invoice_issued: markInvoiceIssued ? true : false,
+      invoice_issued_at: markInvoiceIssued ? nowIso : null,
       // archive_code is intentionally omitted here; Supabase is expected
       // to assign it when sale / senet is finalized.
     })
@@ -217,7 +231,7 @@ export async function updatePatientSgkFields(
     sgkPrescriptionReceived,
     sgkRecordedToSystem,
     sgkPrescriptionNo,
-  } = params;
+  } = params as PatientSgkUpdateInput & { sgkPrescriptionNo?: string };
 
   const { error } = await supabaseClient
     .from('patients')
@@ -227,7 +241,10 @@ export async function updatePatientSgkFields(
         ? sgkPrescriptionReceived
         : false,
       sgk_recorded_to_system: sgkFlag ? sgkRecordedToSystem : false,
-      sgk_prescription_no: sgkPrescriptionNo.trim() || null,
+      sgk_prescription_no:
+        typeof sgkPrescriptionNo === 'string'
+          ? sgkPrescriptionNo.trim() || null
+          : null,
     })
     .eq('id', id);
 
