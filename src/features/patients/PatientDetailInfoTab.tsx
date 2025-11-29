@@ -3,6 +3,7 @@
 
 import type { PatientRow } from './types';
 import { formatDate } from './patientFormatUtils';
+import { getSgkProfileLabel } from './sgkProfiles';
 
 type PatientDetailInfoTabProps = {
   patient: PatientRow;
@@ -53,6 +54,20 @@ export function PatientDetailInfoTab({
 
   const invoiceDateDisplay = invoiceIssuedAt
     ? formatDate(invoiceIssuedAt)
+    : '-';
+
+  const sgkProfileLabel = getSgkProfileLabel(patient.sgk_profile ?? null);
+
+  const sgkExpectedReimbursementDisplay =
+    patient.sgk_expected_reimbursement != null
+      ? `${patient.sgk_expected_reimbursement.toLocaleString('tr-TR', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        })} ₺`
+      : '-';
+
+  const sgkExpectedMonthDisplay = patient.sgk_expected_reimbursement_month
+    ? formatDate(patient.sgk_expected_reimbursement_month)
     : '-';
 
   return (
@@ -197,6 +212,32 @@ export function PatientDetailInfoTab({
                 placeholder="Reçete numarasını girin..."
               />
             </label>
+          </div>
+
+          {/* SGK profile + expected reimbursement (read-only for now) */}
+          <div className="mt-2 grid grid-cols-1 gap-1 border-t border-slate-200 pt-2 text-xs sm:grid-cols-2">
+            <div className="flex justify-between gap-2">
+              <span className="text-xs text-slate-500">SGK Profili</span>
+              <span className="text-xs text-slate-900 text-right">
+                {sgkProfileLabel}
+              </span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-xs text-slate-500">
+                Beklenen SGK Ödemesi (net)
+              </span>
+              <span className="text-xs text-slate-900 text-right">
+                {sgkExpectedReimbursementDisplay}
+              </span>
+            </div>
+            <div className="flex justify-between gap-2 sm:col-span-2">
+              <span className="text-xs text-slate-500">
+                Beklenen Ödeme Ayı
+              </span>
+              <span className="text-xs text-slate-900 text-right">
+                {sgkExpectedMonthDisplay}
+              </span>
+            </div>
           </div>
 
           <p className="mt-1 text-[11px] text-slate-500">
