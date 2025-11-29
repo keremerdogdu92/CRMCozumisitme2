@@ -8,6 +8,11 @@ import { searchPatientsByName } from '../patients/api';
 import { searchTrialsByName } from '../trials/api';
 import { searchReferencesByName } from '../references/api';
 
+// Strong typing for search results from each feature
+import type { PatientRow } from '../patients/types';
+import type { TrialRow } from '../trials/types';
+import type { ReferenceRow } from '../references/types';
+
 type SubjectOption = {
   id: string;
   name: string;
@@ -26,17 +31,26 @@ function useSubjectSearch(meetingType: MeetingType, term: string) {
 
       if (meetingType === 'patient') {
         const rows = await searchPatientsByName(q);
-        return rows.map((r) => ({ id: r.id, name: r.full_name }));
+        return rows.map((r: PatientRow) => ({
+          id: r.id,
+          name: r.full_name,
+        }));
       }
 
       if (meetingType === 'trial') {
         const rows = await searchTrialsByName(q);
-        return rows.map((r) => ({ id: r.id, name: r.full_name }));
+        return rows.map((r: TrialRow) => ({
+          id: r.id,
+          name: r.full_name,
+        }));
       }
 
       if (meetingType === 'reference') {
         const rows = await searchReferencesByName(q);
-        return rows.map((r) => ({ id: r.id, name: r.full_name }));
+        return rows.map((r: ReferenceRow) => ({
+          id: r.id,
+          name: r.full_name,
+        }));
       }
 
       return [];
