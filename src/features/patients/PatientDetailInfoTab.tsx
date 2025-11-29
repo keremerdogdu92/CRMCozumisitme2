@@ -1,5 +1,5 @@
 // src/features/patients/PatientDetailInfoTab.tsx
-// Info tab for patient detail drawer: identity, contact, reference, SGK flags and invoice status.
+// Info tab for patient detail drawer: identity, contact, reference, SGK flags, prescription no and invoice status.
 
 import type { PatientRow } from './types';
 import { formatDate } from './patientFormatUtils';
@@ -12,6 +12,10 @@ type PatientDetailInfoTabProps = {
   onChangeSgkFlag: (value: boolean) => void;
   onChangeSgkPrescriptionReceived: (value: boolean) => void;
   onChangeSgkRecordedToSystem: (value: boolean) => void;
+
+  // SGK prescription no (text input)
+  sgkPrescriptionNo: string;
+  onChangeSgkPrescriptionNo: (value: string) => void;
 
   // Invoice status (controlled by drawer)
   invoiceIssued: boolean;
@@ -27,6 +31,8 @@ export function PatientDetailInfoTab({
   onChangeSgkFlag,
   onChangeSgkPrescriptionReceived,
   onChangeSgkRecordedToSystem,
+  sgkPrescriptionNo,
+  onChangeSgkPrescriptionNo,
   invoiceIssued,
   invoiceIssuedAt,
   onChangeInvoiceIssued,
@@ -176,10 +182,26 @@ export function PatientDetailInfoTab({
             </label>
           </div>
 
+          <div className="mt-2 flex flex-col gap-1 text-xs">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-700">
+                SGK Reçete No
+              </span>
+              <input
+                type="text"
+                value={sgkPrescriptionNo}
+                onChange={(e) =>
+                  onChangeSgkPrescriptionNo(e.target.value)
+                }
+                className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                placeholder="Reçete numarasını girin..."
+              />
+            </label>
+          </div>
+
           <p className="mt-1 text-[11px] text-slate-500">
-            Bu alanlar ana listede satırları renklendirir ve
-            &quot;Reçete bekleniyor / Sisteme işlenecek&quot; uyarılarını
-            tetikler.
+            Bu alanlar ana listede satırları renklendirir ve SGK / fatura
+            uyarılarını tetikler.
           </p>
 
           <div className="mt-3 border-t border-slate-200 pt-2">
