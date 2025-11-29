@@ -100,13 +100,12 @@ export type NewPatientForm = {
   sgkRecordedToSystem: boolean;
 
   /**
-   * SGK profile selection for this patient.
-   * Optional for now so that older forms/flows still compile; when we wire
-   * the dropdown, it will be populated with a code from SgkProfileId.
+   * SGK profile selection and expected reimbursement.
+   * Optional for now so that older flows (CSV import vb.) derlenmeye devam etsin.
    */
-  sgkProfileId?: string;               // e.g. 'SGK_0_4_CALISAN'
-  sgkExpectedReimbursement?: string;   // TL string; parsed on submit
-  sgkExpectedMonth?: string;           // 'yyyy-MM-01' or ''
+  sgkProfileId?: string;             // e.g. 'SGK_0_4_CALISAN'
+  sgkExpectedReimbursement?: string; // TL string; parseMoneyToNumber ile parse edilecek
+  sgkExpectedMonth?: string;         // "yyyy-MM" (UI'da type="month")
 
   paymentMethod: PatientPaymentMethodFormValue;
   cardSaleTotal: string;
