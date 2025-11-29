@@ -25,6 +25,7 @@ type PatientDetailDrawerProps = {
     sgkFlag: boolean;
     sgkPrescriptionReceived: boolean;
     sgkRecordedToSystem: boolean;
+    sgkPrescriptionNo: string;
   }) => void;
   isSaving: boolean;
   errorMsg?: string;
@@ -49,6 +50,9 @@ export function PatientDetailDrawer({
     useState<boolean>(!!patient.sgk_prescription_received);
   const [sgkRecordedToSystem, setSgkRecordedToSystem] =
     useState<boolean>(!!patient.sgk_recorded_to_system);
+  const [sgkPrescriptionNo, setSgkPrescriptionNo] = useState<string>(
+    patient.sgk_prescription_no ?? '',
+  );
   const [activeTab, setActiveTab] =
     useState<PatientDetailTabId>(initialTab);
 
@@ -76,9 +80,7 @@ export function PatientDetailDrawer({
       void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
     },
     onError: () => {
-      // Hata durumunda bir sonraki render'da SGK kaydet butonundan bağımsız
-      // olarak kullanıcıya tekrar deneme imkanı veriyoruz.
-      // Burada sadece optimistic değişikliği geri alıyoruz.
+      // Hata durumunda optimistic değişikliği geri al.
       setInvoiceIssued(patient.invoice_issued === true);
       setInvoiceIssuedAt(
         (patient.invoice_issued_at as string | null) ?? null,
@@ -90,6 +92,7 @@ export function PatientDetailDrawer({
     setSgkFlag(!!patient.sgk_flag);
     setSgkPrescriptionReceived(!!patient.sgk_prescription_received);
     setSgkRecordedToSystem(!!patient.sgk_recorded_to_system);
+    setSgkPrescriptionNo(patient.sgk_prescription_no ?? '');
     setActiveTab(initialTab);
 
     setInvoiceIssued(patient.invoice_issued === true);
@@ -101,6 +104,7 @@ export function PatientDetailDrawer({
     patient.sgk_flag,
     patient.sgk_prescription_received,
     patient.sgk_recorded_to_system,
+    patient.sgk_prescription_no,
     patient.invoice_issued,
     patient.invoice_issued_at,
     initialTab,
@@ -113,6 +117,7 @@ export function PatientDetailDrawer({
         ? sgkPrescriptionReceived
         : false,
       sgkRecordedToSystem: sgkFlag ? sgkRecordedToSystem : false,
+      sgkPrescriptionNo,
     });
   };
 
@@ -199,6 +204,8 @@ export function PatientDetailDrawer({
             }}
             onChangeSgkPrescriptionReceived={setSgkPrescriptionReceived}
             onChangeSgkRecordedToSystem={setSgkRecordedToSystem}
+            sgkPrescriptionNo={sgkPrescriptionNo}
+            onChangeSgkPrescriptionNo={setSgkPrescriptionNo}
             invoiceIssued={invoiceIssued}
             invoiceIssuedAt={invoiceIssuedAt}
             onChangeInvoiceIssued={handleChangeInvoiceIssued}
