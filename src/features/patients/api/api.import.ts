@@ -11,14 +11,15 @@
 // code path as the normal "Yeni Hasta" form.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { parseSimpleCsv } from '../../utils/csvUtils';
-import type { NewPatientForm } from './types';
-import { PATIENTS_QUERY_KEY, createPatient } from './api';
+import { parseSimpleCsv } from '../../../utils/csvUtils';
+import type { NewPatientForm } from '../types';
+import { PATIENTS_QUERY_KEY } from './api.core';
+import { createPatient } from './api.patients';
 import {
   mapCsvRowToNewPatientForm,
   normalizeHeaderKey,
   type PatientsCsvRowObj,
-} from './patientsImportUtils';
+} from '../patientsImportUtils';
 
 export type PatientsImportRowError = {
   rowIndex: number;
