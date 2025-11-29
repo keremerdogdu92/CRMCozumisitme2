@@ -1,13 +1,13 @@
 // src/features/patients/api/api.patients.ts
 // Patient-level mutations: create patient and update SGK fields.
 
-import { supabaseClient } from '../../utils/supabaseClient';
+import { supabaseClient } from '../../../utils/supabaseClient';
 import type {
   NewPatientForm,
   PatientRow,
   PatientSgkUpdateInput,
   PatientPaymentMethod,
-} from './types';
+} from '../types';
 import { parseMoneyToNumber } from './api.core';
 
 /**
