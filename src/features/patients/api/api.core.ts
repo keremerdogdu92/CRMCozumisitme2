@@ -100,7 +100,9 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       card_fee_amount,
       device_brand,
       device_model,
-      device_total_price
+      device_total_price,
+      invoice_issued,
+      invoice_issued_at
     `,
     )
     .order('created_at', { ascending: false });
@@ -160,6 +162,12 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       device_model: (row.device_model as string | null | undefined) ?? null,
       device_total_price:
         (row.device_total_price as number | null | undefined) ?? null,
+
+      // Invoice status
+      invoice_issued:
+        (row.invoice_issued as boolean | null | undefined) ?? null,
+      invoice_issued_at:
+        (row.invoice_issued_at as string | null | undefined) ?? null,
     };
 
     return patient;
