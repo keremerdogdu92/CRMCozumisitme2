@@ -37,6 +37,11 @@ export function NewPatientFormCard({
     sgkFlag: true,
     sgkPrescriptionReceived: false,
     sgkRecordedToSystem: false,
+
+    sgkProfileId: '',
+    sgkExpectedReimbursement: '',
+    sgkExpectedMonth: '',
+
     paymentMethod: '',
     cardSaleTotal: '',
     cardFeeRate: '',
@@ -46,6 +51,28 @@ export function NewPatientFormCard({
     kinPhone: '',
     address: '',
   });
+
+  const resetFormState = () =>
+    setFormState({
+      fullName: '',
+      phone: '',
+      sgkFlag: true,
+      sgkPrescriptionReceived: false,
+      sgkRecordedToSystem: false,
+
+      sgkProfileId: '',
+      sgkExpectedReimbursement: '',
+      sgkExpectedMonth: '',
+
+      paymentMethod: '',
+      cardSaleTotal: '',
+      cardFeeRate: '',
+      referenceId: null,
+      referenceName: '',
+      nationalId: '',
+      kinPhone: '',
+      address: '',
+    });
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -61,6 +88,13 @@ export function NewPatientFormCard({
       sgkRecordedToSystem: formState.sgkFlag
         ? formState.sgkRecordedToSystem
         : false,
+
+      sgkProfileId: formState.sgkFlag ? formState.sgkProfileId : '',
+      sgkExpectedReimbursement: formState.sgkFlag
+        ? formState.sgkExpectedReimbursement
+        : '',
+      sgkExpectedMonth: formState.sgkFlag ? formState.sgkExpectedMonth : '',
+
       paymentMethod: formState.paymentMethod,
       cardSaleTotal: formState.cardSaleTotal,
       cardFeeRate: formState.cardFeeRate,
@@ -71,21 +105,7 @@ export function NewPatientFormCard({
       address: formState.address,
     });
 
-    setFormState({
-      fullName: '',
-      phone: '',
-      sgkFlag: true,
-      sgkPrescriptionReceived: false,
-      sgkRecordedToSystem: false,
-      paymentMethod: '',
-      cardSaleTotal: '',
-      cardFeeRate: '',
-      referenceId: null,
-      referenceName: '',
-      nationalId: '',
-      kinPhone: '',
-      address: '',
-    });
+    resetFormState();
   };
 
   const handleChangePaymentMethod = (
@@ -220,12 +240,17 @@ export function NewPatientFormCard({
         {/* SGK + Ödeme bloğu */}
         <FormSection title="SGK ve Ödeme">
           <div className="grid gap-3 md:grid-cols-12 md:items-start">
-            {/* SGK üçlüsü */}
+            {/* SGK üçlüsü + profil */}
             <div className="md:col-span-4">
               <NewPatientSgkSection
                 sgkFlag={formState.sgkFlag}
                 sgkPrescriptionReceived={formState.sgkPrescriptionReceived}
                 sgkRecordedToSystem={formState.sgkRecordedToSystem}
+                sgkProfileId={formState.sgkProfileId ?? ''}
+                sgkExpectedReimbursement={
+                  formState.sgkExpectedReimbursement ?? ''
+                }
+                sgkExpectedMonth={formState.sgkExpectedMonth ?? ''}
                 onChangeSgkFlag={(value) =>
                   setFormState((s) => ({
                     ...s,
@@ -236,6 +261,11 @@ export function NewPatientFormCard({
                     sgkRecordedToSystem: value
                       ? s.sgkRecordedToSystem
                       : false,
+                    sgkProfileId: value ? s.sgkProfileId ?? '' : '',
+                    sgkExpectedReimbursement: value
+                      ? s.sgkExpectedReimbursement ?? ''
+                      : '',
+                    sgkExpectedMonth: value ? s.sgkExpectedMonth ?? '' : '',
                   }))
                 }
                 onChangeSgkPrescriptionReceived={(value) =>
@@ -248,6 +278,24 @@ export function NewPatientFormCard({
                   setFormState((s) => ({
                     ...s,
                     sgkRecordedToSystem: value,
+                  }))
+                }
+                onChangeSgkProfileId={(value) =>
+                  setFormState((s) => ({
+                    ...s,
+                    sgkProfileId: value,
+                  }))
+                }
+                onChangeSgkExpectedReimbursement={(value) =>
+                  setFormState((s) => ({
+                    ...s,
+                    sgkExpectedReimbursement: value,
+                  }))
+                }
+                onChangeSgkExpectedMonth={(value) =>
+                  setFormState((s) => ({
+                    ...s,
+                    sgkExpectedMonth: value,
                   }))
                 }
               />
