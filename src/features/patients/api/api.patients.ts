@@ -1,5 +1,5 @@
 // src/features/patients/api/api.patients.ts
-// Patient-level mutations: create patient and update SGK fields.
+// Patient-level mutations: create patient, update SGK fields and invoice status.
 
 import { supabaseClient } from '../../../utils/supabaseClient';
 import type {
@@ -10,6 +10,11 @@ import type {
 } from '../types';
 import { parseMoneyToNumber } from './api.core';
 
+export type UpdatePatientInvoiceStatusInput = {
+  id: string;
+  invoiceIssued: boolean;
+};
+
 /**
  * Create a new patient row with org_id taken from the current profile.
  * Returns the inserted PatientRow so that callers can immediately open the detail drawer.
@@ -17,9 +22,15 @@ import { parseMoneyToNumber } from './api.core';
  * Archive code generation is intentionally not handled here; it is assumed to be
  * managed by Supabase (trigger / function) at a later stage such as sale or
  * senet completion.
+ *
+ * options:
+ *  - setInvoiceIssuedTrue: when true (CSV import vb.), the new patient is
+ *    created as "invoice issued" with invoice_issued_at = now().
+ *    When omitted/false, DB defaults are used (invoice_issued = false).
  */
 export async function createPatient(
   input: NewPatientForm,
+  options?: { setInvoiceIssuedTrue?: boolean },
 ): Promise<PatientRow> {
   const { data: userData, error: userError } =
     await supabaseClient.auth.getUser();
@@ -43,7 +54,6 @@ export async function createPatient(
       'Failed to load profile for org_id (STEP_PROFILE):',
       profileError,
     );
-    throw new Error('STEP_PROFILE: ' + profileError.message);
   }
 
   if (!profile?.org_id) {
@@ -86,6 +96,15 @@ export async function createPatient(
     }
   }
 
+  // Invoice defaults for this creation.
+  const shouldSetInvoiceIssued =
+    options?.setInvoiceIssuedTrue === true ? true : false;
+
+  const invoiceIssuedForInsert = shouldSetInvoiceIssued ? true : undefined;
+  const invoiceIssuedAtForInsert = shouldSetInvoiceIssued
+    ? new Date().toISOString()
+    : undefined;
+
   const { data, error: insertError } = await supabaseClient
     .from('patients')
     .insert({
@@ -112,9 +131,12 @@ export async function createPatient(
       national_id: input.nationalId.trim() || null,
       address: input.address.trim() || null,
       kin_phone: input.kinPhone.trim() || null,
+      // Invoice status: only override when explicitly requested
+      // (CSV import). Otherwise DB default (false) is used.
+      invoice_issued: invoiceIssuedForInsert,
+      invoice_issued_at: invoiceIssuedAtForInsert,
       // archive_code is intentionally omitted here; Supabase is expected
       // to assign it when sale / senet is finalized.
-      // invoice_issued / invoice_issued_at rely on DB defaults.
     })
     .select(
       `
@@ -135,12 +157,12 @@ export async function createPatient(
       kin_phone,
       reference_id,
       archive_code,
-      invoice_issued,
-      invoice_issued_at,
       payment_method,
       card_sale_total,
       card_fee_rate,
-      card_fee_amount
+      card_fee_amount,
+      invoice_issued,
+      invoice_issued_at
     `,
     )
     .single();
@@ -181,11 +203,6 @@ export async function createPatient(
 
     archive_code: (data.archive_code as string | null | undefined) ?? null,
 
-    invoice_issued:
-      (data.invoice_issued as boolean | null | undefined) ?? null,
-    invoice_issued_at:
-      (data.invoice_issued_at as string | null | undefined) ?? null,
-
     device_brand: null,
     device_model: null,
     device_total_price: null,
@@ -198,6 +215,11 @@ export async function createPatient(
       (data.card_fee_rate as number | null | undefined) ?? null,
     card_fee_amount:
       (data.card_fee_amount as number | null | undefined) ?? null,
+
+    invoice_issued:
+      (data.invoice_issued as boolean | null | undefined) ?? null,
+    invoice_issued_at:
+      (data.invoice_issued_at as string | null | undefined) ?? null,
   };
 
   return inserted;
@@ -233,21 +255,26 @@ export async function updatePatientSgkFields(
 }
 
 /**
- * Update invoice status for a given patient.
- * When invoice_issued is set to true, invoice_issued_at is stamped with "now".
- * When set back to false, invoice_issued_at is cleared.
+ * Toggle / update invoice status for a given patient.
+ * If invoiceIssued is true, invoice_issued_at is set to now().
+ * If false, invoice_issued_at is cleared to null.
  */
 export async function updatePatientInvoiceStatus(
-  patientId: string,
-  issued: boolean,
-): Promise<void> {
-  const { error } = await supabaseClient
+  params: UpdatePatientInvoiceStatusInput,
+): Promise<{ invoice_issued: boolean; invoice_issued_at: string | null }> {
+  const { id, invoiceIssued } = params;
+
+  const patch = {
+    invoice_issued: invoiceIssued,
+    invoice_issued_at: invoiceIssued ? new Date().toISOString() : null,
+  };
+
+  const { data, error } = await supabaseClient
     .from('patients')
-    .update({
-      invoice_issued: issued,
-      invoice_issued_at: issued ? new Date().toISOString() : null,
-    })
-    .eq('id', patientId);
+    .update(patch)
+    .eq('id', id)
+    .select('invoice_issued, invoice_issued_at')
+    .single();
 
   if (error) {
     console.error(
@@ -256,4 +283,9 @@ export async function updatePatientInvoiceStatus(
     );
     throw new Error('STEP_UPDATE_INVOICE: ' + error.message);
   }
+
+  return {
+    invoice_issued: !!data.invoice_issued,
+    invoice_issued_at: (data.invoice_issued_at as string | null) ?? null,
+  };
 }
