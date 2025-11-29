@@ -99,7 +99,9 @@ export const SGK_PROFILES: SgkProfileDefinition[] = [
  * Helper to get the label for a stored sgk_profile code.
  * Falls back to the raw code if no match is found.
  */
-export function getSgkProfileLabel(profileId: string | null | undefined): string {
+export function getSgkProfileLabel(
+  profileId: string | null | undefined,
+): string {
   if (!profileId) return '-';
   const profile = SGK_PROFILES.find((p) => p.id === profileId);
   return profile ? profile.label : profileId;
