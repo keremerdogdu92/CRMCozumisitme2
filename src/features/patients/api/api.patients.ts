@@ -220,6 +220,17 @@ export async function createPatient(
 }
 
 /**
+ * React Query–friendly wrapper: used by the "Yeni Hasta" form.
+ * - Single `NewPatientForm` parameter (no custom opts/context).
+ * - Normal flow: invoice_issued = false (handled inside createPatient).
+ */
+export async function createPatientFromForm(
+  input: NewPatientForm,
+): Promise<PatientRow> {
+  return createPatient(input);
+}
+
+/**
  * Update SGK-related fields for a given patient.
  */
 export async function updatePatientSgkFields(
@@ -284,7 +295,7 @@ export async function updatePatientInvoiceStatus(params: {
       'Failed to update patient invoice status (STEP_UPDATE_INVOICE):',
       error,
     );
-    throw new Error('STEP_UPDATE_INVOICE: ' + error.message);
+  throw new Error('STEP_UPDATE_INVOICE: ' + error.message);
   }
 
   return {
