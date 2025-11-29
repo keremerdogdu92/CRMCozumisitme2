@@ -1,8 +1,8 @@
 // src/features/patients/api/api.core.ts
 // Core patient API helpers: query keys, listing, search and shared utilities.
 
-import { supabaseClient } from '../../utils/supabaseClient';
-import type { PatientRow } from './types';
+import { supabaseClient } from '../../../utils/supabaseClient';
+import type { PatientRow } from '../types';
 
 // React Query keys
 export const PATIENTS_QUERY_KEY = ['patients'] as const;
