@@ -32,6 +32,14 @@ function formatSgkWarning(p: PatientRow): string | null {
   return 'Sisteme işlenecek';
 }
 
+function formatInvoiceWarning(p: PatientRow): string | null {
+  // Eski kayıtlarla uyum için sadece "explicit false" durumda uyarı gösteriyoruz.
+  if (p.invoice_issued === false) {
+    return 'Fatura henüz kesilmedi';
+  }
+  return null;
+}
+
 function formatPrice(amount: number | null): string {
   if (amount == null || Number.isNaN(amount)) return '-';
   try {
@@ -71,18 +79,19 @@ export function PatientsTable({
       {/* Mobile: card list (md altı) */}
       <div className="space-y-3 md:hidden">
         {patients.map((p) => {
-          const warning = formatSgkWarning(p);
+          const sgkWarning = formatSgkWarning(p);
+          const invoiceWarning = formatInvoiceWarning(p);
+          const hasAnyWarning = !!sgkWarning || !!invoiceWarning;
           const deviceLabel = getDeviceLabel(p);
           const satisfactionDisplay =
             p.satisfaction_10 != null ? `${p.satisfaction_10} / 10` : '-';
-          const invoiceIssued = !!p.invoice_issued;
 
           return (
             <div
               key={p.id}
               className={
                 'rounded-lg border px-3 py-3 shadow-sm ' +
-                (warning
+                (hasAnyWarning
                   ? 'border-amber-200 bg-amber-50/60'
                   : 'border-slate-200 bg-white')
               }
@@ -161,26 +170,16 @@ export function PatientsTable({
                   </span>
                   <span className="font-medium">{satisfactionDisplay}</span>
                 </div>
-                <div>
-                  <span className="block text-[10px] uppercase text-slate-400">
-                    Fatura
-                  </span>
-                  <span
-                    className={
-                      'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ' +
-                      (invoiceIssued
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-slate-50 text-slate-500')
-                    }
-                  >
-                    {invoiceIssued ? 'Kesildi' : 'Bekliyor'}
-                  </span>
-                </div>
               </div>
 
-              {warning && (
+              {sgkWarning && (
                 <p className="mt-2 text-[11px] font-medium text-amber-800">
-                  {warning}
+                  {sgkWarning}
+                </p>
+              )}
+              {invoiceWarning && (
+                <p className="mt-1 text-[11px] font-medium text-amber-800">
+                  {invoiceWarning}
                 </p>
               )}
             </div>
@@ -217,9 +216,6 @@ export function PatientsTable({
               <th className="px-4 py-2 text-center font-medium text-slate-600">
                 SGK
               </th>
-              <th className="px-4 py-2 text-center font-medium text-slate-600">
-                Fatura
-              </th>
               <th className="px-4 py-2 text-left font-medium text-slate-600">
                 Arşiv Kodu
               </th>
@@ -230,19 +226,19 @@ export function PatientsTable({
           </thead>
           <tbody>
             {patients.map((p) => {
-              const warning = formatSgkWarning(p);
+              const sgkWarning = formatSgkWarning(p);
+              const invoiceWarning = formatInvoiceWarning(p);
+              const hasAnyWarning = !!sgkWarning || !!invoiceWarning;
               const deviceLabel = getDeviceLabel(p);
               const satisfactionDisplay =
                 p.satisfaction_10 != null ? `${p.satisfaction_10} / 10` : '-';
-              const hasSgkWarning = !!warning;
-              const invoiceIssued = !!p.invoice_issued;
 
               return (
                 <tr
                   key={p.id}
                   className={
                     'border-t border-slate-100 ' +
-                    (hasSgkWarning ? 'bg-amber-50/40' : '')
+                    (hasAnyWarning ? 'bg-amber-50/40' : '')
                   }
                 >
                   {/* Alış / kayıt tarihi */}
@@ -280,7 +276,7 @@ export function PatientsTable({
                     {formatDate(p.last_visit_at)}
                   </td>
 
-                  {/* SGK etiketi + uyarı */}
+                  {/* SGK etiketi + uyarılar */}
                   <td className="px-4 py-2 text-center">
                     <div className="flex flex-col items-center gap-0.5">
                       <span
@@ -292,26 +288,17 @@ export function PatientsTable({
                       >
                         {p.sgk_flag ? 'Evet' : 'Hayır'}
                       </span>
-                      {warning && (
+                      {sgkWarning && (
                         <span className="text-[10px] font-medium text-amber-700">
-                          {warning}
+                          {sgkWarning}
+                        </span>
+                      )}
+                      {invoiceWarning && (
+                        <span className="text-[10px] font-medium text-amber-700">
+                          {invoiceWarning}
                         </span>
                       )}
                     </div>
-                  </td>
-
-                  {/* Fatura */}
-                  <td className="px-4 py-2 text-center">
-                    <span
-                      className={
-                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ' +
-                        (invoiceIssued
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-slate-50 text-slate-500')
-                      }
-                    >
-                      {invoiceIssued ? 'Kesildi' : 'Bekliyor'}
-                    </span>
                   </td>
 
                   {/* Arşiv Kodu */}
