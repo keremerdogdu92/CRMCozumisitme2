@@ -148,7 +148,7 @@ export function mapCsvRowToNewPatientForm(params: {
   const paymentMethodRaw = row['payment_method'];
   const paymentMethod = parsePaymentMethod(paymentMethodRaw);
 
-  const cardSaleTotal = (row['card_sale_total'] ?? '').trim();
+  const saleTotal = (row['card_sale_total'] ?? '').trim();
   const cardFeeRate = (row['card_fee_rate'] ?? '').trim();
 
   const formValues: NewPatientForm = {
@@ -160,7 +160,7 @@ export function mapCsvRowToNewPatientForm(params: {
     sgkRecordedToSystem: sgkFlag ? !!sgkRecordedParsed : false,
     // Payment info
     paymentMethod,
-    cardSaleTotal,
+    saleTotal,
     cardFeeRate,
     // Referans: CSV'den sadece isim alıyoruz, ID'yi boş bırakıyoruz
     referenceId: null,
