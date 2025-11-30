@@ -246,7 +246,7 @@ export async function createPatient(
       (row.sgk_docs_received as boolean | null | undefined) ?? null,
     sgk_processed:
       (row.sgk_processed as boolean | null | undefined) ?? null,
-    satisfaction_10 =
+    satisfaction_10:
       row.satisfaction_10 != null ? Number(row.satisfaction_10) : null,
     sgk_prescription_received:
       (row.sgk_prescription_received as boolean | null | undefined) ?? null,
@@ -359,11 +359,4 @@ export async function updatePatientInvoiceStatus(params: {
       'Failed to update patient invoice status (STEP_UPDATE_INVOICE):',
       error,
     );
-    throw new Error('STEP_UPDATE_INVOICE: ' + error.message);
-  }
-
-  return {
-    invoice_issued: !!(data as any).invoice_issued,
-    invoice_issued_at: ((data as any).invoice_issued_at as string | null) ?? null,
-  };
-}
+ 
