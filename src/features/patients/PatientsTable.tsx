@@ -62,14 +62,20 @@ function getDeviceLabel(p: PatientRow): string {
 }
 
 /**
- * Ear-side summary placeholder.
- * Şu an patient_list_with_device içinde kulak bilgisi yok, bu yüzden
- * bilinmiyor döndürüyoruz. View'e kulak bilgisi eklendiğinde burası
- * ona göre güncellenecek.
+ * Ear-side summary based on aggregated device_ear_side field.
+ * Beklenen kodlar: 'right' | 'left' | 'bilateral'
  */
-function formatEarSummary(_p: PatientRow): string {
-  // Örn: ileride "Sağ", "Sol", "Çift" gibi değerler gelebilir.
-  return '-';
+function formatEarSummary(p: PatientRow): string {
+  switch (p.device_ear_side) {
+    case 'right':
+      return 'Sağ';
+    case 'left':
+      return 'Sol';
+    case 'bilateral':
+      return 'Çift (Sağ + Sol)';
+    default:
+      return '-';
+  }
 }
 
 export function PatientsTable({
@@ -298,7 +304,7 @@ export function PatientsTable({
                     {deviceLabel}
                   </td>
 
-                  {/* Kulak özeti (placeholder) */}
+                  {/* Kulak özeti */}
                   <td className="px-4 py-2 text-slate-700">
                     {earSummary}
                   </td>
