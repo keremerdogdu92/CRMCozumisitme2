@@ -61,6 +61,17 @@ function getDeviceLabel(p: PatientRow): string {
   return '-';
 }
 
+/**
+ * Ear-side summary placeholder.
+ * Şu an patient_list_with_device içinde kulak bilgisi yok, bu yüzden
+ * bilinmiyor döndürüyoruz. View'e kulak bilgisi eklendiğinde burası
+ * ona göre güncellenecek.
+ */
+function formatEarSummary(_p: PatientRow): string {
+  // Örn: ileride "Sağ", "Sol", "Çift" gibi değerler gelebilir.
+  return '-';
+}
+
 export function PatientsTable({
   patients,
   onSelectPatient,
@@ -83,6 +94,7 @@ export function PatientsTable({
           const invoiceWarning = formatInvoiceWarning(p);
           const hasAnyWarning = !!sgkWarning || !!invoiceWarning;
           const deviceLabel = getDeviceLabel(p);
+          const earSummary = formatEarSummary(p);
           const satisfactionDisplay =
             p.satisfaction_10 != null ? `${p.satisfaction_10} / 10` : '-';
 
@@ -128,6 +140,7 @@ export function PatientsTable({
                     {p.phone && p.phone.trim().length > 0 ? p.phone : '-'}
                   </span>
                 </div>
+
                 <div>
                   <span className="block text-[10px] uppercase text-slate-400">
                     Cihaz
@@ -136,14 +149,23 @@ export function PatientsTable({
                     {deviceLabel}
                   </span>
                 </div>
+
                 <div>
                   <span className="block text-[10px] uppercase text-slate-400">
-                    Fiyat
+                    Kulak
+                  </span>
+                  <span className="font-medium">{earSummary}</span>
+                </div>
+
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Satış Fiyatı
                   </span>
                   <span className="font-semibold">
                     {formatPrice(p.device_total_price)}
                   </span>
                 </div>
+
                 <div>
                   <span className="block text-[10px] uppercase text-slate-400">
                     SGK
@@ -159,12 +181,14 @@ export function PatientsTable({
                     {p.sgk_flag ? 'Evet (SGK)' : 'Hayır'}
                   </span>
                 </div>
+
                 <div>
                   <span className="block text-[10px] uppercase text-slate-400">
                     Memnuniyet
                   </span>
                   <span className="font-medium">{satisfactionDisplay}</span>
                 </div>
+
                 <div>
                   <span className="block text-[10px] uppercase text-slate-400">
                     Fatura
@@ -213,8 +237,11 @@ export function PatientsTable({
               <th className="px-4 py-2 text-left font-medium text-slate-600">
                 Cihaz Modeli
               </th>
+              <th className="px-4 py-2 text-left font-medium text-slate-600">
+                Kulak
+              </th>
               <th className="px-4 py-2 text-right font-medium text-slate-600">
-                Fiyat
+                Satış Fiyatı
               </th>
               <th className="px-4 py-2 text-center font-medium text-slate-600">
                 Memnuniyet (1–10)
@@ -239,6 +266,7 @@ export function PatientsTable({
               const invoiceWarning = formatInvoiceWarning(p);
               const hasAnyWarning = !!sgkWarning || !!invoiceWarning;
               const deviceLabel = getDeviceLabel(p);
+              const earSummary = formatEarSummary(p);
               const satisfactionDisplay =
                 p.satisfaction_10 != null ? `${p.satisfaction_10} / 10` : '-';
 
@@ -270,7 +298,12 @@ export function PatientsTable({
                     {deviceLabel}
                   </td>
 
-                  {/* Fiyat */}
+                  {/* Kulak özeti (placeholder) */}
+                  <td className="px-4 py-2 text-slate-700">
+                    {earSummary}
+                  </td>
+
+                  {/* Satış Fiyatı */}
                   <td className="px-4 py-2 text-right text-slate-700">
                     {formatPrice(p.device_total_price)}
                   </td>
