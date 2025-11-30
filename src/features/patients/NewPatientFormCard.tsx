@@ -1,16 +1,16 @@
 // src/features/patients/NewPatientFormCard.tsx
 // Inline "Yeni Hasta" form card using InlineCreateCard and modular subsections.
 // Layout:
-//  - Row 1 (desktop): Ad Soyad, T.C. Kimlik No, Telefon
-//  - Row 2 (desktop): Yakın Telefonu, Adres, Referans
-//  - Row 3 (desktop): SGK üçlüsü + Ödeme Şekli
+// - Row 1 (desktop): Ad Soyad, T.C. Kimlik No, Telefon
+// - Row 2 (desktop): Yakın Telefonu, Adres, Referans
+// - Row 3 (desktop): SGK üçlüsü + Ödeme Şekli
 //
 // v2 kuralları:
-//  - Zorunlu alanlar: Ad Soyad, T.C. Kimlik No, Telefon, Ödeme Şekli, Toplam Satış Tutarı.
-//  - Telefon E.164 uyumlu normalize edilir:
-//      * '+' veya '00' ile başlayan yabancı numaralar desteklenir.
-//      * Diğer girişler TR olarak varsayılır ve +90 ile normalize edilir.
-//  - T.C. Kimlik No sadece rakamlardan oluşur ve 11 hanelidir.
+// - Zorunlu alanlar: Ad Soyad, T.C. Kimlik No, Telefon, Ödeme Şekli, Toplam Satış Tutarı.
+// - Telefon E.164 uyumlu normalize edilir:
+//   * '+' veya '00' ile başlayan yabancı numaralar desteklenir.
+//   * Diğer girişler TR olarak varsayılır ve +90 ile normalize edilir.
+// - T.C. Kimlik No sadece rakamlardan oluşur ve 11 hanelidir.
 
 import { useState, FormEvent } from 'react';
 import type {
@@ -51,7 +51,9 @@ function normalizePhone(input: string): string {
     const digits = v.slice(1).replace(/\D/g, '');
     const normalized = `+${digits}`;
     if (digits.length < 8 || digits.length > 15) {
-      throw new Error('Telefon numarası geçerli bir uluslararası formatta değil.');
+      throw new Error(
+        'Telefon numarası geçerli bir uluslararası formatta değil.',
+      );
     }
     return normalized;
   }
@@ -61,13 +63,16 @@ function normalizePhone(input: string): string {
     const digits = v.slice(2).replace(/\D/g, '');
     const normalized = `+${digits}`;
     if (digits.length < 8 || digits.length > 15) {
-      throw new Error('Telefon numarası geçerli bir uluslararası formatta değil.');
+      throw new Error(
+        'Telefon numarası geçerli bir uluslararası formatta değil.',
+      );
     }
     return normalized;
   }
 
   // Case 3: treat as TR number.
   const digits = v.replace(/\D/g, '');
+
   if (digits.length === 10) {
     // Example: 5XXXXXXXXX or 05XXXXXXXX
     if (digits.startsWith('0')) {
@@ -81,7 +86,9 @@ function normalizePhone(input: string): string {
     return `+90${digits.slice(1)}`;
   }
 
-  throw new Error('Telefon numarası 10–11 haneli TR veya geçerli uluslararası formatta olmalıdır.');
+  throw new Error(
+    'Telefon numarası 10–11 haneli TR veya geçerli uluslararası formatta olmalıdır.',
+  );
 }
 
 // Normalize T.C.: keep digits only and require 11 digits.
@@ -106,13 +113,11 @@ export function NewPatientFormCard({
     sgkFlag: true,
     sgkPrescriptionReceived: false,
     sgkRecordedToSystem: false,
-
     sgkProfileId: '',
     sgkExpectedReimbursement: '',
     sgkExpectedMonth: '',
-
     paymentMethod: '',
-    cardSaleTotal: '',
+    saleTotal: '',
     cardFeeRate: '',
     referenceId: null,
     referenceName: '',
@@ -130,13 +135,11 @@ export function NewPatientFormCard({
       sgkFlag: true,
       sgkPrescriptionReceived: false,
       sgkRecordedToSystem: false,
-
       sgkProfileId: '',
       sgkExpectedReimbursement: '',
       sgkExpectedMonth: '',
-
       paymentMethod: '',
-      cardSaleTotal: '',
+      saleTotal: '',
       cardFeeRate: '',
       referenceId: null,
       referenceName: '',
@@ -154,28 +157,24 @@ export function NewPatientFormCard({
     const tcRaw = formState.nationalId;
     const phoneRaw = formState.phone;
     const paymentMethod = formState.paymentMethod;
-    const saleTotalRaw = formState.cardSaleTotal.trim();
+    const saleTotalRaw = formState.saleTotal.trim();
 
     if (!fullName) {
       setLocalError('Ad Soyad alanı zorunludur.');
       return;
     }
-
     if (!tcRaw.trim()) {
       setLocalError('T.C. Kimlik No zorunludur.');
       return;
     }
-
     if (!phoneRaw.trim()) {
       setLocalError('Telefon alanı zorunludur.');
       return;
     }
-
     if (!paymentMethod) {
       setLocalError('Ödeme şeklini seçmeniz gerekiyor.');
       return;
     }
-
     if (!saleTotalRaw) {
       setLocalError('Toplam satış tutarı zorunludur.');
       return;
@@ -197,7 +196,6 @@ export function NewPatientFormCard({
         sgkRecordedToSystem: formState.sgkFlag
           ? formState.sgkRecordedToSystem
           : false,
-
         sgkProfileId: formState.sgkFlag ? formState.sgkProfileId : '',
         sgkExpectedReimbursement: formState.sgkFlag
           ? formState.sgkExpectedReimbursement
@@ -205,9 +203,8 @@ export function NewPatientFormCard({
         sgkExpectedMonth: formState.sgkFlag
           ? formState.sgkExpectedMonth
           : '',
-
         paymentMethod,
-        cardSaleTotal: saleTotalRaw,
+        saleTotal: saleTotalRaw,
         cardFeeRate: formState.cardFeeRate,
         referenceId: formState.referenceId,
         referenceName: formState.referenceName,
@@ -217,9 +214,12 @@ export function NewPatientFormCard({
       });
 
       // Başarılı kayıttan sonra üst komponent isterse resetFormState çağırabilir.
+      // resetFormState();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Form doğrulaması sırasında hata oluştu.';
+        err instanceof Error
+          ? err.message
+          : 'Form doğrulaması sırasında hata oluştu.';
       setLocalError(message);
     }
   };
@@ -263,7 +263,10 @@ export function NewPatientFormCard({
                 required
                 value={formState.fullName}
                 onChange={(e) =>
-                  setFormState((s) => ({ ...s, fullName: e.target.value }))
+                  setFormState((s) => ({
+                    ...s,
+                    fullName: e.target.value,
+                  }))
                 }
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 placeholder="Örn. Ahmet Yılmaz"
@@ -280,7 +283,10 @@ export function NewPatientFormCard({
                 required
                 value={formState.nationalId}
                 onChange={(e) =>
-                  setFormState((s) => ({ ...s, nationalId: e.target.value }))
+                  setFormState((s) => ({
+                    ...s,
+                    nationalId: e.target.value,
+                  }))
                 }
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 placeholder="11 haneli T.C. no"
@@ -297,7 +303,10 @@ export function NewPatientFormCard({
                 required
                 value={formState.phone}
                 onChange={(e) =>
-                  setFormState((s) => ({ ...s, phone: e.target.value }))
+                  setFormState((s) => ({
+                    ...s,
+                    phone: e.target.value,
+                  }))
                 }
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 placeholder="05XXXXXXXXX veya +49..."
@@ -316,7 +325,10 @@ export function NewPatientFormCard({
                 type="tel"
                 value={formState.kinPhone}
                 onChange={(e) =>
-                  setFormState((s) => ({ ...s, kinPhone: e.target.value }))
+                  setFormState((s) => ({
+                    ...s,
+                    kinPhone: e.target.value,
+                  }))
                 }
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 placeholder="Acil durumda aranacak kişi"
@@ -331,7 +343,10 @@ export function NewPatientFormCard({
               <textarea
                 value={formState.address}
                 onChange={(e) =>
-                  setFormState((s) => ({ ...s, address: e.target.value }))
+                  setFormState((s) => ({
+                    ...s,
+                    address: e.target.value,
+                  }))
                 }
                 rows={2}
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -340,7 +355,7 @@ export function NewPatientFormCard({
             </div>
 
             {/* Referans (opsiyonel) */}
-            <div className="md:col-span-4 relative">
+            <div className="relative md:col-span-4">
               <NewPatientReferenceField
                 referenceId={formState.referenceId}
                 referenceName={formState.referenceName}
@@ -384,7 +399,9 @@ export function NewPatientFormCard({
                     sgkExpectedReimbursement: value
                       ? s.sgkExpectedReimbursement ?? ''
                       : '',
-                    sgkExpectedMonth: value ? s.sgkExpectedMonth ?? '' : '',
+                    sgkExpectedMonth: value
+                      ? s.sgkExpectedMonth ?? ''
+                      : '',
                   }))
                 }
                 onChangeSgkPrescriptionReceived={(value) =>
@@ -424,14 +441,20 @@ export function NewPatientFormCard({
             <div className="md:col-span-8">
               <NewPatientPaymentSection
                 paymentMethod={formState.paymentMethod}
-                cardSaleTotal={formState.cardSaleTotal}
+                saleTotal={formState.saleTotal}
                 cardFeeRate={formState.cardFeeRate}
                 onChangePaymentMethod={handleChangePaymentMethod}
-                onChangeCardSaleTotal={(value) =>
-                  setFormState((s) => ({ ...s, cardSaleTotal: value }))
+                onChangeSaleTotal={(value) =>
+                  setFormState((s) => ({
+                    ...s,
+                    saleTotal: value,
+                  }))
                 }
                 onChangeCardFeeRate={(value) =>
-                  setFormState((s) => ({ ...s, cardFeeRate: value }))
+                  setFormState((s) => ({
+                    ...s,
+                    cardFeeRate: value,
+                  }))
                 }
               />
             </div>
