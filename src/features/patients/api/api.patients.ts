@@ -261,9 +261,11 @@ export async function createPatient(
       (data.sgk_expected_reimbursement_month as string | null | undefined) ??
       null,
 
+    // Device summary – new patient has no linked inventory devices yet.
     device_brand: null,
     device_model: null,
     device_total_price: null,
+    device_ear_side_summary: null,
 
     payment_method:
       (data.payment_method as PatientPaymentMethod | null) ?? null,
@@ -350,6 +352,6 @@ export async function updatePatientInvoiceStatus(params: {
 
   return {
     invoice_issued: !!data.invoice_issued,
-    invoice_issued_at: (data.invoice_issued_at as string | null) ?? null,
+    invoice_issued_at: (data.invoice_issued as string | null) ?? null,
   };
 }
