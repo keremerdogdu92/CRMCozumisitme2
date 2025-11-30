@@ -9,6 +9,8 @@ import type {
   PatientPaymentMethod,
 } from '../types';
 import { parseMoneyToNumber } from './api.core';
+import { savePatientSaleBreakdown } from './api.saleBreakdown';
+import { upsertPatientInstallmentPlan } from './api.payments';
 
 export type CreatePatientOptions = {
   /**
@@ -25,6 +27,15 @@ export type CreatePatientOptions = {
  * Archive code generation is intentionally not handled here; it is assumed to be
  * managed by Supabase (trigger / function) at a later stage such as sale or
  * senet completion.
+ *
+ * v2: Supports optional financial drafts from NewPatientForm:
+ * - input.saleBreakdownDraft → patient_sale_breakdown rows
+ * - input.installmentPlanDraft → patient_installment_plans row
+ *
+ * These drafts are applied after the patient is inserted. If a draft step fails,
+ * this function throws with a STEP_CHAIN_* error. In that case the patient row
+ * is already created, but breakdown / plan may be missing; the caller should
+ * surface the error message and the user can fix details from the Payments tab.
  */
 export async function createPatient(
   input: NewPatientForm,
@@ -298,6 +309,48 @@ export async function createPatient(
     invoice_issued_at:
       (row.invoice_issued_at as string | null | undefined) ?? null,
   };
+
+  // ---------------------------------------------------------------------------
+  // v2 financial chaining: sale breakdown + installment plan
+  // ---------------------------------------------------------------------------
+  const saleBreakdownDraft = input.saleBreakdownDraft ?? [];
+  const installmentPlanDraft = input.installmentPlanDraft ?? null;
+
+  if (saleBreakdownDraft.length > 0 || installmentPlanDraft) {
+    let chainedStep: 'BREAKDOWN' | 'PLAN' | 'UNKNOWN' = 'UNKNOWN';
+
+    try {
+      // 1) Ödeme dağılımı (patient_sale_breakdown)
+      if (saleBreakdownDraft.length > 0) {
+        chainedStep = 'BREAKDOWN';
+        await savePatientSaleBreakdown({
+          patientId: inserted.id,
+          items: saleBreakdownDraft,
+        });
+      }
+
+      // 2) Senet planı (patient_installment_plans)
+      if (installmentPlanDraft) {
+        chainedStep = 'PLAN';
+        await upsertPatientInstallmentPlan({
+          ...installmentPlanDraft,
+          patientId: inserted.id,
+        });
+      }
+    } catch (err) {
+      console.error(
+        'STEP_CHAIN: Failed to apply financial drafts after patient insert',
+        { step: chainedStep, error: err },
+      );
+
+      const msg =
+        err instanceof Error ? err.message : 'Bilinmeyen hata';
+
+      throw new Error(
+        `STEP_CHAIN_${chainedStep}: Hasta kaydedildi fakat finansal taslak kaydedilirken hata oluştu. Detay ekranındaki "Ödemeler" sekmesinden ödeme dağılımı ve senet planını kontrol edin. Orijinal hata: ${msg}`,
+      );
+    }
+  }
 
   return inserted;
 }
