@@ -1,5 +1,5 @@
 // src/features/patients/types.ts
-// Shared types for the Patients feature.
+// Shared TypeScript types for the Patients feature.
 
 export type PatientPaymentMethod =
   | 'Tim'
@@ -10,8 +10,6 @@ export type PatientPaymentMethod =
 
 export type PatientPaymentMethodFormValue = '' | PatientPaymentMethod;
 
-export type PatientDeviceEarSideSummary = 'right' | 'left' | 'bilateral';
-
 export type PatientRow = {
   id: string;
   full_name: string;
@@ -19,12 +17,18 @@ export type PatientRow = {
   created_at: string;
   last_visit_at: string | null;
   sgk_flag: boolean | null;
+  sgk_prescription_received: boolean | null;
+  sgk_recorded_to_system: boolean | null;
+
+  /**
+   * Extra SGK / satisfaction fields stored on patients.
+   * Marked optional to keep compatibility with older API
+   * mapping code that may not select all columns yet.
+   */
   sgk_prescription_no?: string | null;
   sgk_docs_received?: boolean | null;
   sgk_processed?: boolean | null;
   satisfaction_10?: number | null;
-  sgk_prescription_received: boolean | null;
-  sgk_recorded_to_system: boolean | null;
 
   /**
    * SGK profile-based reimbursement metadata.
@@ -64,20 +68,12 @@ export type PatientRow = {
 
   /**
    * Aggregated device info from patient_list_with_device view.
-   * For now brand/model may be null until stock module is fully wired.
+   * Brand/model/price + ear-side summary.
    */
   device_brand: string | null;
   device_model: string | null;
   device_total_price: number | null;
-
-  /**
-   * Ear summary information derived from linked inventory items.
-   * - 'bilateral' -> both ears (or a bilateral device)
-   * - 'right'     -> only right ear device(s)
-   * - 'left'      -> only left ear device(s)
-   * Optional to keep compatibility while view is being updated.
-   */
-  device_ear_side_summary?: PatientDeviceEarSideSummary | null;
+  device_ear_side_summary: string | null;
 
   // Payment metadata on the patient row (optional in v1).
   payment_method: PatientPaymentMethod | null;
@@ -106,11 +102,11 @@ export type NewPatientForm = {
 
   /**
    * SGK profile selection and expected reimbursement.
-   * Optional for now so that older flows (CSV import vb.) derlenmeye devam etsin.
+   * Optional for now so that older flows (CSV import vb.) still compile.
    */
   sgkProfileId?: string;             // e.g. 'SGK_0_4_CALISAN'
-  sgkExpectedReimbursement?: string; // TL string; parseMoneyToNumber ile parse edilecek
-  sgkExpectedMonth?: string;         // "yyyy-MM" (UI'da type="month")
+  sgkExpectedReimbursement?: string; // TL string; parsed by parseMoneyToNumber
+  sgkExpectedMonth?: string;         // "yyyy-MM" (input type="month")
 
   paymentMethod: PatientPaymentMethodFormValue;
   cardSaleTotal: string;
@@ -182,5 +178,24 @@ export type UpsertPatientInstallmentPlanInput = {
   upfrontPaid: string;
   installmentCount: string;
   firstDueDate: string; // yyyy-MM-dd
-  dayOfMonth: string; // "1"–"31"
+  dayOfMonth: string;   // "1"–"31"
+};
+
+/**
+ * Per-patient device rows resolved from inventory_items.
+ * Used in PatientDetailDevicesTab via api.devices.ts.
+ */
+export type PatientDeviceEarSide = 'right' | 'left' | 'bilateral';
+
+export type PatientDeviceRow = {
+  id: string;
+  brand: string;
+  model: string;
+  item_type: 'hearing_aid' | 'charger' | string;
+  ear_side: PatientDeviceEarSide | null;
+  purchase_price: number | null;
+  list_price: number | null;
+  barcode: string | null;
+  serial_no: string | null;
+  sold_at: string | null;
 };
