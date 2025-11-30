@@ -10,6 +10,8 @@ export type PatientPaymentMethod =
 
 export type PatientPaymentMethodFormValue = '' | PatientPaymentMethod;
 
+export type PatientDeviceEarSideSummary = 'right' | 'left' | 'bilateral';
+
 export type PatientRow = {
   id: string;
   full_name: string;
@@ -17,10 +19,10 @@ export type PatientRow = {
   created_at: string;
   last_visit_at: string | null;
   sgk_flag: boolean | null;
-  sgk_prescription_no: string | null;
-  sgk_docs_received: boolean | null;
-  sgk_processed: boolean | null;
-  satisfaction_10: number | null;
+  sgk_prescription_no?: string | null;
+  sgk_docs_received?: boolean | null;
+  sgk_processed?: boolean | null;
+  satisfaction_10?: number | null;
   sgk_prescription_received: boolean | null;
   sgk_recorded_to_system: boolean | null;
 
@@ -39,9 +41,9 @@ export type PatientRow = {
   /**
    * Extra identity / contact info.
    */
-  national_id: string | null;
-  address: string | null;
-  kin_phone: string | null;
+  national_id?: string | null;
+  address?: string | null;
+  kin_phone?: string | null;
 
   /**
    * Optional reference attached to the patient row.
@@ -58,18 +60,24 @@ export type PatientRow = {
   /**
    * Archive code for physical file / folder mapping.
    */
-  archive_code: string | null;
+  archive_code?: string | null;
 
   /**
    * Aggregated device info from patient_list_with_device view.
    * For now brand/model may be null until stock module is fully wired.
-   *
-   * device_total_price is the "first sale total" for this patient:
-   * initial devices + included accessories on the first sale.
    */
   device_brand: string | null;
   device_model: string | null;
   device_total_price: number | null;
+
+  /**
+   * Ear summary information derived from linked inventory items.
+   * - 'bilateral' -> both ears (or a bilateral device)
+   * - 'right'     -> only right ear device(s)
+   * - 'left'      -> only left ear device(s)
+   * Optional to keep compatibility while view is being updated.
+   */
+  device_ear_side_summary?: PatientDeviceEarSideSummary | null;
 
   // Payment metadata on the patient row (optional in v1).
   payment_method: PatientPaymentMethod | null;
@@ -98,11 +106,11 @@ export type NewPatientForm = {
 
   /**
    * SGK profile selection and expected reimbursement.
-   * Optional for now so that older flows (CSV import vb.) keep compiling.
+   * Optional for now so that older flows (CSV import vb.) derlenmeye devam etsin.
    */
   sgkProfileId?: string;             // e.g. 'SGK_0_4_CALISAN'
-  sgkExpectedReimbursement?: string; // TL string; parsed via parseMoneyToNumber
-  sgkExpectedMonth?: string;         // "yyyy-MM" (UI: type="month")
+  sgkExpectedReimbursement?: string; // TL string; parseMoneyToNumber ile parse edilecek
+  sgkExpectedMonth?: string;         // "yyyy-MM" (UI'da type="month")
 
   paymentMethod: PatientPaymentMethodFormValue;
   cardSaleTotal: string;
@@ -175,31 +183,4 @@ export type UpsertPatientInstallmentPlanInput = {
   installmentCount: string;
   firstDueDate: string; // yyyy-MM-dd
   dayOfMonth: string; // "1"–"31"
-};
-
-/**
- * One inventory-backed device row attached to a patient via sold_patient_id.
- * Backed by inventory_items.
- *
- * Note:
- * - ear_side is always NULL in stock; it is set to 'right' / 'left' / 'bilateral'
- *   only after the device is bound to the patient and ear is chosen.
- * - manufactured_at is not included yet; when we add the column to
- *   inventory_items we will extend this type + API mapping.
- */
-export type PatientDeviceItemType = 'hearing_aid' | 'charger';
-
-export type PatientDeviceEarSide = 'right' | 'left' | 'bilateral' | null;
-
-export type PatientDeviceRow = {
-  id: string;
-  brand: string;
-  model: string;
-  item_type: PatientDeviceItemType;
-  ear_side: PatientDeviceEarSide;
-  purchase_price: number | null;
-  list_price: number | null;
-  barcode: string | null;
-  serial_no: string | null;
-  sold_at: string | null;
 };
