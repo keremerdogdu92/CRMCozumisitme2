@@ -9,6 +9,8 @@ import {
   updatePatientSgkFields,
 } from '../features/patients/api';
 import { createPatient } from '../features/patients/api/api.patients';
+import { savePatientSaleBreakdown } from '../features/patients/api/api.saleBreakdown';
+import { upsertPatientInstallmentPlan } from '../features/patients/api/api.payments';
 import type {
   NewPatientForm,
   PatientRow,
@@ -46,7 +48,52 @@ export default function PatientsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (values: NewPatientForm) => createPatient(values),
+    // Yeni hasta oluşturma + isteğe bağlı breakdown + senet plan zinciri
+    mutationFn: async (values: NewPatientForm) => {
+      // 1) Hasta kaydı
+      const patient = await createPatient(values);
+
+      // 2) Ödeme dağılımı taslağı varsa kaydet
+      if (
+        values.saleBreakdownDraft &&
+        values.saleBreakdownDraft.length > 0
+      ) {
+        try {
+          await savePatientSaleBreakdown({
+            patientId: patient.id,
+            items: values.saleBreakdownDraft,
+          });
+        } catch (err) {
+          console.error(
+            'NewPatient: sale breakdown save error:',
+            err,
+          );
+          // Hasta zaten oluştu; yine de kullanıcıya hata göstermek için
+          // mutasyonu hatalı sayıyoruz.
+          throw err;
+        }
+      }
+
+      // 3) Senet plan taslağı varsa kaydet/güncelle
+      if (values.installmentPlanDraft) {
+        try {
+          await upsertPatientInstallmentPlan({
+            ...values.installmentPlanDraft,
+            patientId: patient.id,
+          });
+        } catch (err) {
+          console.error(
+            'NewPatient: installment plan save error:',
+            err,
+          );
+          // Yine: hasta oluşturuldu ama plan kaydı başarısız; hata
+          // kullanıcıya yansısın diye yeniden fırlatıyoruz.
+          throw err;
+        }
+      }
+
+      return patient;
+    },
     onSuccess: (createdPatient, variables) => {
       void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
       setShowCreateForm(false);
