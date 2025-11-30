@@ -101,6 +101,7 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       device_brand,
       device_model,
       device_total_price,
+      device_ear_side_summary,
       invoice_issued,
       invoice_issued_at
     `,
@@ -162,6 +163,14 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       device_model: (row.device_model as string | null | undefined) ?? null,
       device_total_price:
         (row.device_total_price as number | null | undefined) ?? null,
+
+      device_ear_side_summary:
+        (row.device_ear_side_summary as
+          | 'right'
+          | 'left'
+          | 'bilateral'
+          | null
+          | undefined) ?? null,
 
       // Invoice status
       invoice_issued:
