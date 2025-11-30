@@ -191,6 +191,37 @@ export type UpsertPatientInstallmentPlanInput = {
 };
 
 /**
+ * Per-patient payment breakdown for a sale.
+ * Backed by patient_sale_breakdown table.
+ *
+ * Each row represents one part of the sale:
+ * - method: 'Kredi_Kartı', 'Nakit', 'Tim', 'Sivantos', 'Senet'...
+ * - amount: TL amount for that method
+ * - note: optional explanation (e.g. "Firma katkısı", "Kapora" vb.)
+ */
+export type PatientSaleBreakdownRow = {
+  id: string;
+  org_id: string;
+  patient_id: string;
+  method: PatientPaymentMethod;
+  amount: number;
+  note: string | null;
+  created_at: string;
+  created_by: string | null;
+};
+
+/**
+ * Input type for editing the sale breakdown in UI.
+ * Amount is kept as string for easier binding to <input />.
+ */
+export type UpsertPatientSaleBreakdownItem = {
+  id?: string;
+  method: PatientPaymentMethod;
+  amount: string;
+  note: string;
+};
+
+/**
  * Per-patient device rows resolved from inventory_items.
  * Used in PatientDetailDevicesTab via api.devices.ts.
  */
