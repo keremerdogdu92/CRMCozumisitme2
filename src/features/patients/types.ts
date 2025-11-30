@@ -1,8 +1,5 @@
 // src/features/patients/types.ts
-// Shared types for the Patients feature,
-// aligned with patient_list_with_device view and related tables.
-
-import type { EarSide, InventoryItemType } from '../inventory/types';
+// Shared types for the Patients feature.
 
 export type PatientPaymentMethod =
   | 'Tim'
@@ -20,18 +17,12 @@ export type PatientRow = {
   created_at: string;
   last_visit_at: string | null;
   sgk_flag: boolean | null;
+  sgk_prescription_no: string | null;
+  sgk_docs_received: boolean | null;
+  sgk_processed: boolean | null;
+  satisfaction_10: number | null;
   sgk_prescription_received: boolean | null;
   sgk_recorded_to_system: boolean | null;
-
-  /**
-   * Extra SGK / satisfaction fields stored on patients.
-   * Marked optional to keep compatibility with older API
-   * mapping code that may not select all columns yet.
-   */
-  sgk_prescription_no?: string | null;
-  sgk_docs_received?: boolean | null;
-  sgk_processed?: boolean | null;
-  satisfaction_10?: number | null;
 
   /**
    * SGK profile-based reimbursement metadata.
@@ -48,16 +39,15 @@ export type PatientRow = {
   /**
    * Extra identity / contact info.
    */
-  national_id?: string | null;
-  address?: string | null;
-  kin_phone?: string | null;
+  national_id: string | null;
+  address: string | null;
+  kin_phone: string | null;
 
   /**
    * Optional reference attached to the patient row.
    * Filled when the patient is created with a reference or later updated.
    */
   reference_id: string | null;
-
   /**
    * Convenience fields coming from the joined references table.
    * UI-only; backend always stores only reference_id.
@@ -68,11 +58,14 @@ export type PatientRow = {
   /**
    * Archive code for physical file / folder mapping.
    */
-  archive_code?: string | null;
+  archive_code: string | null;
 
   /**
    * Aggregated device info from patient_list_with_device view.
    * For now brand/model may be null until stock module is fully wired.
+   *
+   * device_total_price is the "first sale total" for this patient:
+   * initial devices + included accessories on the first sale.
    */
   device_brand: string | null;
   device_model: string | null;
@@ -94,13 +87,6 @@ export type PatientRow = {
    */
   invoice_issued?: boolean | null;
   invoice_issued_at?: string | null;
-
-  /**
-   * NOTE: device_ear_side is NOT present on patient_list_with_device yet.
-   * When/if we add it on the backend, we can introduce:
-   *
-   *   device_ear_side?: EarSide | null;
-   */
 };
 
 export type NewPatientForm = {
@@ -112,11 +98,11 @@ export type NewPatientForm = {
 
   /**
    * SGK profile selection and expected reimbursement.
-   * Optional for now so that older flows (CSV import vb.) derlenmeye devam etsin.
+   * Optional for now so that older flows (CSV import vb.) keep compiling.
    */
-  sgkProfileId?: string; // e.g. 'SGK_0_4_CALISAN'
-  sgkExpectedReimbursement?: string; // TL string; parseMoneyToNumber ile parse edilecek
-  sgkExpectedMonth?: string; // "yyyy-MM" (UI'da type="month")
+  sgkProfileId?: string;             // e.g. 'SGK_0_4_CALISAN'
+  sgkExpectedReimbursement?: string; // TL string; parsed via parseMoneyToNumber
+  sgkExpectedMonth?: string;         // "yyyy-MM" (UI: type="month")
 
   paymentMethod: PatientPaymentMethodFormValue;
   cardSaleTotal: string;
@@ -192,15 +178,25 @@ export type UpsertPatientInstallmentPlanInput = {
 };
 
 /**
- * Per-patient device rows resolved from inventory_items.
- * Used by api.devices.ts (fetchPatientDevicesByPatientId).
+ * One inventory-backed device row attached to a patient via sold_patient_id.
+ * Backed by inventory_items.
+ *
+ * Note:
+ * - ear_side is always NULL in stock; it is set to 'right' / 'left' / 'bilateral'
+ *   only after the device is bound to the patient and ear is chosen.
+ * - manufactured_at is not included yet; when we add the column to
+ *   inventory_items we will extend this type + API mapping.
  */
+export type PatientDeviceItemType = 'hearing_aid' | 'charger';
+
+export type PatientDeviceEarSide = 'right' | 'left' | 'bilateral' | null;
+
 export type PatientDeviceRow = {
   id: string;
   brand: string;
   model: string;
-  item_type: InventoryItemType;
-  ear_side: EarSide | null;
+  item_type: PatientDeviceItemType;
+  ear_side: PatientDeviceEarSide;
   purchase_price: number | null;
   list_price: number | null;
   barcode: string | null;
