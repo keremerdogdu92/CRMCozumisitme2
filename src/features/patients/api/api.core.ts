@@ -66,16 +66,40 @@ export async function fetchPatients(): Promise<PatientRow[]> {
   const { data, error } = await supabaseClient
     .from('patient_list_with_device')
     .select(
-      'id, full_name, phone, created_at, last_visit_at, ' +
-        'sgk_flag, sgk_prescription_no, sgk_docs_received, sgk_processed, satisfaction_10, ' +
-        'sgk_prescription_received, sgk_recorded_to_system, ' +
-        'national_id, address, kin_phone, ' +
-        'reference_id, reference_name, reference_phone, ' +
-        'archive_code, ' +
-        'payment_method, sale_total_amount, card_fee_rate, card_fee_amount, ' +
-        'device_brand, device_model, device_total_price, device_ear_side_summary, ' +
-        'sgk_profile, sgk_expected_reimbursement, sgk_expected_reimbursement_month, ' +
-        'invoice_issued, invoice_issued_at',
+      [
+        'id',
+        'full_name',
+        'phone',
+        'created_at',
+        'last_visit_at',
+        'sgk_flag',
+        'sgk_prescription_no',
+        'sgk_docs_received',
+        'sgk_processed',
+        'satisfaction_10',
+        'sgk_prescription_received',
+        'sgk_recorded_to_system',
+        'national_id',
+        'address',
+        'kin_phone',
+        'reference_id',
+        'reference_name',
+        'reference_phone',
+        'archive_code',
+        'payment_method',
+        'sale_total_amount',
+        'card_fee_rate',
+        'card_fee_amount',
+        'device_brand',
+        'device_model',
+        'device_total_price',
+        'device_ear_side_summary',
+        'invoice_issued',
+        'invoice_issued_at',
+        'sgk_profile',
+        'sgk_expected_reimbursement',
+        'sgk_expected_reimbursement_month',
+      ].join(', '),
     )
     .order('created_at', { ascending: false });
 
@@ -107,18 +131,6 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       sgk_recorded_to_system:
         (row.sgk_recorded_to_system as boolean | null | undefined) ?? null,
 
-      // SGK profile-based reimbursement (optional)
-      sgk_profile: (row.sgk_profile as string | null | undefined) ?? null,
-      sgk_expected_reimbursement:
-        row.sgk_expected_reimbursement != null
-          ? Number(row.sgk_expected_reimbursement)
-          : null,
-      sgk_expected_reimbursement_month:
-        (row.sgk_expected_reimbursement_month as
-          | string
-          | null
-          | undefined) ?? null,
-
       // Identity / address / relative
       national_id: (row.national_id as string | null | undefined) ?? null,
       address: (row.address as string | null | undefined) ?? null,
@@ -147,18 +159,25 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       device_total_price:
         (row.device_total_price as number | null | undefined) ?? null,
       device_ear_side_summary:
-        (row.device_ear_side_summary as
-          | 'right'
-          | 'left'
-          | 'bilateral'
-          | null
-          | undefined) ?? null,
+        (row.device_ear_side_summary as string | null | undefined) ?? null,
 
       // Invoice status
       invoice_issued:
         (row.invoice_issued as boolean | null | undefined) ?? null,
       invoice_issued_at:
         (row.invoice_issued_at as string | null | undefined) ?? null,
+
+      // SGK profile-based reimbursement metadata
+      sgk_profile: (row.sgk_profile as string | null | undefined) ?? null,
+      sgk_expected_reimbursement:
+        row.sgk_expected_reimbursement != null
+          ? Number(row.sgk_expected_reimbursement)
+          : null,
+      sgk_expected_reimbursement_month:
+        (row.sgk_expected_reimbursement_month as
+          | string
+          | null
+          | undefined) ?? null,
     };
 
     return patient;
