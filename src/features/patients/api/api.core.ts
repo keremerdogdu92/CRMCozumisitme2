@@ -95,7 +95,7 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       reference_phone,
       archive_code,
       payment_method,
-      card_sale_total,
+      sale_total_amount,
       card_fee_rate,
       card_fee_amount,
       device_brand,
@@ -148,11 +148,11 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       reference_phone:
         (row.reference_phone as string | null | undefined) ?? null,
 
-      // Archive + card sale
+      // Archive + payment
       archive_code: (row.archive_code as string | null | undefined) ?? null,
       payment_method: (row.payment_method as any) ?? null,
-      card_sale_total:
-        (row.card_sale_total as number | null | undefined) ?? null,
+      sale_total_amount:
+        (row.sale_total_amount as number | null | undefined) ?? null,
       card_fee_rate:
         (row.card_fee_rate as number | null | undefined) ?? null,
       card_fee_amount:
@@ -162,10 +162,7 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       device_brand: (row.device_brand as string | null | undefined) ?? null,
       device_model: (row.device_model as string | null | undefined) ?? null,
       device_total_price:
-        row.device_total_price != null
-          ? Number(row.device_total_price)
-          : null,
-
+        (row.device_total_price as number | null | undefined) ?? null,
       device_ear_side_summary:
         (row.device_ear_side_summary as
           | 'right'
