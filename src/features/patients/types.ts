@@ -75,9 +75,13 @@ export type PatientRow = {
   device_total_price: number | null;
   device_ear_side_summary: string | null;
 
-  // Payment metadata on the patient row (optional in v1).
+  /**
+   * Payment metadata on the patient row.
+   * - sale_total_amount: toplam gerçek satış (cihaz + aksesuar, tüm ödeme türleri için ortak).
+   * - card_fee_rate / card_fee_amount: yalnızca kredi kartı ile ödenen kısım için kullanılır.
+   */
   payment_method: PatientPaymentMethod | null;
-  card_sale_total: number | null;
+  sale_total_amount: number | null;
   card_fee_rate: number | null;
   card_fee_amount: number | null;
 
@@ -108,8 +112,13 @@ export type NewPatientForm = {
   sgkExpectedReimbursement?: string; // TL string; parsed by parseMoneyToNumber
   sgkExpectedMonth?: string;         // "yyyy-MM" (input type="month")
 
+  /**
+   * Payment meta collected at creation time.
+   * saleTotal: toplam gerçek satış; tüm ödeme türleri için zorunlu.
+   * cardFeeRate: yalnızca Kredi Kartı için, taksit tablosundan gelir.
+   */
   paymentMethod: PatientPaymentMethodFormValue;
-  cardSaleTotal: string;
+  saleTotal: string;
   cardFeeRate: string;
 
   /**
