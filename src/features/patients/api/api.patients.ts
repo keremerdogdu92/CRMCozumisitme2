@@ -67,48 +67,46 @@ export async function createPatient(
   // ---------------------------------------------------------------------------
   // Payment metadata on patient row
   // ---------------------------------------------------------------------------
+  if (!input.paymentMethod) {
+    throw new Error('PAYMENT_METHOD: Ödeme şekli zorunludur.');
+  }
+
+  const saleTotalRaw = input.saleTotal?.trim() ?? '';
+  if (!saleTotalRaw) {
+    throw new Error('SALE_TOTAL_AMOUNT: Toplam satış tutarı zorunludur.');
+  }
+
   let payment_method: PatientPaymentMethod | null = null;
   let sale_total_amount: number | null = null;
   let card_fee_rate: number | null = null;
   let card_fee_amount: number | null = null;
 
   // Toplam gerçek satış, tüm ödeme türleri için zorunlu
-  if (!input.saleTotal || !input.saleTotal.trim()) {
-    throw new Error(
-      "SALE_TOTAL_AMOUNT: Toplam satış tutarı zorunludur ve 0'dan büyük olmalıdır.",
-    );
-  }
-
   sale_total_amount = parseMoneyToNumber(
-    input.saleTotal,
+    saleTotalRaw,
     'SALE_TOTAL_AMOUNT',
   );
 
-  // Ödeme şekli zorunlu
-  if (!input.paymentMethod) {
-    throw new Error(
-      'PAYMENT_METHOD: Ödeme şeklini seçmeniz gerekiyor.',
-    );
-  }
+  if (input.paymentMethod) {
+    payment_method = input.paymentMethod as PatientPaymentMethod;
 
-  payment_method = input.paymentMethod as PatientPaymentMethod;
+    if (payment_method === 'Kredi_Kartı') {
+      const feeRateRaw = input.cardFeeRate.trim().replace(',', '.');
+      const feeRateNum = Number(feeRateRaw);
 
-  if (payment_method === 'Kredi_Kartı') {
-    const feeRateRaw = input.cardFeeRate.trim().replace(',', '.');
-    const feeRateNum = Number(feeRateRaw);
+      if (!Number.isFinite(feeRateNum) || feeRateNum <= 0) {
+        throw new Error(
+          "CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0'dan büyük).",
+        );
+      }
 
-    if (!Number.isFinite(feeRateNum) || feeRateNum <= 0) {
-      throw new Error(
-        "CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0'dan büyük).",
-      );
-    }
+      card_fee_rate = Number(feeRateNum.toFixed(2));
 
-    card_fee_rate = Number(feeRateNum.toFixed(2));
-
-    if (sale_total_amount != null) {
-      card_fee_amount = Number(
-        (sale_total_amount * (feeRateNum / 100)).toFixed(2),
-      );
+      if (sale_total_amount != null) {
+        card_fee_amount = Number(
+          (sale_total_amount * (feeRateNum / 100)).toFixed(2),
+        );
+      }
     }
   }
 
@@ -368,7 +366,6 @@ export async function updatePatientInvoiceStatus(params: {
       'Failed to update patient invoice status (STEP_UPDATE_INVOICE):',
       error,
     );
- 
-
+  }
 
 ::contentReference[oaicite:0]{index=0}
