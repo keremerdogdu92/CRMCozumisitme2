@@ -124,7 +124,7 @@ export async function fetchPatients(): Promise<PatientRow[]> {
         (row.sgk_docs_received as boolean | null | undefined) ?? null,
       sgk_processed:
         (row.sgk_processed as boolean | null | undefined) ?? null,
-      satisfaction_10 =
+      satisfaction_10:
         row.satisfaction_10 != null ? Number(row.satisfaction_10) : null,
       sgk_prescription_received:
         (row.sgk_prescription_received as boolean | null | undefined) ?? null,
