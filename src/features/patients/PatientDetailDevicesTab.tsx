@@ -1,13 +1,8 @@
 // src/features/patients/PatientDetailDevicesTab.tsx
-// Device tab for patient detail drawer.
-// Shows:
-// - High-level device summary (brand + model from patient_list_with_device)
-// - Price breakdown (purchase total, list-price total, first sale total)
-// - Ear-based device list (right / left / bilateral) with barcode & serial.
-//
-// Devices are resolved from inventory_items via sold_patient_id using
-// usePatientDevices. Stocks keep ear_side = NULL; it is set only after
-// binding the device to the patient and choosing the ear.
+// Summary: Device & sale summary tab for patient detail drawer.
+// Uses aggregated fields from patient_list_with_device on the PatientRow
+// (device_brand, device_model, device_total_price, device_ear_side_summary)
+// and detailed per-device rows from inventory_items via usePatientDevices.
 
 import type { PatientRow, PatientDeviceRow } from './types';
 import { formatAmount } from './patientFormatUtils';
@@ -16,6 +11,32 @@ import { usePatientDevices } from './api/api.devices';
 type PatientDetailDevicesTabProps = {
   patient: PatientRow;
 };
+
+function formatEarSummary(
+  summary: PatientRow['device_ear_side_summary'],
+): string {
+  switch (summary) {
+    case 'right':
+      return 'Sağ';
+    case 'left':
+      return 'Sol';
+    case 'bilateral':
+      return 'Çift';
+    default:
+      return '-';
+  }
+}
+
+function formatEarSide(side: PatientDeviceRow['ear_side']): string {
+  switch (side) {
+    case 'right':
+      return 'Sağ';
+    case 'left':
+      return 'Sol';
+    default:
+      return '-';
+  }
+}
 
 function formatDate(value: string | null): string {
   if (!value) return '-';
@@ -26,75 +47,42 @@ function formatDate(value: string | null): string {
   }
 }
 
-function formatEarSide(ear: PatientDeviceRow['ear_side']): string {
-  if (ear === 'right') return 'Sağ';
-  if (ear === 'left') return 'Sol';
-  if (ear === 'bilateral') return 'Çift';
-  return 'Belirsiz';
-}
-
-function formatOptionalTotal(total: number, hasAnyDevice: boolean): string {
-  if (!hasAnyDevice || total <= 0) return '-';
-  return formatAmount(total);
-}
-
-function getPrimaryDeviceLabel(
-  patient: PatientRow,
-  devices: PatientDeviceRow[],
-): string {
-  const summaryFromPatient =
-    patient.device_brand || patient.device_model
-      ? [patient.device_brand, patient.device_model].filter(Boolean).join(' ')
-      : null;
-
-  if (summaryFromPatient) {
-    return summaryFromPatient;
-  }
-
-  if (devices.length === 0) return '-';
-
-  const first = devices[0];
-  return [first.brand, first.model].filter(Boolean).join(' ') || '-';
-}
-
 export function PatientDetailDevicesTab({
   patient,
 }: PatientDetailDevicesTabProps) {
-  const { data: devices = [], isLoading } = usePatientDevices(patient.id);
+  const hasDeviceSummary = !!patient.device_brand || !!patient.device_model;
 
-  const hasAnyDevice = devices.length > 0;
-  const deviceLabel = getPrimaryDeviceLabel(patient, devices);
+  const deviceLabel = hasDeviceSummary
+    ? [patient.device_brand, patient.device_model].filter(Boolean).join(' ')
+    : '-';
 
-  const purchaseTotal = devices.reduce(
-    (sum, d) => sum + (d.purchase_price ?? 0),
-    0,
-  );
-  const listPriceTotal = devices.reduce(
-    (sum, d) => sum + (d.list_price ?? 0),
-    0,
-  );
-
-  const purchaseTotalDisplay = formatOptionalTotal(
-    purchaseTotal,
-    hasAnyDevice,
-  );
-  const listPriceTotalDisplay = formatOptionalTotal(
-    listPriceTotal,
-    hasAnyDevice,
-  );
-  const saleTotalDisplay =
+  // Tavsiye satış toplamı: stokta bağlı cihazların liste fiyatı toplamı.
+  const recommendedTotal =
     patient.device_total_price != null
       ? formatAmount(patient.device_total_price)
       : '-';
 
-  return (
-    <section className="space-y-3">
-      <h4 className="text-xs font-semibold uppercase text-slate-500">
-        Cihaz
-      </h4>
+  // Gerçek satış toplamı (ilk satış): şimdilik kart satış toplamından okunuyor.
+  // İleride nakit/senet için ayrı alan eklersek bu hesap güncellenecek.
+  const saleTotal =
+    patient.card_sale_total != null
+      ? formatAmount(patient.card_sale_total)
+      : '-';
 
-      {/* Summary card: primary model / brand info */}
+  const earSummaryLabel = formatEarSummary(patient.device_ear_side_summary);
+
+  const { data: devices, isLoading } = usePatientDevices(patient.id);
+  const deviceRows: PatientDeviceRow[] = devices ?? [];
+
+  return (
+    <section className="space-y-4">
+      {/* Overall device summary card */}
       <div className="space-y-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
+        <h4 className="text-xs font-semibold uppercase text-slate-500">
+          Cihaz
+        </h4>
+
+        {/* Device model */}
         <div className="flex justify-between gap-2">
           <span className="text-xs text-slate-500">Cihaz Modeli</span>
           <span className="max-w-[220px] text-right text-xs font-medium text-slate-900">
@@ -102,148 +90,123 @@ export function PatientDetailDevicesTab({
           </span>
         </div>
 
-        {!hasAnyDevice && (
-          <p className="mt-1 text-[11px] text-slate-500">
-            Bu hastaya bağlı cihaz kaydı henüz görünmüyor. Stok modülünden
-            cihaz bağlandığında burada listelenecek.
-          </p>
-        )}
-      </div>
-
-      {/* Price breakdown: purchase, list, first sale total */}
-      <div className="space-y-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
+        {/* Ear summary */}
         <div className="flex justify-between gap-2">
-          <span className="text-xs text-slate-500">
-            Geliş Fiyatı Toplamı
-          </span>
+          <span className="text-xs text-slate-500">Kulak</span>
           <span className="text-xs font-medium text-slate-900">
-            {purchaseTotalDisplay}
+            {earSummaryLabel}
           </span>
         </div>
 
-        <div className="flex justify-between gap-2">
+        {/* Recommended price total */}
+        <div className="mt-1 flex justify-between gap-2 border-t border-slate-200 pt-1">
           <span className="text-xs text-slate-500">
             Tavsiye Satış Toplamı
           </span>
-          <span className="text-xs font-medium text-slate-900">
-            {listPriceTotalDisplay}
+          <span className="text-xs font-semibold text-slate-900">
+            {recommendedTotal}
           </span>
         </div>
 
-        <div className="mt-1 border-t border-slate-200 pt-1 flex justify-between gap-2">
+        {/* Actual sale price total (first sale) */}
+        <div className="flex justify-between gap-2">
           <span className="text-xs text-slate-500">
             Gerçek Satış Fiyatı (ilk satış)
           </span>
           <span className="text-xs font-semibold text-slate-900">
-            {saleTotalDisplay}
+            {saleTotal}
           </span>
         </div>
 
-        <p className="mt-1 text-[10px] text-slate-500">
-          İlk satışta alınan cihaz ve o ana kadar eklenen aksesuarların toplamı
-          hasta kaydındaki satış fiyatı alanından gelir. Geliş ve liste
-          fiyatları, stokta seçilen cihaz satırlarının toplamıdır.
+        <p className="mt-1 text-[11px] leading-snug text-slate-500">
+          Tavsiye satış toplamı, stokta bu hastaya bağlanan cihazların liste
+          fiyatlarının toplamıdır. Gerçek satış fiyatı ise hasta kaydında
+          girilen ilk satış tutarını gösterir. Sonradan eklenen aksesuar ve
+          tamirler ayrı kalemler olarak izlenecektir.
         </p>
 
-        {/* [TODO] Later: include accessory / repair events from meetings/payments
-            here and add their amounts into accessory-specific revenue stats
-            on the dashboard. */}
+        {!hasDeviceSummary && (
+          <p className="mt-1 text-[11px] text-slate-500">
+            Bu hastaya bağlı cihaz kaydı henüz görünmüyor. Stok modülü
+            üzerinden cihaz bağlandığında burada listelenecek.
+          </p>
+        )}
       </div>
 
-      {/* Ear-based device list */}
-      <div className="space-y-2 rounded-md border border-slate-100 bg-white px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-semibold text-slate-600">
-            Kulak Bazında Cihazlar
-          </span>
-          {isLoading && (
-            <span className="text-[10px] text-slate-400">
-              Yükleniyor...
-            </span>
-          )}
-        </div>
+      {/* Per-ear device breakdown */}
+      <div className="space-y-2">
+        <h4 className="text-xs font-semibold uppercase text-slate-500">
+          Kulak Bazında Cihazlar
+        </h4>
 
-        {devices.length === 0 && !isLoading && (
+        {isLoading && (
+          <p className="text-[11px] text-slate-500">Cihazlar yükleniyor…</p>
+        )}
+
+        {!isLoading && deviceRows.length === 0 && (
           <p className="text-[11px] text-slate-500">
-            Bu hastaya henüz stoktan cihaz bağlanmadı. Hasta oluştururken veya
-            düzenlerken stoktan cihaz seçtiğinizde, hangi seri/barkodun sağda
-            hangisinin solda olduğunu burada görebilirsiniz.
+            Bu hastaya bağlı stok cihazı bulunamadı. Satışı yapılan cihazları
+            stok modülünden bu hastaya bağladığınızda burada görünecek.
           </p>
         )}
 
-        {devices.length > 0 && (
-          <div className="divide-y divide-slate-100">
-            {devices.map((d) => (
-              <div key={d.id} className="py-2 first:pt-0 last:pb-0">
-                <div className="flex justify-between gap-2">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[10px] uppercase text-slate-400">
-                      Kulak
-                    </span>
-                    <span className="text-xs font-semibold text-slate-800">
-                      {formatEarSide(d.ear_side)}
-                    </span>
-                  </div>
-                  <div className="flex min-w-0 flex-col items-end gap-0.5">
-                    <span className="text-[10px] uppercase text-slate-400">
-                      Marka / Model
-                    </span>
-                    <span className="max-w-[220px] truncate text-xs font-medium text-slate-900">
-                      {[d.brand, d.model].filter(Boolean).join(' ')}
-                    </span>
-                  </div>
+        {!isLoading &&
+          deviceRows.map((d) => (
+            <div
+              key={d.id}
+              className="space-y-1 rounded-md border border-slate-100 bg-white px-3 py-2 shadow-sm"
+            >
+              {/* Ear + model header */}
+              <div className="flex justify-between gap-2">
+                <div className="flex flex-col">
+                  <span className="text-[11px] uppercase text-slate-500">
+                    Kulak
+                  </span>
+                  <span className="text-xs font-semibold text-slate-900">
+                    {formatEarSide(d.ear_side)}
+                  </span>
                 </div>
-
-                <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-700">
-                  <div>
-                    <span className="block text-[10px] uppercase text-slate-400">
-                      Barkod
-                    </span>
-                    <span className="font-medium">
-                      {d.barcode ?? '-'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] uppercase text-slate-400">
-                      Seri No
-                    </span>
-                    <span className="font-medium">
-                      {d.serial_no ?? '-'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] uppercase text-slate-400">
-                      Geliş Fiyatı
-                    </span>
-                    <span className="font-medium">
-                      {d.purchase_price != null
-                        ? formatAmount(d.purchase_price)
-                        : '-'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] uppercase text-slate-400">
-                      Tavsiye Satış
-                    </span>
-                    <span className="font-medium">
-                      {d.list_price != null
-                        ? formatAmount(d.list_price)
-                        : '-'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] uppercase text-slate-400">
-                      Satış Tarihi
-                    </span>
-                    <span className="font-medium">
-                      {formatDate(d.sold_at)}
-                    </span>
-                  </div>
+                <div className="flex flex-col text-right">
+                  <span className="text-[11px] uppercase text-slate-500">
+                    Marka / Model
+                  </span>
+                  <span className="text-xs font-medium text-slate-900">
+                    {[d.brand, d.model].filter(Boolean).join(' ')}
+                  </span>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+
+              {/* Barcode / Serial */}
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                <div className="flex flex-col">
+                  <span className="text-[11px] uppercase text-slate-500">
+                    Barkod
+                  </span>
+                  <span className="text-[11px] text-slate-900">
+                    {d.barcode || '-'}
+                  </span>
+                </div>
+                <div className="flex flex-col text-right">
+                  <span className="text-[11px] uppercase text-slate-500">
+                    Seri No
+                  </span>
+                  <span className="text-[11px] text-slate-900">
+                    {d.serial_no || '-'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Sale date only – no per-ear prices */}
+              <div className="mt-1 flex justify-between gap-2">
+                <span className="text-[11px] uppercase text-slate-500">
+                  Satış Tarihi
+                </span>
+                <span className="text-[11px] text-slate-900">
+                  {formatDate(d.sold_at)}
+                </span>
+              </div>
+            </div>
+          ))}
       </div>
     </section>
   );
