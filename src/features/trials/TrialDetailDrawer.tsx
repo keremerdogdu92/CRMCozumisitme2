@@ -211,4 +211,191 @@ export function TrialDetailDrawer({
         )}
 
         {activeTab === 'devices' && (
-          <section className="space-y-2
+          <section className="space-y-2">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase">
+              Deneme Cihazları
+            </h4>
+
+            {isDevicesLoading && (
+              <p className="text-xs text-slate-500">Cihazlar yükleniyor...</p>
+            )}
+
+            {isDevicesError && (
+              <p className="text-xs text-red-600">
+                Cihazlar alınırken bir hata oluştu. Lütfen tekrar deneyin.
+              </p>
+            )}
+
+            {!isDevicesLoading &&
+              !isDevicesError &&
+              typedDevices.length === 0 && (
+                <p className="text-xs text-slate-500">
+                  Bu deneme için kayıtlı cihaz satırı bulunmuyor.
+                </p>
+              )}
+
+            {!isDevicesLoading &&
+              !isDevicesError &&
+              typedDevices.length > 0 && (
+                <div className="space-y-2">
+                  <table className="min-w-full border border-slate-200 text-[11px]">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                          #
+                        </th>
+                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                          Marka
+                        </th>
+                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                          Model
+                        </th>
+                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                          Kulak
+                        </th>
+                        <th className="border-b border-slate-200 px-2 py-1 text-right font-medium text-slate-600">
+                          Teklif (Satır)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {typedDevices.map((d, index) => (
+                        <tr key={d.id}>
+                          <td className="border-b border-slate-100 px-2 py-1">
+                            {index + 1}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1">
+                            {d.brand ?? '-'}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1">
+                            {d.model ?? '-'}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1">
+                            {d.side ?? '-'}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1 text-right">
+                            {formatPrice(d.quote_price)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {/* Toplam teklif satırı bilinçli olarak kaldırıldı; hasta genelde
+                      bu satırlardan yalnızca birini seçeceği için kafa karışıklığı
+                      yaratmaması adına gösterilmiyor. */}
+                </div>
+              )}
+          </section>
+        )}
+
+        {activeTab === 'meetings' && (
+          <section className="space-y-2">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase">
+              Görüşmeler
+            </h4>
+
+            {isMeetingsLoading && (
+              <p className="text-xs text-slate-500">
+                Görüşmeler yükleniyor...
+              </p>
+            )}
+
+            {isMeetingsError && (
+              <p className="text-xs text-red-600">
+                Görüşmeler alınırken bir hata oluştu:{' '}
+                {(meetingsError as Error)?.message ?? 'Bilinmeyen hata'}
+              </p>
+            )}
+
+            {!isMeetingsLoading &&
+              !isMeetingsError &&
+              typedMeetings.length === 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-500">
+                    Bu deneme hastası için kayıtlı görüşme bulunmuyor.
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Yeni görüşme eklemek için üst menüden{' '}
+                    <span className="font-semibold">Görüşmeler</span> ekranına
+                    gidip, görüşme tipi olarak{' '}
+                    <span className="font-semibold">Deneme hastası</span>{' '}
+                    seçerek ilgili kişiyi seçebilirsiniz.
+                  </p>
+                </div>
+              )}
+
+            {!isMeetingsLoading &&
+              !isMeetingsError &&
+              typedMeetings.length > 0 && (
+                <div className="space-y-2">
+                  <table className="min-w-full border border-slate-200 text-[11px]">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="px-2 py-1 text-left font-medium">
+                          Tarih
+                        </th>
+                        <th className="px-2 py-1 text-left font-medium">
+                          Başlık
+                        </th>
+                        <th className="px-2 py-1 text-left font-medium">
+                          Sonraki Tarih
+                        </th>
+                        <th className="px-2 py-1 text-left font-medium">
+                          Memnuniyet
+                        </th>
+                        <th className="px-2 py-1 text-left font-medium">
+                          Not
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {typedMeetings.map((m) => (
+                        <tr
+                          key={m.id}
+                          className="border-t border-slate-100 align-top"
+                        >
+                          <td className="px-2 py-1 text-slate-800">
+                            {formatDate(m.at)}
+                          </td>
+                          <td className="px-2 py-1 text-slate-800">
+                            {m.subject ?? '-'}
+                          </td>
+                          <td className="px-2 py-1 text-slate-800">
+                            {formatDate(m.next_at)}
+                          </td>
+                          <td className="px-2 py-1 text-slate-800">
+                            {m.satisfaction_10 ?? '-'}
+                          </td>
+                          <td className="px-2 py-1 text-slate-600">
+                            {m.note ? m.note.slice(0, 160) : '-'}
+                            {m.note && m.note.length > 160 ? '…' : ''}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-[11px] text-slate-400">
+                    Yeni görüşme eklemek için{' '}
+                    <span className="font-semibold">Görüşmeler</span> ana
+                    ekranını kullanın. Bu sekme sadece ilgili deneme
+                    görüşmelerini görüntüler.
+                  </p>
+                </div>
+              )}
+          </section>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      title="Deneme Detayı"
+      subtitle="Kişi bilgileri, deneme cihazları ve görüşme süreci"
+    >
+      {content}
+    </SideDrawer>
+  );
+}
