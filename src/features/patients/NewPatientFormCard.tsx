@@ -12,16 +12,20 @@
 //   * Diğer girişler TR olarak varsayılır ve +90 ile normalize edilir.
 // - T.C. Kimlik No sadece rakamlardan oluşur ve 11 hanelidir.
 
-import { useState, FormEvent } from 'react';
+import { useState, useMemo, FormEvent } from 'react';
 import type {
   NewPatientForm,
   PatientPaymentMethodFormValue,
+  UpsertPatientSaleBreakdownItem,
+  UpsertPatientInstallmentPlanInput,
 } from './types';
 import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
 import { NewPatientReferenceField } from './NewPatientReferenceField';
 import { NewPatientSgkSection } from './NewPatientSgkSection';
 import { NewPatientPaymentSection } from './NewPatientPaymentSection';
 import { FormSection } from '../../components/layout/FormSection';
+import { PatientSaleBreakdownCard } from './PatientSaleBreakdownCard';
+import { PatientSenetPlanFormCard } from './PatientSenetPlanFormCard';
 
 type NewPatientFormCardProps = {
   open: boolean;
@@ -49,25 +53,23 @@ function normalizePhone(input: string): string {
   // Case 1: starts with '+'
   if (v.startsWith('+')) {
     const digits = v.slice(1).replace(/\D/g, '');
-    const normalized = `+${digits}`;
     if (digits.length < 8 || digits.length > 15) {
       throw new Error(
         'Telefon numarası geçerli bir uluslararası formatta değil.',
       );
     }
-    return normalized;
+    return `+${digits}`;
   }
 
   // Case 2: starts with '00' -> convert to '+'
   if (v.startsWith('00')) {
     const digits = v.slice(2).replace(/\D/g, '');
-    const normalized = `+${digits}`;
     if (digits.length < 8 || digits.length > 15) {
       throw new Error(
         'Telefon numarası geçerli bir uluslararası formatta değil.',
       );
     }
-    return normalized;
+    return `+${digits}`;
   }
 
   // Case 3: treat as TR number.
@@ -124,9 +126,34 @@ export function NewPatientFormCard({
     nationalId: '',
     kinPhone: '',
     address: '',
+    // Financial draft fields are optional; initialize as empty.
+    saleBreakdownDraft: [],
+    installmentPlanDraft: null,
   });
 
   const [localError, setLocalError] = useState<string | null>(null);
+
+  // Draft: breakdown lines for this new patient.
+  const [breakdownItems, setBreakdownItems] =
+    useState<UpsertPatientSaleBreakdownItem[]>([]);
+
+  // Draft: senet plan fields for this new patient.
+  const [senetUpfrontPaid, setSenetUpfrontPaid] = useState<string>('');
+  const [senetInstallmentCount, setSenetInstallmentCount] =
+    useState<string>('');
+  const [senetFirstDueDate, setSenetFirstDueDate] = useState<string>('');
+  const [senetDayOfMonth, setSenetDayOfMonth] = useState<string>('');
+
+  const breakdownTotal = useMemo(() => {
+    return breakdownItems.reduce((sum, item) => {
+      const raw = (item.amount ?? '').trim();
+      if (!raw) return sum;
+      const normalized = raw.replace(/\./g, '').replace(',', '.');
+      const num = Number(normalized);
+      if (!Number.isFinite(num) || num <= 0) return sum;
+      return sum + num;
+    }, 0);
+  }, [breakdownItems]);
 
   const resetFormState = () => {
     setFormState({
@@ -146,7 +173,14 @@ export function NewPatientFormCard({
       nationalId: '',
       kinPhone: '',
       address: '',
+      saleBreakdownDraft: [],
+      installmentPlanDraft: null,
     });
+    setBreakdownItems([]);
+    setSenetUpfrontPaid('');
+    setSenetInstallmentCount('');
+    setSenetFirstDueDate('');
+    setSenetDayOfMonth('');
     setLocalError(null);
   };
 
@@ -186,6 +220,24 @@ export function NewPatientFormCard({
 
       setLocalError(null);
 
+      // Senet plan taslağı: yalnızca temel alanlar doluysa oluştur.
+      const hasInstallmentDraft =
+        senetInstallmentCount.trim() !== '' &&
+        senetFirstDueDate.trim() !== '' &&
+        senetDayOfMonth.trim() !== '';
+
+      const installmentPlanDraft: UpsertPatientInstallmentPlanInput | null =
+        hasInstallmentDraft
+          ? {
+              patientId: '', // createPatient sonrası zincirde doldurulacak.
+              saleTotal: saleTotalRaw,
+              upfrontPaid: senetUpfrontPaid.trim(),
+              installmentCount: senetInstallmentCount.trim(),
+              firstDueDate: senetFirstDueDate.trim(),
+              dayOfMonth: senetDayOfMonth.trim(),
+            }
+          : null;
+
       onSubmit({
         fullName,
         phone: normalizedPhone,
@@ -211,6 +263,11 @@ export function NewPatientFormCard({
         nationalId: normalizedNationalId,
         kinPhone: formState.kinPhone.trim(),
         address: formState.address.trim(),
+        // Financial drafts: createPatient doğrudan kullanmaz; create sonrası
+        // savePatientSaleBreakdown + upsertPatientInstallmentPlan zincirinde
+        // kullanılmak üzere üst levele taşınıyor.
+        saleBreakdownDraft: breakdownItems,
+        installmentPlanDraft,
       });
 
       // Başarılı kayıttan sonra üst komponent isterse resetFormState çağırabilir.
@@ -458,6 +515,83 @@ export function NewPatientFormCard({
                 }
               />
             </div>
+          </div>
+
+          {/* Gelişmiş ödeme taslakları: breakdown + senet planı */}
+          <div className="mt-3 space-y-3">
+            <p className="text-[11px] text-slate-600">
+              Aşağıdaki alanlar bu yeni hasta için ödeme dağılımı ve senet
+              planı taslağını tutar. Hasta kaydından sonra bu bilgiler
+              detay ekranındaki Ödemeler sekmesinde de düzenlenebilir.
+            </p>
+
+            <PatientSaleBreakdownCard
+              items={breakdownItems}
+              onAddRow={() =>
+                setBreakdownItems((rows) => [
+                  ...rows,
+                  {
+                    id: undefined,
+                    method: 'Kredi_Kartı',
+                    amount: '',
+                    note: '',
+                  },
+                ])
+              }
+              onChangeRow={(index, patch) =>
+                setBreakdownItems((rows) =>
+                  rows.map((row, i) =>
+                    i === index ? { ...row, ...patch } : row,
+                  ),
+                )
+              }
+              onRemoveRow={(index) =>
+                setBreakdownItems((rows) =>
+                  rows.filter((_, i) => i !== index),
+                )
+              }
+              onSave={() => {
+                // New patient flow: gerçek kayıt, createPatient sonrası
+                // savePatientSaleBreakdown ile yapılacak.
+                // Bu handler, taslağın zaten form state'inde tutulduğu
+                // için ekstra işlem yapmıyor.
+                return;
+              }}
+              totalAmount={breakdownTotal}
+              isLoading={false}
+              isSaving={false}
+              errorMessage={null}
+            />
+
+            <PatientSenetPlanFormCard
+              plan={null}
+              saleTotal={formState.saleTotal}
+              upfrontPaid={senetUpfrontPaid}
+              installmentCount={senetInstallmentCount}
+              firstDueDate={senetFirstDueDate}
+              dayOfMonth={senetDayOfMonth}
+              setSaleTotal={(v) =>
+                setFormState((s) => ({
+                  ...s,
+                  saleTotal: v,
+                }))
+              }
+              setUpfrontPaid={setSenetUpfrontPaid}
+              setInstallmentCount={setSenetInstallmentCount}
+              setFirstDueDate={setSenetFirstDueDate}
+              setDayOfMonth={setSenetDayOfMonth}
+              isPlanSaveError={false}
+              planSaveError={null}
+              isPlanError={false}
+              planError={null}
+              isPlanSaving={false}
+              patientId=""
+              upsertPlan={async (_input: UpsertPatientInstallmentPlanInput) => {
+                // New patient flow: gerçek upsert, createPatient sonrası
+                // upsertPatientInstallmentPlan ile yapılacak.
+                return;
+              }}
+            />
           </div>
         </FormSection>
 
