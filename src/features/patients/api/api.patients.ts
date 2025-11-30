@@ -65,34 +65,38 @@ export async function createPatient(
   // ---------------------------------------------------------------------------
   // Payment metadata on patient row
   // ---------------------------------------------------------------------------
-  if (!input.paymentMethod) {
-    throw new Error('PAYMENT_METHOD: Ödeme şeklini seçmeniz gerekiyor.');
-  }
-
-  const payment_method = input.paymentMethod as PatientPaymentMethod;
-
-  // Toplam gerçek satış tutarı (cihaz + aksesuar, tüm ödeme türleri için).
-  const card_sale_total = parseMoneyToNumber(
-    input.cardSaleTotal || '',
-    'SALE_TOTAL',
-  );
-
+  let payment_method: PatientPaymentMethod | null = null;
+  let sale_total_amount: number | null = null;
   let card_fee_rate: number | null = null;
   let card_fee_amount: number | null = null;
 
-  if (payment_method === 'Kredi_Kartı') {
-    const feeRateRaw = input.cardFeeRate.trim().replace(',', '.');
-    const feeRateNum = Number(feeRateRaw);
-    if (!Number.isFinite(feeRateNum) || feeRateNum <= 0) {
-      throw new Error(
-        "CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0'dan büyük).",
-      );
-    }
-
-    card_fee_rate = Number(feeRateNum.toFixed(2));
-    card_fee_amount = Number(
-      (card_sale_total * (feeRateNum / 100)).toFixed(2),
+  // Toplam gerçek satış, tüm ödeme türleri için zorunlu
+  if (input.saleTotal) {
+    sale_total_amount = parseMoneyToNumber(
+      input.saleTotal,
+      'SALE_TOTAL_AMOUNT',
     );
+  }
+
+  if (input.paymentMethod) {
+    payment_method = input.paymentMethod as PatientPaymentMethod;
+
+    if (payment_method === 'Kredi_Kartı') {
+      const feeRateRaw = input.cardFeeRate.trim().replace(',', '.');
+      const feeRateNum = Number(feeRateRaw);
+      if (!Number.isFinite(feeRateNum) || feeRateNum <= 0) {
+        throw new Error(
+          "CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0'dan büyük).",
+        );
+      }
+
+      card_fee_rate = Number(feeRateNum.toFixed(2));
+      if (sale_total_amount != null) {
+        card_fee_amount = Number(
+          (sale_total_amount * (feeRateNum / 100)).toFixed(2),
+        );
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -159,7 +163,7 @@ export async function createPatient(
         : false,
       reference_id: input.referenceId,
       payment_method,
-      card_sale_total,
+      sale_total_amount,
       card_fee_rate,
       card_fee_amount,
       // Extended fields: initial values from the new patient form.
@@ -202,7 +206,7 @@ export async function createPatient(
       reference_id,
       archive_code,
       payment_method,
-      card_sale_total,
+      sale_total_amount,
       card_fee_rate,
       card_fee_amount,
       sgk_profile,
@@ -269,8 +273,8 @@ export async function createPatient(
 
     payment_method:
       (data.payment_method as PatientPaymentMethod | null) ?? null,
-    card_sale_total:
-      (data.card_sale_total as number | null | undefined) ?? null,
+    sale_total_amount:
+      (data.sale_total_amount as number | null | undefined) ?? null,
     card_fee_rate:
       (data.card_fee_rate as number | null | undefined) ?? null,
     card_fee_amount:
@@ -352,6 +356,6 @@ export async function updatePatientInvoiceStatus(params: {
 
   return {
     invoice_issued: !!data.invoice_issued,
-    invoice_issued_at: (data.invoice_issued as string | null) ?? null,
+    invoice_issued_at: (data.invoice_issued_at as string | null) ?? null,
   };
 }
