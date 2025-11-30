@@ -1,8 +1,6 @@
 // src/features/patients/types.ts
 // Shared types for the Patients feature.
 
-import type { InventoryItemRow } from '../inventory/types';
-
 export type PatientPaymentMethod =
   | 'Tim'
   | 'Sivantos'
@@ -75,6 +73,14 @@ export type PatientRow = {
   device_brand: string | null;
   device_model: string | null;
   device_total_price: number | null;
+
+  /**
+   * Aggregated ear-side summary for the device(s).
+   * Expected codes follow inventory_items.ear_side:
+   * - 'right' | 'left' | 'bilateral'
+   * View tarafında farklı kod kullanıyorsan, mapping'i api.core.ts içinde uyarlayabilirsin.
+   */
+  device_ear_side: 'right' | 'left' | 'bilateral' | null;
 
   // Payment metadata on the patient row (optional in v1).
   payment_method: PatientPaymentMethod | null;
@@ -181,21 +187,3 @@ export type UpsertPatientInstallmentPlanInput = {
   firstDueDate: string; // yyyy-MM-dd
   dayOfMonth: string; // "1"–"31"
 };
-
-/**
- * One device row for patient detail view.
- * Backed by public.inventory_items and filtered by sold_patient_id.
- */
-export type PatientDeviceRow = Pick<
-  InventoryItemRow,
-  | 'id'
-  | 'brand'
-  | 'model'
-  | 'item_type'
-  | 'ear_side'
-  | 'purchase_price'
-  | 'list_price'
-  | 'barcode'
-  | 'serial_no'
-  | 'sold_at'
->;
