@@ -20,11 +20,12 @@ export type CreatePatientOptions = {
 
 /**
  * Create a new patient row with org_id taken from the current profile.
- * Returns the inserted PatientRow so that callers can immediately open the detail drawer.
+ * Returns the inserted PatientRow so that callers can immediately open
+ * the detail drawer.
  *
- * Archive code generation is intentionally not handled here; it is assumed to be
- * managed by Supabase (trigger / function) at a later stage such as sale or
- * senet completion.
+ * Archive code generation is intentionally not handled here; it is assumed
+ * to be managed by Supabase (trigger / function) at a later stage such as
+ * sale or senet completion.
  */
 export async function createPatient(
   input: NewPatientForm,
@@ -32,10 +33,12 @@ export async function createPatient(
 ): Promise<PatientRow> {
   const { data: userData, error: userError } =
     await supabaseClient.auth.getUser();
+
   if (userError) {
     console.error('Failed to get current user (STEP_USER):', userError);
     throw new Error('STEP_USER: ' + userError.message);
   }
+
   const user = userData.user;
   if (!user) {
     throw new Error('STEP_USER: User not authenticated');
@@ -84,6 +87,7 @@ export async function createPatient(
     if (payment_method === 'Kredi_Kartı') {
       const feeRateRaw = input.cardFeeRate.trim().replace(',', '.');
       const feeRateNum = Number(feeRateRaw);
+
       if (!Number.isFinite(feeRateNum) || feeRateNum <= 0) {
         throw new Error(
           "CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0'dan büyük).",
@@ -91,6 +95,7 @@ export async function createPatient(
       }
 
       card_fee_rate = Number(feeRateNum.toFixed(2));
+
       if (sale_total_amount != null) {
         card_fee_amount = Number(
           (sale_total_amount * (feeRateNum / 100)).toFixed(2),
@@ -145,8 +150,7 @@ export async function createPatient(
   }
 
   // Decide initial invoice state.
-  const shouldMarkInvoiceIssued =
-    options?.setInvoiceIssuedTrue === true;
+  const shouldMarkInvoiceIssued = options?.setInvoiceIssuedTrue === true;
 
   const { data, error: insertError } = await supabaseClient
     .from('patients')
@@ -166,6 +170,7 @@ export async function createPatient(
       sale_total_amount,
       card_fee_rate,
       card_fee_amount,
+
       // Extended fields: initial values from the new patient form.
       sgk_prescription_no: null,
       sgk_docs_received: null,
@@ -174,47 +179,30 @@ export async function createPatient(
       national_id: input.nationalId.trim() || null,
       address: input.address.trim() || null,
       kin_phone: input.kinPhone.trim() || null,
+
       // SGK profile-based reimbursement metadata.
       sgk_profile,
       sgk_expected_reimbursement,
       sgk_expected_reimbursement_month,
+
       // Invoice metadata.
       invoice_issued: shouldMarkInvoiceIssued,
       invoice_issued_at: shouldMarkInvoiceIssued
         ? new Date().toISOString()
         : null,
+
       // archive_code is intentionally omitted here; Supabase is expected
       // to assign it when sale / senet is finalized.
     })
     .select(
-      `
-      id,
-      full_name,
-      phone,
-      created_at,
-      last_visit_at,
-      sgk_flag,
-      sgk_prescription_no,
-      sgk_docs_received,
-      sgk_processed,
-      satisfaction_10,
-      sgk_prescription_received,
-      sgk_recorded_to_system,
-      national_id,
-      address,
-      kin_phone,
-      reference_id,
-      archive_code,
-      payment_method,
-      sale_total_amount,
-      card_fee_rate,
-      card_fee_amount,
-      sgk_profile,
-      sgk_expected_reimbursement,
-      sgk_expected_reimbursement_month,
-      invoice_issued,
-      invoice_issued_at
-    `,
+      'id, full_name, phone, created_at, last_visit_at, ' +
+        'sgk_flag, sgk_prescription_no, sgk_docs_received, sgk_processed, satisfaction_10, ' +
+        'sgk_prescription_received, sgk_recorded_to_system, ' +
+        'national_id, address, kin_phone, ' +
+        'reference_id, archive_code, ' +
+        'payment_method, sale_total_amount, card_fee_rate, card_fee_amount, ' +
+        'sgk_profile, sgk_expected_reimbursement, sgk_expected_reimbursement_month, ' +
+        'invoice_issued, invoice_issued_at',
     )
     .single();
 
@@ -237,7 +225,7 @@ export async function createPatient(
       (data.sgk_docs_received as boolean | null | undefined) ?? null,
     sgk_processed:
       (data.sgk_processed as boolean | null | undefined) ?? null,
-    satisfaction_10:
+    satisfaction_10 =
       data.satisfaction_10 != null ? Number(data.satisfaction_10) : null,
     sgk_prescription_received:
       (data.sgk_prescription_received as boolean | null | undefined) ?? null,
@@ -255,15 +243,16 @@ export async function createPatient(
     archive_code: (data.archive_code as string | null | undefined) ?? null,
 
     // SGK profile-based reimbursement metadata
-    sgk_profile:
-      (data.sgk_profile as string | null | undefined) ?? null,
+    sgk_profile: (data.sgk_profile as string | null | undefined) ?? null,
     sgk_expected_reimbursement:
       data.sgk_expected_reimbursement != null
         ? Number(data.sgk_expected_reimbursement)
         : null,
     sgk_expected_reimbursement_month:
-      (data.sgk_expected_reimbursement_month as string | null | undefined) ??
-      null,
+      (data.sgk_expected_reimbursement_month as
+        | string
+        | null
+        | undefined) ?? null,
 
     // Device summary – new patient has no linked inventory devices yet.
     device_brand: null,
@@ -331,9 +320,11 @@ export async function updatePatientSgkFields(
 export async function updatePatientInvoiceStatus(params: {
   id: string;
   invoiceIssued: boolean;
-}): Promise<{ invoice_issued: boolean; invoice_issued_at: string | null }> {
+}): Promise<{
+  invoice_issued: boolean;
+  invoice_issued_at: string | null;
+}> {
   const { id, invoiceIssued } = params;
-
   const nextIssuedAt = invoiceIssued ? new Date().toISOString() : null;
 
   const { data, error } = await supabaseClient
