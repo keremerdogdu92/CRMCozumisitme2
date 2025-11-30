@@ -34,6 +34,9 @@ export function PatientDetailPaymentsTab({
   patientId,
   open,
 }: PatientDetailPaymentsTabProps) {
+  // Edit mode: view-only vs editable
+  const [isEditMode, setIsEditMode] = useState(false);
+
   // Payment history
   const {
     data: payments = [],
@@ -48,6 +51,7 @@ export function PatientDetailPaymentsTab({
     isLoading: isPlanLoading,
     isError: isPlanError,
     error: planError,
+    refetch: refetchPlan,
   } = usePatientInstallmentPlan(open ? patientId : null);
 
   const {
@@ -231,19 +235,100 @@ export function PatientDetailPaymentsTab({
     return sum + num;
   }, 0);
 
+  // Cancel edits: reload latest plan + breakdown from backend and exit edit mode
+  const handleCancelEdit = async () => {
+    setIsEditMode(false);
+
+    // Refresh plan from backend and sync into form state
+    try {
+      const result = await refetchPlan();
+      const freshPlan = result.data as PatientInstallmentPlanRow | null | undefined;
+      if (!freshPlan) {
+        setSaleTotal('');
+        setUpfrontPaid('');
+        setInstallmentCount('');
+        setFirstDueDate('');
+        setDayOfMonth('');
+      } else {
+        setSaleTotal(freshPlan.sale_total.toString());
+        setUpfrontPaid(freshPlan.upfront_paid.toString());
+        setInstallmentCount(freshPlan.installment_count.toString());
+        setFirstDueDate(freshPlan.first_due_date.substring(0, 10));
+        setDayOfMonth(freshPlan.day_of_month.toString());
+      }
+    } catch {
+      // Sessizce geç; mevcut local state kalsın
+    }
+
+    // Refresh breakdown from backend
+    if (!patientId) return;
+    setIsBreakdownLoading(true);
+    try {
+      const rows = await fetchPatientSaleBreakdown(patientId);
+      setBreakdownItems(
+        rows.map((r) => ({
+          id: r.id,
+          method: r.method,
+          amount: r.amount.toString(),
+          note: r.note ?? '',
+        })),
+      );
+      setBreakdownError(null);
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Ödeme dağılımı tekrar yüklenirken hata oluştu.';
+      setBreakdownError(msg);
+    } finally {
+      setIsBreakdownLoading(false);
+    }
+  };
+
   return (
     <section className="space-y-3">
-      <h4 className="text-xs font-semibold uppercase text-slate-500">
-        Ödemeler (Senet)
-      </h4>
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-xs font-semibold uppercase text-slate-500">
+          Ödemeler (Senet)
+        </h4>
+        <div className="flex items-center gap-2">
+          {!isEditMode && (
+            <button
+              type="button"
+              onClick={() => setIsEditMode(true)}
+              className="inline-flex items-center rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Düzenle
+            </button>
+          )}
+          {isEditMode && (
+            <>
+              <span className="hidden text-[11px] text-slate-500 sm:inline">
+                Düzenleme modunda. Değişiklikleri aşağıdaki kartlardan kaydedebilirsiniz.
+              </span>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="inline-flex items-center rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+              >
+                İptal
+              </button>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Sale breakdown card */}
       <PatientSaleBreakdownCard
         items={breakdownItems}
-        onAddRow={handleAddBreakdownRow}
-        onChangeRow={handleChangeBreakdownRow}
-        onRemoveRow={handleRemoveBreakdownRow}
-        onSave={handleSaveBreakdown}
+        onAddRow={isEditMode ? handleAddBreakdownRow : () => {}}
+        onChangeRow={
+          isEditMode ? handleChangeBreakdownRow : () => {}
+        }
+        onRemoveRow={
+          isEditMode ? handleRemoveBreakdownRow : () => {}
+        }
+        onSave={isEditMode ? handleSaveBreakdown : async () => {}}
         totalAmount={breakdownTotal}
         isLoading={isBreakdownLoading}
         isSaving={isBreakdownSaving}
@@ -258,18 +343,32 @@ export function PatientDetailPaymentsTab({
         installmentCount={installmentCount}
         firstDueDate={firstDueDate}
         dayOfMonth={dayOfMonth}
-        setSaleTotal={setSaleTotal}
-        setUpfrontPaid={setUpfrontPaid}
-        setInstallmentCount={setInstallmentCount}
-        setFirstDueDate={setFirstDueDate}
-        setDayOfMonth={setDayOfMonth}
+        setSaleTotal={
+          isEditMode ? setSaleTotal : (_v: string) => {}
+        }
+        setUpfrontPaid={
+          isEditMode ? setUpfrontPaid : (_v: string) => {}
+        }
+        setInstallmentCount={
+          isEditMode ? setInstallmentCount : (_v: string) => {}
+        }
+        setFirstDueDate={
+          isEditMode ? setFirstDueDate : (_v: string) => {}
+        }
+        setDayOfMonth={
+          isEditMode ? setDayOfMonth : (_v: string) => {}
+        }
         isPlanSaveError={isPlanSaveError}
         planSaveError={planSaveError}
         isPlanError={isPlanError}
         planError={planError}
         isPlanSaving={isPlanSaving}
         patientId={patientId}
-        upsertPlan={upsertPlan}
+        upsertPlan={
+          isEditMode
+            ? upsertPlan
+            : async (_input: UpsertPatientInstallmentPlanInput) => {}
+        }
       />
 
       {/* Plan summary */}
