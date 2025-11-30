@@ -1,5 +1,6 @@
 // src/features/patients/types.ts
-// Shared types for the Patients feature.
+// Shared types for the Patients feature, aligned with patient_list_with_device view
+// and related patient payment/installment tables.
 
 export type PatientPaymentMethod =
   | 'Tim'
@@ -74,14 +75,6 @@ export type PatientRow = {
   device_model: string | null;
   device_total_price: number | null;
 
-  /**
-   * Aggregated ear-side summary for the device(s).
-   * Expected codes follow inventory_items.ear_side:
-   * - 'right' | 'left' | 'bilateral'
-   * View tarafında farklı kod kullanıyorsan, mapping'i api.core.ts içinde uyarlayabilirsin.
-   */
-  device_ear_side: 'right' | 'left' | 'bilateral' | null;
-
   // Payment metadata on the patient row (optional in v1).
   payment_method: PatientPaymentMethod | null;
   card_sale_total: number | null;
@@ -98,6 +91,12 @@ export type PatientRow = {
    */
   invoice_issued?: boolean | null;
   invoice_issued_at?: string | null;
+
+  /**
+   * NOTE: device_ear_side is NOT on patient_list_with_device yet.
+   * When/if we add it on the backend, we can introduce an optional field here:
+   *   device_ear_side?: 'right' | 'left' | 'bilateral' | null;
+   */
 };
 
 export type NewPatientForm = {
@@ -111,9 +110,9 @@ export type NewPatientForm = {
    * SGK profile selection and expected reimbursement.
    * Optional for now so that older flows (CSV import vb.) derlenmeye devam etsin.
    */
-  sgkProfileId?: string;             // e.g. 'SGK_0_4_CALISAN'
+  sgkProfileId?: string; // e.g. 'SGK_0_4_CALISAN'
   sgkExpectedReimbursement?: string; // TL string; parseMoneyToNumber ile parse edilecek
-  sgkExpectedMonth?: string;         // "yyyy-MM" (UI'da type="month")
+  sgkExpectedMonth?: string; // "yyyy-MM" (UI'da type="month")
 
   paymentMethod: PatientPaymentMethodFormValue;
   cardSaleTotal: string;
