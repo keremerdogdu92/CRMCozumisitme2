@@ -1,6 +1,8 @@
 // src/features/patients/types.ts
-// Shared types for the Patients feature, aligned with patient_list_with_device view
-// and related patient payment/installment tables.
+// Shared types for the Patients feature,
+// aligned with patient_list_with_device view and related tables.
+
+import type { EarSide, InventoryItemType } from '../inventory/types';
 
 export type PatientPaymentMethod =
   | 'Tim'
@@ -55,6 +57,7 @@ export type PatientRow = {
    * Filled when the patient is created with a reference or later updated.
    */
   reference_id: string | null;
+
   /**
    * Convenience fields coming from the joined references table.
    * UI-only; backend always stores only reference_id.
@@ -93,9 +96,10 @@ export type PatientRow = {
   invoice_issued_at?: string | null;
 
   /**
-   * NOTE: device_ear_side is NOT on patient_list_with_device yet.
-   * When/if we add it on the backend, we can introduce an optional field here:
-   *   device_ear_side?: 'right' | 'left' | 'bilateral' | null;
+   * NOTE: device_ear_side is NOT present on patient_list_with_device yet.
+   * When/if we add it on the backend, we can introduce:
+   *
+   *   device_ear_side?: EarSide | null;
    */
 };
 
@@ -185,4 +189,21 @@ export type UpsertPatientInstallmentPlanInput = {
   installmentCount: string;
   firstDueDate: string; // yyyy-MM-dd
   dayOfMonth: string; // "1"–"31"
+};
+
+/**
+ * Per-patient device rows resolved from inventory_items.
+ * Used by api.devices.ts (fetchPatientDevicesByPatientId).
+ */
+export type PatientDeviceRow = {
+  id: string;
+  brand: string;
+  model: string;
+  item_type: InventoryItemType;
+  ear_side: EarSide | null;
+  purchase_price: number | null;
+  list_price: number | null;
+  barcode: string | null;
+  serial_no: string | null;
+  sold_at: string | null;
 };
