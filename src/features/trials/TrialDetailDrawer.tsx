@@ -14,6 +14,11 @@ import {
   fetchReferenceLiteById,
   type ReferenceLiteForTrial,
 } from '../references/api';
+import type { MeetingRow } from '../meetings/types';
+import {
+  MEETINGS_BY_TRIAL_QUERY_KEY,
+  fetchMeetingsByTrialId,
+} from '../meetings/api';
 
 type TrialDetailDrawerProps = {
   trial: TrialRow | null;
@@ -33,6 +38,15 @@ function formatPrice(amount: number | null | undefined): string {
     });
   } catch {
     return `${amount}`;
+  }
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return '-';
+  try {
+    return new Date(value).toLocaleString('tr-TR');
+  } catch {
+    return '-';
   }
 }
 
@@ -69,6 +83,18 @@ export function TrialDetailDrawer({
     enabled: !!referenceId && open,
   });
 
+  // Bu deneme hastasına bağlı görüşmeler
+  const {
+    data: meetings = [],
+    isLoading: isMeetingsLoading,
+    isError: isMeetingsError,
+    error: meetingsError,
+  } = useQuery<MeetingRow[]>({
+    queryKey: MEETINGS_BY_TRIAL_QUERY_KEY(trialId ?? 'none'),
+    queryFn: () => fetchMeetingsByTrialId(trialId as string),
+    enabled: !!trialId && open,
+  });
+
   useEffect(() => {
     if (open) {
       setActiveTab('summary');
@@ -80,6 +106,7 @@ export function TrialDetailDrawer({
   }
 
   const typedDevices = devices as TrialDeviceRow[];
+  const typedMeetings = meetings as MeetingRow[];
 
   const tabs: { id: TrialTabId; label: string }[] = [
     { id: 'summary', label: 'Özet' },
@@ -152,23 +179,19 @@ export function TrialDetailDrawer({
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Kayıt Tarihi</span>
                 <span className="text-xs text-slate-900">
-                  {new Date(trial.created_at).toLocaleString('tr-TR')}
+                  {formatDate(trial.created_at)}
                 </span>
               </div>
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">İlk Görüşme</span>
                 <span className="text-xs text-slate-900">
-                  {trial.first_meet_at
-                    ? new Date(trial.first_meet_at).toLocaleString('tr-TR')
-                    : '-'}
+                  {trial.first_meet_at ? formatDate(trial.first_meet_at) : '-'}
                 </span>
               </div>
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Sonraki Randevu</span>
                 <span className="text-xs text-slate-900">
-                  {trial.next_meet_at
-                    ? new Date(trial.next_meet_at).toLocaleString('tr-TR')
-                    : '-'}
+                  {trial.next_meet_at ? formatDate(trial.next_meet_at) : '-'}
                 </span>
               </div>
               <div className="flex justify-between gap-2">
@@ -188,107 +211,4 @@ export function TrialDetailDrawer({
         )}
 
         {activeTab === 'devices' && (
-          <section className="space-y-2">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase">
-              Deneme Cihazları
-            </h4>
-
-            {isDevicesLoading && (
-              <p className="text-xs text-slate-500">Cihazlar yükleniyor...</p>
-            )}
-
-            {isDevicesError && (
-              <p className="text-xs text-red-600">
-                Cihazlar alınırken bir hata oluştu. Lütfen tekrar deneyin.
-              </p>
-            )}
-
-            {!isDevicesLoading &&
-              !isDevicesError &&
-              typedDevices.length === 0 && (
-                <p className="text-xs text-slate-500">
-                  Bu deneme için kayıtlı cihaz satırı bulunmuyor.
-                </p>
-              )}
-
-            {!isDevicesLoading &&
-              !isDevicesError &&
-              typedDevices.length > 0 && (
-                <div className="space-y-2">
-                  <table className="min-w-full border border-slate-200 text-[11px]">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
-                          #
-                        </th>
-                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
-                          Marka
-                        </th>
-                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
-                          Model
-                        </th>
-                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
-                          Kulak
-                        </th>
-                        <th className="border-b border-slate-200 px-2 py-1 text-right font-medium text-slate-600">
-                          Teklif (Satır)
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {typedDevices.map((d, index) => (
-                        <tr key={d.id}>
-                          <td className="border-b border-slate-100 px-2 py-1">
-                            {index + 1}
-                          </td>
-                          <td className="border-b border-slate-100 px-2 py-1">
-                            {d.brand ?? '-'}
-                          </td>
-                          <td className="border-b border-slate-100 px-2 py-1">
-                            {d.model ?? '-'}
-                          </td>
-                          <td className="border-b border-slate-100 px-2 py-1">
-                            {d.side ?? '-'}
-                          </td>
-                          <td className="border-b border-slate-100 px-2 py-1 text-right">
-                            {formatPrice(d.quote_price)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {/* Toplam teklif satırı bilinçli olarak kaldırıldı; hasta genelde
-                      bu satırlardan yalnızca birini seçeceği için kafa karışıklığı
-                      yaratmaması adına gösterilmiyor. */}
-                </div>
-              )}
-          </section>
-        )}
-
-        {activeTab === 'meetings' && (
-          <section className="space-y-2">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase">
-              Görüşmeler
-            </h4>
-            <p className="text-xs text-slate-500">
-              Bu sekmede tarih bazlı görüşme listesi, not alanı, memnuniyet ve
-              sonraki randevu bilgileri gösterilecek. <code>meetings</code>{' '}
-              tablosu <code>trial_id</code> üzerinden bağlanacak.
-            </p>
-          </section>
-        )}
-      </div>
-    </div>
-  );
-
-  return (
-    <SideDrawer
-      open={open}
-      onClose={onClose}
-      title="Deneme Detayı"
-      subtitle="Kişi bilgileri, deneme cihazları ve görüşme süreci"
-    >
-      {content}
-    </SideDrawer>
-  );
-}
+          <section className="space-y-2
