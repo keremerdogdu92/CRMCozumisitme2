@@ -366,6 +366,12 @@ export async function updatePatientInvoiceStatus(params: {
       'Failed to update patient invoice status (STEP_UPDATE_INVOICE):',
       error,
     );
+    throw new Error('STEP_UPDATE_INVOICE: ' + error.message);
   }
 
-::contentReference[oaicite:0]{index=0}
+  return {
+    invoice_issued: !!(data as any).invoice_issued,
+    invoice_issued_at:
+      ((data as any).invoice_issued_at as string | null) ?? null,
+  };
+}
