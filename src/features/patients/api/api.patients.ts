@@ -73,33 +73,42 @@ export async function createPatient(
   let card_fee_amount: number | null = null;
 
   // Toplam gerçek satış, tüm ödeme türleri için zorunlu
-  if (input.saleTotal) {
-    sale_total_amount = parseMoneyToNumber(
-      input.saleTotal,
-      'SALE_TOTAL_AMOUNT',
+  if (!input.saleTotal || !input.saleTotal.trim()) {
+    throw new Error(
+      "SALE_TOTAL_AMOUNT: Toplam satış tutarı zorunludur ve 0'dan büyük olmalıdır.",
     );
   }
 
-  if (input.paymentMethod) {
-    payment_method = input.paymentMethod as PatientPaymentMethod;
+  sale_total_amount = parseMoneyToNumber(
+    input.saleTotal,
+    'SALE_TOTAL_AMOUNT',
+  );
 
-    if (payment_method === 'Kredi_Kartı') {
-      const feeRateRaw = input.cardFeeRate.trim().replace(',', '.');
-      const feeRateNum = Number(feeRateRaw);
+  // Ödeme şekli zorunlu
+  if (!input.paymentMethod) {
+    throw new Error(
+      'PAYMENT_METHOD: Ödeme şeklini seçmeniz gerekiyor.',
+    );
+  }
 
-      if (!Number.isFinite(feeRateNum) || feeRateNum <= 0) {
-        throw new Error(
-          "CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0'dan büyük).",
-        );
-      }
+  payment_method = input.paymentMethod as PatientPaymentMethod;
 
-      card_fee_rate = Number(feeRateNum.toFixed(2));
+  if (payment_method === 'Kredi_Kartı') {
+    const feeRateRaw = input.cardFeeRate.trim().replace(',', '.');
+    const feeRateNum = Number(feeRateRaw);
 
-      if (sale_total_amount != null) {
-        card_fee_amount = Number(
-          (sale_total_amount * (feeRateNum / 100)).toFixed(2),
-        );
-      }
+    if (!Number.isFinite(feeRateNum) || feeRateNum <= 0) {
+      throw new Error(
+        "CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0'dan büyük).",
+      );
+    }
+
+    card_fee_rate = Number(feeRateNum.toFixed(2));
+
+    if (sale_total_amount != null) {
+      card_fee_amount = Number(
+        (sale_total_amount * (feeRateNum / 100)).toFixed(2),
+      );
     }
   }
 
@@ -359,12 +368,7 @@ export async function updatePatientInvoiceStatus(params: {
       'Failed to update patient invoice status (STEP_UPDATE_INVOICE):',
       error,
     );
-    throw new Error('STEP_UPDATE_INVOICE: ' + error.message);
-  }
+ 
 
-  return {
-    invoice_issued: !!(data as any).invoice_issued,
-    invoice_issued_at:
-      ((data as any).invoice_issued_at as string | null) ?? null,
-  };
-}
+
+::contentReference[oaicite:0]{index=0}
