@@ -11,6 +11,10 @@ export const MEETINGS_QUERY_KEY = ['meetings'] as const;
 export const MEETINGS_BY_TRIAL_QUERY_KEY = (trialId: string) =>
   ['meetings', 'trial', trialId] as const;
 
+// Patient detail için: belirli bir hastaya bağlı görüşmeler
+export const MEETINGS_BY_PATIENT_QUERY_KEY = (patientId: string) =>
+  ['meetings', 'patient', patientId] as const;
+
 export async function fetchMeetings(): Promise<MeetingRow[]> {
   const { data, error } = await supabaseClient
     .from('meetings')
@@ -68,6 +72,44 @@ export async function fetchMeetingsByTrialId(
   if (error) {
     console.error(
       'Supabase trial meetings fetch error (fetchMeetingsByTrialId):',
+      error,
+    );
+    throw error;
+  }
+
+  return (data ?? []) as MeetingRow[];
+}
+
+/**
+ * Fetch meetings for a specific patient (hasta).
+ * Filters by meeting_type = 'patient' and subject_id = patientId.
+ */
+export async function fetchMeetingsByPatientId(
+  patientId: string,
+): Promise<MeetingRow[]> {
+  const { data, error } = await supabaseClient
+    .from('meetings')
+    .select(
+      `
+      id,
+      meeting_type,
+      subject_id,
+      subject_name,
+      subject,
+      note,
+      at,
+      next_at,
+      satisfaction_10,
+      created_at
+    `,
+    )
+    .eq('meeting_type', 'patient')
+    .eq('subject_id', patientId)
+    .order('at', { ascending: false });
+
+  if (error) {
+    console.error(
+      'Supabase patient meetings fetch error (fetchMeetingsByPatientId):',
       error,
     );
     throw error;
@@ -246,7 +288,7 @@ export function useCreateMeetingMutation() {
     mutationFn: createMeeting,
     onSuccess: () => {
       // Bu invalidation, ['meetings'] ile başlayan tüm queryKey'leri
-      // (ör: ['meetings'], ['meetings', 'trial', trialId]) etkileyecek.
+      // (ör: ['meetings'], ['meetings', 'trial', trialId], ['meetings', 'patient', patientId]) etkileyecek.
       queryClient.invalidateQueries({ queryKey: MEETINGS_QUERY_KEY });
     },
   });
