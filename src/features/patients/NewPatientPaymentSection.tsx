@@ -2,11 +2,11 @@
 // Payment method selector and sale total + optional card details for new patient form.
 //
 // v2 kuralları:
-//  - Toplam satış tutarı (cihaz + aksesuar, gerçek satış) tüm ödeme türleri için zorunludur.
-//  - Kredi Kartı seçilirse:
-//      * Taksit (Fiziki POS) seçilir.
-//      * Komisyon oranı tabloya göre otomatik dolar, input readOnly'dir.
-//      * Toplam satış + komisyon oranından komisyon tutarı ve net tutar hesaplanır ve gösterilir.
+// - Toplam satış tutarı (cihaz + aksesuar, gerçek satış) tüm ödeme türleri için zorunludur.
+// - Kredi Kartı seçilirse:
+//   * Taksit (Fiziki POS) seçilir.
+//   * Komisyon oranı tabloya göre otomatik dolar, input readOnly'dir.
+//   * Toplam satış + komisyon oranından komisyon tutarı ve net tutar hesaplanır ve gösterilir.
 
 import { useMemo, useState } from 'react';
 import type { PatientPaymentMethodFormValue } from './types';
@@ -48,7 +48,9 @@ const COMMISSION_RATE_SWITCH_DATE_ISO = '2026-03-01';
 
 function shouldUseFinalRates(): boolean {
   const now = new Date();
-  const switchDate = new Date(`${COMMISSION_RATE_SWITCH_DATE_ISO}T00:00:00`);
+  const switchDate = new Date(
+    `${COMMISSION_RATE_SWITCH_DATE_ISO}T00:00:00`,
+  );
   return now >= switchDate;
 }
 
@@ -95,22 +97,23 @@ function formatCurrencyTry(amount: number | null): string {
 
 type NewPatientPaymentSectionProps = {
   paymentMethod: PatientPaymentMethodFormValue;
-  cardSaleTotal: string;
+  saleTotal: string;
   cardFeeRate: string;
   onChangePaymentMethod: (value: PatientPaymentMethodFormValue) => void;
-  onChangeCardSaleTotal: (value: string) => void;
+  onChangeSaleTotal: (value: string) => void;
   onChangeCardFeeRate: (value: string) => void;
 };
 
 export function NewPatientPaymentSection({
   paymentMethod,
-  cardSaleTotal,
+  saleTotal,
   cardFeeRate,
   onChangePaymentMethod,
-  onChangeCardSaleTotal,
+  onChangeSaleTotal,
   onChangeCardFeeRate,
 }: NewPatientPaymentSectionProps) {
-  const [selectedInstallment, setSelectedInstallment] = useState<string>('');
+  const [selectedInstallment, setSelectedInstallment] =
+    useState<string>('');
 
   const isCard = paymentMethod === 'Kredi_Kartı';
 
@@ -127,7 +130,10 @@ export function NewPatientPaymentSection({
   const handleInstallmentChange = (value: string) => {
     setSelectedInstallment(value);
     const count = Number(value);
-    const rate = Number.isFinite(count) ? getRateForInstallments(count) : null;
+    const rate = Number.isFinite(count)
+      ? getRateForInstallments(count)
+      : null;
+
     if (rate != null) {
       onChangeCardFeeRate(rate.toString().replace('.', ','));
     } else {
@@ -136,15 +142,17 @@ export function NewPatientPaymentSection({
   };
 
   const { feeAmount, netAmount } = useMemo(() => {
-    const sale = parseMoneyLikeToNumber(cardSaleTotal);
+    const sale = parseMoneyLikeToNumber(saleTotal);
     const rate = parsePercentLike(cardFeeRate);
+
     if (sale == null || rate == null || rate <= 0) {
       return { feeAmount: null, netAmount: null };
     }
+
     const fee = Number((sale * (rate / 100)).toFixed(2));
     const net = Number((sale - fee).toFixed(2));
     return { feeAmount: fee, netAmount: net };
-  }, [cardSaleTotal, cardFeeRate]);
+  }, [saleTotal, cardFeeRate]);
 
   return (
     <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
@@ -183,8 +191,8 @@ export function NewPatientPaymentSection({
           </label>
           <input
             type="text"
-            value={cardSaleTotal}
-            onChange={(e) => onChangeCardSaleTotal(e.target.value)}
+            value={saleTotal}
+            onChange={(e) => onChangeSaleTotal(e.target.value)}
             className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             placeholder="Örn. 80.000"
             required
@@ -200,7 +208,9 @@ export function NewPatientPaymentSection({
               </label>
               <select
                 value={selectedInstallment}
-                onChange={(e) => handleInstallmentChange(e.target.value)}
+                onChange={(e) =>
+                  handleInstallmentChange(e.target.value)
+                }
                 className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               >
                 <option value="">Seçilmedi</option>
@@ -222,7 +232,7 @@ export function NewPatientPaymentSection({
                 type="text"
                 value={cardFeeRate}
                 readOnly
-                className="w-full rounded-md border border-slate-200 bg-slate-100 px-2 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 cursor-not-allowed"
+                className="w-full cursor-not-allowed rounded-md border border-slate-200 bg-slate-100 px-2 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 placeholder="Taksit seçiniz"
               />
               <p className="mt-1 text-[11px] text-slate-500">
@@ -233,8 +243,14 @@ export function NewPatientPaymentSection({
 
             <div className="md:col-span-4 mt-2">
               <p className="text-[11px] text-slate-600">
-                Komisyon: <span className="font-semibold">{formatCurrencyTry(feeAmount)}</span>{' '}
-                – Komisyon sonrası net: <span className="font-semibold">{formatCurrencyTry(netAmount)}</span>
+                Komisyon:{' '}
+                <span className="font-semibold">
+                  {formatCurrencyTry(feeAmount)}
+                </span>{' '}
+                – Komisyon sonrası net:{' '}
+                <span className="font-semibold">
+                  {formatCurrencyTry(netAmount)}
+                </span>
               </p>
             </div>
           </>
