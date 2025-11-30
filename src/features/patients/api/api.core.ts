@@ -161,4 +161,75 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       device_brand: (row.device_brand as string | null | undefined) ?? null,
       device_model: (row.device_model as string | null | undefined) ?? null,
       device_total_price:
-        (row.device_total_price as number | null
+        (row.device_total_price as number | null | undefined) ?? null,
+
+      // Invoice status
+      invoice_issued:
+        (row.invoice_issued as boolean | null | undefined) ?? null,
+      invoice_issued_at:
+        (row.invoice_issued_at as string | null | undefined) ?? null,
+    };
+
+    return patient;
+  });
+}
+
+/**
+ * Lightweight search for patients by full_name.
+ * Used by the Meetings subject picker to attach meetings to existing patients.
+ */
+export interface PatientLite {
+  id: string;
+  full_name: string;
+}
+
+export async function searchPatientsByName(
+  query: string,
+  limit = 10,
+): Promise<PatientLite[]> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const { data, error } = await supabaseClient
+    .from('patients')
+    .select('id, full_name')
+    .ilike('full_name', `%${trimmed}%`)
+    .order('full_name', { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    console.error('Supabase patients search error:', error);
+    throw error;
+  }
+
+  return (data ?? []).map((row: any) => ({
+    id: row.id as string,
+    full_name: row.full_name as string,
+  }));
+}
+
+/**
+ * Parse a money-like string ("20 000", "20.000", "20000,50") into number.
+ * Shared helper for patient creation and installment plans.
+ */
+export function parseMoneyToNumber(raw: string, fieldCode: string): number {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error(
+      `${fieldCode}: Boş bırakılamaz, geçerli bir tutar girin.`,
+    );
+  }
+
+  const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
+  const value = Number(normalized);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(
+      `${fieldCode}: Geçerli bir tutar girin (0'dan büyük olmalı).`,
+    );
+  }
+
+  return Number(value.toFixed(2));
+}
