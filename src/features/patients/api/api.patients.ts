@@ -65,34 +65,34 @@ export async function createPatient(
   // ---------------------------------------------------------------------------
   // Payment metadata on patient row
   // ---------------------------------------------------------------------------
-  let payment_method: PatientPaymentMethod | null = null;
-  let card_sale_total: number | null = null;
+  if (!input.paymentMethod) {
+    throw new Error('PAYMENT_METHOD: Ödeme şeklini seçmeniz gerekiyor.');
+  }
+
+  const payment_method = input.paymentMethod as PatientPaymentMethod;
+
+  // Toplam gerçek satış tutarı (cihaz + aksesuar, tüm ödeme türleri için).
+  const card_sale_total = parseMoneyToNumber(
+    input.cardSaleTotal || '',
+    'SALE_TOTAL',
+  );
+
   let card_fee_rate: number | null = null;
   let card_fee_amount: number | null = null;
 
-  if (input.paymentMethod) {
-    payment_method = input.paymentMethod as PatientPaymentMethod;
-
-    if (payment_method === 'Kredi_Kartı') {
-      const saleTotalNum = parseMoneyToNumber(
-        input.cardSaleTotal || '',
-        'CARD_SALE_TOTAL',
-      );
-
-      const feeRateRaw = input.cardFeeRate.trim().replace(',', '.');
-      const feeRateNum = Number(feeRateRaw);
-      if (!Number.isFinite(feeRateNum) || feeRateNum <= 0) {
-        throw new Error(
-          "CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0'dan büyük).",
-        );
-      }
-
-      card_sale_total = saleTotalNum;
-      card_fee_rate = Number(feeRateNum.toFixed(2));
-      card_fee_amount = Number(
-        (saleTotalNum * (feeRateNum / 100)).toFixed(2),
+  if (payment_method === 'Kredi_Kartı') {
+    const feeRateRaw = input.cardFeeRate.trim().replace(',', '.');
+    const feeRateNum = Number(feeRateRaw);
+    if (!Number.isFinite(feeRateNum) || feeRateNum <= 0) {
+      throw new Error(
+        "CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0'dan büyük).",
       );
     }
+
+    card_fee_rate = Number(feeRateNum.toFixed(2));
+    card_fee_amount = Number(
+      (card_sale_total * (feeRateNum / 100)).toFixed(2),
+    );
   }
 
   // ---------------------------------------------------------------------------
