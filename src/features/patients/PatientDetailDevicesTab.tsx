@@ -65,8 +65,8 @@ export function PatientDetailDevicesTab({
   // Gerçek satış toplamı (ilk satış): şimdilik kart satış toplamından okunuyor.
   // İleride nakit/senet için ayrı alan eklersek bu hesap güncellenecek.
   const saleTotal =
-    patient.card_sale_total != null
-      ? formatAmount(patient.card_sale_total)
+    patient.sale_total_amount != null
+      ? formatAmount(patient.sale_total_amount)
       : '-';
 
   const earSummaryLabel = formatEarSummary(patient.device_ear_side_summary);
