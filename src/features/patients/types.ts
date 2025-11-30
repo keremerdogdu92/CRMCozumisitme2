@@ -97,45 +97,6 @@ export type PatientRow = {
   invoice_issued_at?: string | null;
 };
 
-export type NewPatientForm = {
-  fullName: string;
-  phone: string;
-  sgkFlag: boolean;
-  sgkPrescriptionReceived: boolean;
-  sgkRecordedToSystem: boolean;
-
-  /**
-   * SGK profile selection and expected reimbursement.
-   * Optional for now so that older flows (CSV import vb.) still compile.
-   */
-  sgkProfileId?: string;             // e.g. 'SGK_0_4_CALISAN'
-  sgkExpectedReimbursement?: string; // TL string; parsed by parseMoneyToNumber
-  sgkExpectedMonth?: string;         // "yyyy-MM" (input type="month")
-
-  /**
-   * Payment meta collected at creation time.
-   * saleTotal: toplam gerçek satış; tüm ödeme türleri için zorunlu.
-   * cardFeeRate: yalnızca Kredi Kartı için, taksit tablosundan gelir.
-   */
-  paymentMethod: PatientPaymentMethodFormValue;
-  saleTotal: string;
-  cardFeeRate: string;
-
-  /**
-   * Optional reference attached while creating the patient.
-   * Now fully wired to backend via patients.reference_id.
-   */
-  referenceId: string | null;
-  referenceName: string;
-
-  /**
-   * Identity / contact / address fields collected on create.
-   */
-  nationalId: string;
-  kinPhone: string;
-  address: string;
-};
-
 export type PatientSgkUpdateInput = {
   id: string;
   sgkFlag: boolean;
@@ -238,4 +199,62 @@ export type PatientDeviceRow = {
   barcode: string | null;
   serial_no: string | null;
   sold_at: string | null;
+};
+
+/**
+ * Input collected from the "New Patient" form.
+ * Extended with optional financial drafts to chain:
+ * - savePatientSaleBreakdown
+ * - upsertPatientInstallmentPlan
+ * after the patient row is created.
+ */
+export type NewPatientForm = {
+  fullName: string;
+  phone: string;
+  sgkFlag: boolean;
+  sgkPrescriptionReceived: boolean;
+  sgkRecordedToSystem: boolean;
+
+  /**
+   * SGK profile selection and expected reimbursement.
+   * Optional for now so that older flows (CSV import vb.) still compile.
+   */
+  sgkProfileId?: string;             // e.g. 'SGK_0_4_CALISAN'
+  sgkExpectedReimbursement?: string; // TL string; parsed by parseMoneyToNumber
+  sgkExpectedMonth?: string;         // "yyyy-MM" (input type="month")
+
+  /**
+   * Payment meta collected at creation time.
+   * saleTotal: toplam gerçek satış; tüm ödeme türleri için zorunlu.
+   * cardFeeRate: yalnızca Kredi Kartı için, taksit tablosundan gelir.
+   */
+  paymentMethod: PatientPaymentMethodFormValue;
+  saleTotal: string;
+  cardFeeRate: string;
+
+  /**
+   * Optional reference attached while creating the patient.
+   * Now fully wired to backend via patients.reference_id.
+   */
+  referenceId: string | null;
+  referenceName: string;
+
+  /**
+   * Identity / contact / address fields collected on create.
+   */
+  nationalId: string;
+  kinPhone: string;
+  address: string;
+
+  /**
+   * Financial drafts used in "new patient" flow.
+   * These are NOT persisted by createPatient directly; they are intended
+   * to be chained with savePatientSaleBreakdown and
+   * upsertPatientInstallmentPlan after the patient row is created.
+   *
+   * They are optional so that older callers (CSV import, tests, vb.)
+   * continue to work without providing them.
+   */
+  saleBreakdownDraft?: UpsertPatientSaleBreakdownItem[];
+  installmentPlanDraft?: UpsertPatientInstallmentPlanInput | null;
 };
