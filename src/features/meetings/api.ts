@@ -7,6 +7,10 @@ import type { MeetingRow, NewMeetingForm, MeetingType } from './types';
 
 export const MEETINGS_QUERY_KEY = ['meetings'] as const;
 
+// Trial detail için: belirli bir deneme hastasına bağlı görüşmeler
+export const MEETINGS_BY_TRIAL_QUERY_KEY = (trialId: string) =>
+  ['meetings', 'trial', trialId] as const;
+
 export async function fetchMeetings(): Promise<MeetingRow[]> {
   const { data, error } = await supabaseClient
     .from('meetings')
@@ -28,6 +32,44 @@ export async function fetchMeetings(): Promise<MeetingRow[]> {
 
   if (error) {
     console.error('Supabase meetings fetch error:', error);
+    throw error;
+  }
+
+  return (data ?? []) as MeetingRow[];
+}
+
+/**
+ * Fetch meetings for a specific trial (deneme hastası).
+ * Filters by meeting_type = 'trial' and subject_id = trialId.
+ */
+export async function fetchMeetingsByTrialId(
+  trialId: string,
+): Promise<MeetingRow[]> {
+  const { data, error } = await supabaseClient
+    .from('meetings')
+    .select(
+      `
+      id,
+      meeting_type,
+      subject_id,
+      subject_name,
+      subject,
+      note,
+      at,
+      next_at,
+      satisfaction_10,
+      created_at
+    `,
+    )
+    .eq('meeting_type', 'trial')
+    .eq('subject_id', trialId)
+    .order('at', { ascending: false });
+
+  if (error) {
+    console.error(
+      'Supabase trial meetings fetch error (fetchMeetingsByTrialId):',
+      error,
+    );
     throw error;
   }
 
@@ -100,108 +142,4 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
         );
 
   const atIso = input.at ? new Date(input.at).toISOString() : null;
-  const nextAtIso = input.next_at
-    ? new Date(input.next_at).toISOString()
-    : null;
-
-  // Ödeme (sadece hasta tipi meeting için anlamlı)
-  const paymentAmountNumber = (() => {
-    try {
-      return parseAmountString(input.paymentAmount);
-    } catch (err) {
-      // Mesajı yukarı fırlatıyoruz ki UI'da gösterilsin
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error('MEET_STEP_PAYMENT_AMOUNT_INVALID');
-    }
-  })();
-
-  const shouldInsertPayment =
-    input.hasPayment &&
-    paymentAmountNumber !== null &&
-    input.meetingType === 'patient' &&
-    !!input.subjectId;
-
-  // 4) Meeting insert – meeting_type ve subject_x alanlarını da gönder
-  const { data: insertedMeetings, error: insertError } = await supabaseClient
-    .from('meetings')
-    .insert({
-      org_id: profile.org_id,
-      meeting_type: input.meetingType as MeetingType,
-      subject_id: input.subjectId,
-      subject_name: input.subjectName.trim() || null,
-
-      subject: input.subject.trim() || null,
-      note: input.note.trim() || null,
-      at: atIso,
-      next_at: nextAtIso,
-      satisfaction_10: satisfaction,
-      // created_by, profiles(id) ile aynı olduğu için direkt user.id
-      created_by: user.id,
-    })
-    .select('id')
-    .limit(1);
-
-  if (insertError) {
-    console.error('Failed to insert meeting (MEET_STEP_INSERT):', insertError);
-    throw new Error('MEET_STEP_INSERT: ' + insertError.message);
-  }
-
-  const meetingId = insertedMeetings?.[0]?.id as string | undefined;
-  if (!meetingId) {
-    console.error(
-      'Meeting insert did not return an id (MEET_STEP_INSERT_NO_ID)',
-      insertedMeetings,
-    );
-    throw new Error('MEET_STEP_INSERT_NO_ID: Meeting insert did not return an id');
-  }
-
-  // 5) Eğer hasta tipi meeting ve ödeme varsa, meeting_payments tablosuna da kayıt aç
-  if (shouldInsertPayment && paymentAmountNumber && input.subjectId) {
-    const { error: paymentError } = await supabaseClient
-      .from('meeting_payments')
-      .insert({
-        org_id: profile.org_id,
-        meeting_id: meetingId,
-        patient_id: input.subjectId,
-        amount: paymentAmountNumber,
-        // NOTE: method artık CHECK constraint ile kısıtlı.
-        // Şimdilik meeting ekranından sadece 'Senet' kaydediyoruz.
-        method: 'Senet',
-        note: input.paymentNote.trim() || null,
-      });
-
-    if (paymentError) {
-      console.error(
-        'Failed to insert meeting payment (MEET_STEP_PAYMENT_INSERT):',
-        paymentError,
-      );
-      throw new Error(
-        'MEET_STEP_PAYMENT_INSERT: ' + paymentError.message,
-      );
-    }
-  }
-}
-
-/**
- * React Query hooks
- */
-
-export function useMeetingsQuery() {
-  return useQuery({
-    queryKey: MEETINGS_QUERY_KEY,
-    queryFn: fetchMeetings,
-  });
-}
-
-export function useCreateMeetingMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: createMeeting,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: MEETINGS_QUERY_KEY });
-    },
-  });
-}
+  const nextAtIso = input
