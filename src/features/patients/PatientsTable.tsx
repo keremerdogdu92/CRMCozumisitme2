@@ -61,6 +61,14 @@ function getDeviceLabel(p: PatientRow): string {
   return '-';
 }
 
+function getDeviceEarLabel(p: PatientRow): string {
+  const ear = p.device_ear_side_summary;
+  if (ear === 'bilateral') return 'Çift';
+  if (ear === 'right') return 'Sağ';
+  if (ear === 'left') return 'Sol';
+  return '-';
+}
+
 export function PatientsTable({
   patients,
   onSelectPatient,
@@ -83,6 +91,7 @@ export function PatientsTable({
           const invoiceWarning = formatInvoiceWarning(p);
           const hasAnyWarning = !!sgkWarning || !!invoiceWarning;
           const deviceLabel = getDeviceLabel(p);
+          const deviceEarLabel = getDeviceEarLabel(p);
           const satisfactionDisplay =
             p.satisfaction_10 != null ? `${p.satisfaction_10} / 10` : '-';
 
@@ -135,6 +144,12 @@ export function PatientsTable({
                   <span className="line-clamp-2 font-medium">
                     {deviceLabel}
                   </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Kulak
+                  </span>
+                  <span className="font-medium">{deviceEarLabel}</span>
                 </div>
                 <div>
                   <span className="block text-[10px] uppercase text-slate-400">
@@ -213,6 +228,9 @@ export function PatientsTable({
               <th className="px-4 py-2 text-left font-medium text-slate-600">
                 Cihaz Modeli
               </th>
+              <th className="px-4 py-2 text-left font-medium text-slate-600">
+                Kulak
+              </th>
               <th className="px-4 py-2 text-right font-medium text-slate-600">
                 Fiyat
               </th>
@@ -239,6 +257,7 @@ export function PatientsTable({
               const invoiceWarning = formatInvoiceWarning(p);
               const hasAnyWarning = !!sgkWarning || !!invoiceWarning;
               const deviceLabel = getDeviceLabel(p);
+              const deviceEarLabel = getDeviceEarLabel(p);
               const satisfactionDisplay =
                 p.satisfaction_10 != null ? `${p.satisfaction_10} / 10` : '-';
 
@@ -268,6 +287,11 @@ export function PatientsTable({
                   {/* Cihaz Modeli */}
                   <td className="px-4 py-2 text-slate-700">
                     {deviceLabel}
+                  </td>
+
+                  {/* Kulak özeti */}
+                  <td className="px-4 py-2 text-slate-700">
+                    {deviceEarLabel}
                   </td>
 
                   {/* Fiyat */}
