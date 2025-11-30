@@ -162,7 +162,9 @@ export async function fetchPatients(): Promise<PatientRow[]> {
       device_brand: (row.device_brand as string | null | undefined) ?? null,
       device_model: (row.device_model as string | null | undefined) ?? null,
       device_total_price:
-        (row.device_total_price as number | null | undefined) ?? null,
+        row.device_total_price != null
+          ? Number(row.device_total_price)
+          : null,
 
       device_ear_side_summary:
         (row.device_ear_side_summary as
