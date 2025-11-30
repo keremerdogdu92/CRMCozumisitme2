@@ -20,12 +20,11 @@ export type CreatePatientOptions = {
 
 /**
  * Create a new patient row with org_id taken from the current profile.
- * Returns the inserted PatientRow so that callers can immediately open
- * the detail drawer.
+ * Returns the inserted PatientRow so that callers can immediately open the detail drawer.
  *
- * Archive code generation is intentionally not handled here; it is assumed
- * to be managed by Supabase (trigger / function) at a later stage such as
- * sale or senet completion.
+ * Archive code generation is intentionally not handled here; it is assumed to be
+ * managed by Supabase (trigger / function) at a later stage such as sale or
+ * senet completion.
  */
 export async function createPatient(
   input: NewPatientForm,
@@ -195,14 +194,34 @@ export async function createPatient(
       // to assign it when sale / senet is finalized.
     })
     .select(
-      'id, full_name, phone, created_at, last_visit_at, ' +
-        'sgk_flag, sgk_prescription_no, sgk_docs_received, sgk_processed, satisfaction_10, ' +
-        'sgk_prescription_received, sgk_recorded_to_system, ' +
-        'national_id, address, kin_phone, ' +
-        'reference_id, archive_code, ' +
-        'payment_method, sale_total_amount, card_fee_rate, card_fee_amount, ' +
-        'sgk_profile, sgk_expected_reimbursement, sgk_expected_reimbursement_month, ' +
-        'invoice_issued, invoice_issued_at',
+      [
+        'id',
+        'full_name',
+        'phone',
+        'created_at',
+        'last_visit_at',
+        'sgk_flag',
+        'sgk_prescription_no',
+        'sgk_docs_received',
+        'sgk_processed',
+        'satisfaction_10',
+        'sgk_prescription_received',
+        'sgk_recorded_to_system',
+        'national_id',
+        'address',
+        'kin_phone',
+        'reference_id',
+        'archive_code',
+        'payment_method',
+        'sale_total_amount',
+        'card_fee_rate',
+        'card_fee_amount',
+        'sgk_profile',
+        'sgk_expected_reimbursement',
+        'sgk_expected_reimbursement_month',
+        'invoice_issued',
+        'invoice_issued_at',
+      ].join(', '),
     )
     .single();
 
@@ -211,45 +230,47 @@ export async function createPatient(
     throw new Error('STEP_INSERT: ' + insertError.message);
   }
 
+  const row: any = data;
+
   const inserted: PatientRow = {
-    id: data.id as string,
-    full_name: data.full_name as string,
-    phone: (data.phone as string | null) ?? null,
-    created_at: data.created_at as string,
-    last_visit_at: (data.last_visit_at as string | null) ?? null,
+    id: row.id as string,
+    full_name: row.full_name as string,
+    phone: (row.phone as string | null) ?? null,
+    created_at: row.created_at as string,
+    last_visit_at: (row.last_visit_at as string | null) ?? null,
 
-    sgk_flag: (data.sgk_flag as boolean | null) ?? null,
+    sgk_flag: (row.sgk_flag as boolean | null) ?? null,
     sgk_prescription_no:
-      (data.sgk_prescription_no as string | null | undefined) ?? null,
+      (row.sgk_prescription_no as string | null | undefined) ?? null,
     sgk_docs_received:
-      (data.sgk_docs_received as boolean | null | undefined) ?? null,
+      (row.sgk_docs_received as boolean | null | undefined) ?? null,
     sgk_processed:
-      (data.sgk_processed as boolean | null | undefined) ?? null,
+      (row.sgk_processed as boolean | null | undefined) ?? null,
     satisfaction_10 =
-      data.satisfaction_10 != null ? Number(data.satisfaction_10) : null,
+      row.satisfaction_10 != null ? Number(row.satisfaction_10) : null,
     sgk_prescription_received:
-      (data.sgk_prescription_received as boolean | null | undefined) ?? null,
+      (row.sgk_prescription_received as boolean | null | undefined) ?? null,
     sgk_recorded_to_system:
-      (data.sgk_recorded_to_system as boolean | null | undefined) ?? null,
+      (row.sgk_recorded_to_system as boolean | null | undefined) ?? null,
 
-    national_id: (data.national_id as string | null | undefined) ?? null,
-    address: (data.address as string | null | undefined) ?? null,
-    kin_phone: (data.kin_phone as string | null | undefined) ?? null,
+    national_id: (row.national_id as string | null | undefined) ?? null,
+    address: (row.address as string | null | undefined) ?? null,
+    kin_phone: (row.kin_phone as string | null | undefined) ?? null,
 
-    reference_id: (data.reference_id as string | null) ?? null,
+    reference_id: (row.reference_id as string | null) ?? null,
     reference_name: null,
     reference_phone: null,
 
-    archive_code: (data.archive_code as string | null | undefined) ?? null,
+    archive_code: (row.archive_code as string | null | undefined) ?? null,
 
     // SGK profile-based reimbursement metadata
-    sgk_profile: (data.sgk_profile as string | null | undefined) ?? null,
+    sgk_profile: (row.sgk_profile as string | null | undefined) ?? null,
     sgk_expected_reimbursement:
-      data.sgk_expected_reimbursement != null
-        ? Number(data.sgk_expected_reimbursement)
+      row.sgk_expected_reimbursement != null
+        ? Number(row.sgk_expected_reimbursement)
         : null,
     sgk_expected_reimbursement_month:
-      (data.sgk_expected_reimbursement_month as
+      (row.sgk_expected_reimbursement_month as
         | string
         | null
         | undefined) ?? null,
@@ -260,19 +281,15 @@ export async function createPatient(
     device_total_price: null,
     device_ear_side_summary: null,
 
-    payment_method:
-      (data.payment_method as PatientPaymentMethod | null) ?? null,
+    payment_method: (row.payment_method as PatientPaymentMethod | null) ?? null,
     sale_total_amount:
-      (data.sale_total_amount as number | null | undefined) ?? null,
-    card_fee_rate:
-      (data.card_fee_rate as number | null | undefined) ?? null,
-    card_fee_amount:
-      (data.card_fee_amount as number | null | undefined) ?? null,
+      (row.sale_total_amount as number | null | undefined) ?? null,
+    card_fee_rate: (row.card_fee_rate as number | null | undefined) ?? null,
+    card_fee_amount: (row.card_fee_amount as number | null | undefined) ?? null,
 
-    invoice_issued:
-      (data.invoice_issued as boolean | null | undefined) ?? null,
+    invoice_issued: (row.invoice_issued as boolean | null | undefined) ?? null,
     invoice_issued_at:
-      (data.invoice_issued_at as string | null | undefined) ?? null,
+      (row.invoice_issued_at as string | null | undefined) ?? null,
   };
 
   return inserted;
@@ -346,7 +363,7 @@ export async function updatePatientInvoiceStatus(params: {
   }
 
   return {
-    invoice_issued: !!data.invoice_issued,
-    invoice_issued_at: (data.invoice_issued_at as string | null) ?? null,
+    invoice_issued: !!(data as any).invoice_issued,
+    invoice_issued_at: ((data as any).invoice_issued_at as string | null) ?? null,
   };
 }
