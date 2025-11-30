@@ -1,6 +1,8 @@
 // src/features/patients/types.ts
 // Shared types for the Patients feature.
 
+import type { InventoryItemRow } from '../inventory/types';
+
 export type PatientPaymentMethod =
   | 'Tim'
   | 'Sivantos'
@@ -179,3 +181,21 @@ export type UpsertPatientInstallmentPlanInput = {
   firstDueDate: string; // yyyy-MM-dd
   dayOfMonth: string; // "1"–"31"
 };
+
+/**
+ * One device row for patient detail view.
+ * Backed by public.inventory_items and filtered by sold_patient_id.
+ */
+export type PatientDeviceRow = Pick<
+  InventoryItemRow,
+  | 'id'
+  | 'brand'
+  | 'model'
+  | 'item_type'
+  | 'ear_side'
+  | 'purchase_price'
+  | 'list_price'
+  | 'barcode'
+  | 'serial_no'
+  | 'sold_at'
+>;
