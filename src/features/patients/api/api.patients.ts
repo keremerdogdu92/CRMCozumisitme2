@@ -7,6 +7,7 @@ import type {
   PatientRow,
   PatientSgkUpdateInput,
   PatientPaymentMethod,
+  NewPatientDeviceDraft,
 } from '../types';
 import { parseMoneyToNumber } from './api.core';
 import { savePatientSaleBreakdown } from './api.saleBreakdown';
@@ -21,6 +22,108 @@ export type CreatePatientOptions = {
 };
 
 /**
+ * Best-effort helper to attach inventory_items to a patient based on
+ * device drafts collected in the "New Patient" form.
+ *
+ * Current matching strategy (v1):
+ * - For each draft row:
+ *   - brand + model are trimmed; if either is empty, row is skipped.
+ *   - We search inventory_items for the first row with:
+ *       org_id = orgId
+ *       status = 'in_stock'
+ *       brand  = draft.brand
+ *       model  = draft.model
+ *   - If found, we mark it as sold to this patient:
+ *       sold_patient_id = patientId
+ *       status          = 'sold'
+ *       sold_at         = now()
+ *       ear_side        = draft.side (right/left/bilateral) or NULL
+ *
+ * Notes:
+ * - This is intentionally "first free match" logic. When the UI later exposes
+ *   barcode/serial selection, we can extend this to match by barcode/serial.
+ * - All errors are logged but DO NOT cause createPatient to fail.
+ */
+async function attachDevicesToPatientFromDrafts(params: {
+  orgId: string;
+  patientId: string;
+  drafts: NewPatientDeviceDraft[];
+}): Promise<void> {
+  const { orgId, patientId, drafts } = params;
+
+  if (!drafts || drafts.length === 0) return;
+
+  for (const draft of drafts) {
+    const brand = (draft.brand ?? '').trim();
+    const model = (draft.model ?? '').trim();
+
+    // Brand + model are minimum requirement to attempt a match.
+    if (!brand || !model) {
+      continue;
+    }
+
+    try {
+      const { data, error } = await supabaseClient
+        .from('inventory_items')
+        .select('id, ear_side, status')
+        .eq('org_id', orgId)
+        .eq('brand', brand)
+        .eq('model', model)
+        .eq('status', 'in_stock')
+        .limit(1);
+
+      if (error) {
+        console.error(
+          'STEP_DEVICE_ATTACH_QUERY: Failed to query inventory_items for device draft',
+          { orgId, brand, model, error },
+        );
+        continue;
+      }
+
+      const row = (data ?? [])[0] as { id: string } | undefined;
+      if (!row) {
+        console.warn(
+          'STEP_DEVICE_ATTACH_NO_MATCH: No in_stock inventory item found for draft',
+          { orgId, brand, model },
+        );
+        continue;
+      }
+
+      const side =
+        draft.side === 'right' ||
+        draft.side === 'left' ||
+        draft.side === 'bilateral'
+          ? draft.side
+          : null;
+
+      const { error: updateError } = await supabaseClient
+        .from('inventory_items')
+        .update({
+          sold_patient_id: patientId,
+          sold_at: new Date().toISOString(),
+          status: 'sold',
+          ear_side: side,
+        })
+        .eq('id', row.id);
+
+      if (updateError) {
+        console.error(
+          'STEP_DEVICE_ATTACH_UPDATE: Failed to update inventory_items row for device draft',
+          { inventoryItemId: row.id, patientId, updateError },
+        );
+        continue;
+      }
+    } catch (err) {
+      console.error(
+        'STEP_DEVICE_ATTACH_UNEXPECTED: Unexpected error while attaching device draft',
+        { orgId, patientId, brand, model, err },
+      );
+      continue;
+    }
+  }
+}
+
+/**
  * Create a new patient row with org_id taken from the current profile.
  * Returns the inserted PatientRow so that callers can immediately open the detail drawer.
  *
@@ -31,11 +134,13 @@ export type CreatePatientOptions = {
  * v2: Supports optional financial drafts from NewPatientForm:
  * - input.saleBreakdownDraft → patient_sale_breakdown rows (best-effort)
  * - input.installmentPlanDraft → patient_installment_plans row (best-effort)
+ * - input.deviceDrafts → inventory_items rows sold to patient (best-effort)
  *
  * Önemli not:
- * - Finans taslakları başarısız olursa hasta kaydı yine de oluşturulur.
+ * - Finans ve cihaz taslakları başarısız olursa hasta kaydı yine de oluşturulur.
  * - Hatalar console.error ile loglanır, createPatient dışarıya throw etmez.
- * - Kullanıcı daha sonra Hasta Detay → Ödemeler sekmesinden breakdown/plan’ı düzeltebilir.
+ * - Kullanıcı daha sonra Hasta Detay → Ödemeler / Cihazlar sekmelerinden
+ *   breakdown/plan/cihazları düzeltebilir.
  */
 export async function createPatient(
   input: NewPatientForm,
@@ -311,12 +416,14 @@ export async function createPatient(
   };
 
   // ---------------------------------------------------------------------------
-  // v2 financial chaining (best-effort, non-blocking):
+  // v2 financial & device chaining (best-effort, non-blocking):
   // - Ödeme dağılımı (patient_sale_breakdown)
   // - Senet planı (patient_installment_plans)
+  // - Stok cihazlarının hastaya bağlanması (inventory_items)
   // ---------------------------------------------------------------------------
   const saleBreakdownDraft = input.saleBreakdownDraft ?? [];
   const installmentPlanDraft = input.installmentPlanDraft ?? null;
+  const deviceDrafts = input.deviceDrafts ?? [];
 
   if (saleBreakdownDraft.length > 0) {
     try {
@@ -345,6 +452,22 @@ export async function createPatient(
         err,
       );
       // Intentionally NOT throwing: patient is created, user can fix plan later.
+    }
+  }
+
+  if (deviceDrafts.length > 0) {
+    try {
+      await attachDevicesToPatientFromDrafts({
+        orgId,
+        patientId: inserted.id,
+        drafts: deviceDrafts,
+      });
+    } catch (err) {
+      console.error(
+        'STEP_CHAIN_DEVICE: Unexpected error while attaching device drafts after patient insert',
+        err,
+      );
+      // Yine throw etmiyoruz; hasta kaydı tamam, cihaz eşlemesi sonradan düzeltilebilir.
     }
   }
 
@@ -415,6 +538,8 @@ export async function updatePatientInvoiceStatus(params: {
       'Failed to update patient invoice status (STEP_UPDATE_INVOICE):',
       error,
     );
+  }
+  if (error) {
     throw new Error('STEP_UPDATE_INVOICE: ' + error.message);
   }
 
