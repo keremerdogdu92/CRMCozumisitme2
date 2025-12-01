@@ -4,7 +4,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { supabaseClient } from '../../../utils/supabaseClient';
-import type { PatientDeviceRow } from '../types';
+import type { PatientDeviceRow, NewPatientDeviceDraft } from '../types';
 
 // React Query key for patient devices
 export const PATIENT_DEVICES_BY_PATIENT_QUERY_KEY = (patientId: string) =>
@@ -92,4 +92,76 @@ export function usePatientDevices(patientId: string | null) {
     enabled: !!patientId,
     queryFn: () => fetchPatientDevicesByPatientId(patientId as string),
   });
+}
+
+/**
+ * Attach inventory_items rows to a patient using NewPatientDeviceDraft[].
+ *
+ * - Only drafts with inventoryItemId and a non-empty side are processed.
+ * - For each such draft:
+ *   - inventory_items.sold_patient_id = patientId
+ *   - inventory_items.sold_at = now
+ *   - inventory_items.ear_side = draft.side (right/left/bilateral)
+ *   - inventory_items.status = 'sold'
+ *
+ * Notes:
+ * - Çok fazla cihaz olmayacağı varsayımıyla her satır için ayrı UPDATE
+ *   yapılmaktadır. Performans sorunu olursa server-side RPC'e taşınabilir.
+ */
+export async function attachDevicesToPatientFromDrafts(
+  patientId: string,
+  drafts: NewPatientDeviceDraft[] | undefined,
+): Promise<void> {
+  if (!patientId) {
+    throw new Error('ATTACH_DEVICES_NO_PATIENT_ID');
+  }
+  if (!drafts || drafts.length === 0) {
+    return;
+  }
+
+  const rowsToAttach = drafts.filter(
+    (d) => d.inventoryItemId && d.side && d.side !== '',
+  );
+
+  if (rowsToAttach.length === 0) {
+    return;
+  }
+
+  const nowIso = new Date().toISOString();
+  const errorMessages: string[] = [];
+
+  for (const draft of rowsToAttach) {
+    const ear =
+      draft.side === 'right' ||
+      draft.side === 'left' ||
+      draft.side === 'bilateral'
+        ? draft.side
+        : null;
+
+    const { error } = await supabaseClient
+      .from('inventory_items')
+      .update({
+        sold_patient_id: patientId,
+        sold_at: nowIso,
+        ear_side: ear,
+        status: 'sold',
+      })
+      .eq('id', draft.inventoryItemId);
+
+    if (error) {
+      console.error(
+        'attachDevicesToPatientFromDrafts update error:',
+        error,
+      );
+      errorMessages.push(error.message);
+    }
+  }
+
+  if (errorMessages.length > 0) {
+    // Şimdilik ilk hatayı kullanıcıya gösteriyoruz; loglarda detay duruyor.
+    throw new Error(
+      'Cihazları hastaya bağlarken hata oluştu: ' +
+        errorMessages[0],
+    );
+  }
 }
