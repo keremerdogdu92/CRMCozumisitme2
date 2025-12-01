@@ -310,6 +310,7 @@ export function NewPatientFormCard({
     setDeviceDrafts((rows) => [
       ...rows,
       {
+        inventoryItemId: null,
         side: '',
         brand: '',
         model: '',
@@ -639,7 +640,7 @@ export function NewPatientFormCard({
         {/* Cihaz taslakları bloğu */}
         <FormSection
           title="Cihazlar (opsiyonel)"
-          description="Bu hastaya verilmesi planlanan cihazları burada taslak olarak girebilirsiniz. Hasta kaydından sonra stok modülü ile ilişkilendirilebilir."
+          description="Stoktaki cihazları bu hastaya bağlamak için kulak yönü ve cihaz seçimlerini burada yapabilirsiniz. Hasta kaydından sonra inventory'de ilgili satırlar 'satıldı' olarak işaretlenecek."
         >
           <NewPatientDevicesSection
             items={deviceDrafts}
