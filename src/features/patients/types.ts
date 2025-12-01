@@ -203,12 +203,18 @@ export type PatientDeviceRow = {
 
 /**
  * Draft devices collected on "New Patient" form.
- * These are not persisted by createPatient directly; they are intended
- * to be chained after patient creation to attach inventory items / device rows.
+ *
+ * - inventoryItemId: optional link to an inventory_items row.
+ *   Eğer doluysa, hasta kaydından sonra bu stok satırı hastaya bağlanır
+ *   (sold_patient_id, sold_at, ear_side, status='sold').
+ *
+ * - Diğer alanlar UI için; brand/model/listPrice stok seçildiğinde
+ *   otomatik doldurulabilir ama istenirse elle override edilebilir.
  */
 export type NewPatientDeviceSide = 'right' | 'left' | 'bilateral' | '';
 
 export type NewPatientDeviceDraft = {
+  inventoryItemId?: string | null;
   side: NewPatientDeviceSide;
   brand: string;
   model: string;
@@ -276,8 +282,8 @@ export type NewPatientForm = {
 
   /**
    * Device drafts collected at creation time.
-   * Similar to saleBreakdownDraft, these are meant to be processed
-   * after the patient is created and attached to the correct rows.
+   * Benzer şekilde, createPatient sonrasında inventory_items üzerinden
+   * hastaya bağlanmak için kullanılır.
    */
   deviceDrafts?: NewPatientDeviceDraft[];
 };
