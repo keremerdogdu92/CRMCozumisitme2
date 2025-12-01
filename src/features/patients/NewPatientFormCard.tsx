@@ -18,6 +18,7 @@ import type {
   PatientPaymentMethodFormValue,
   UpsertPatientSaleBreakdownItem,
   UpsertPatientInstallmentPlanInput,
+  NewPatientDeviceDraft,
 } from './types';
 import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
 import { NewPatientReferenceField } from './NewPatientReferenceField';
@@ -26,6 +27,7 @@ import { NewPatientPaymentSection } from './NewPatientPaymentSection';
 import { FormSection } from '../../components/layout/FormSection';
 import { PatientSaleBreakdownCard } from './PatientSaleBreakdownCard';
 import { PatientSenetPlanFormCard } from './PatientSenetPlanFormCard';
+import { NewPatientDevicesSection } from './NewPatientDevicesSection';
 
 type NewPatientFormCardProps = {
   open: boolean;
@@ -129,6 +131,7 @@ export function NewPatientFormCard({
     // Financial draft fields are optional; initialize as empty.
     saleBreakdownDraft: [],
     installmentPlanDraft: null,
+    deviceDrafts: [],
   });
 
   const [localError, setLocalError] = useState<string | null>(null);
@@ -141,8 +144,14 @@ export function NewPatientFormCard({
   const [senetUpfrontPaid, setSenetUpfrontPaid] = useState<string>('');
   const [senetInstallmentCount, setSenetInstallmentCount] =
     useState<string>('');
-  const [senetFirstDueDate, setSenetFirstDueDate] = useState<string>('');
+  const [senetFirstDueDate, setSenetFirstDueDate] =
+    useState<string>('');
   const [senetDayOfMonth, setSenetDayOfMonth] = useState<string>('');
+
+  // Draft: device rows for this new patient.
+  const [deviceDrafts, setDeviceDrafts] = useState<NewPatientDeviceDraft[]>(
+    [],
+  );
 
   const breakdownTotal = useMemo(() => {
     return breakdownItems.reduce((sum, item) => {
@@ -175,12 +184,14 @@ export function NewPatientFormCard({
       address: '',
       saleBreakdownDraft: [],
       installmentPlanDraft: null,
+      deviceDrafts: [],
     });
     setBreakdownItems([]);
     setSenetUpfrontPaid('');
     setSenetInstallmentCount('');
     setSenetFirstDueDate('');
     setSenetDayOfMonth('');
+    setDeviceDrafts([]);
     setLocalError(null);
   };
 
@@ -268,6 +279,9 @@ export function NewPatientFormCard({
         // kullanılmak üzere üst levele taşınıyor.
         saleBreakdownDraft: breakdownItems,
         installmentPlanDraft,
+        // Device drafts: create sonrası hasta cihazlarına bağlanmak için
+        // üst levele taşınıyor.
+        deviceDrafts,
       });
 
       // Başarılı kayıttan sonra üst komponent isterse resetFormState çağırabilir.
@@ -290,6 +304,33 @@ export function NewPatientFormCard({
       // Komisyon oranı sadece kartta kullanılıyor.
       cardFeeRate: value === 'Kredi_Kartı' ? s.cardFeeRate : '',
     }));
+  };
+
+  const handleAddDeviceRow = () => {
+    setDeviceDrafts((rows) => [
+      ...rows,
+      {
+        side: '',
+        brand: '',
+        model: '',
+        listPrice: '',
+        salePrice: '',
+        note: '',
+      },
+    ]);
+  };
+
+  const handleChangeDeviceRow = (
+    index: number,
+    patch: Partial<NewPatientDeviceDraft>,
+  ) => {
+    setDeviceDrafts((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
+  };
+
+  const handleRemoveDeviceRow = (index: number) => {
+    setDeviceDrafts((rows) => rows.filter((_, i) => i !== index));
   };
 
   const combinedError = localError || errorMessage || undefined;
@@ -593,6 +634,19 @@ export function NewPatientFormCard({
               }}
             />
           </div>
+        </FormSection>
+
+        {/* Cihaz taslakları bloğu */}
+        <FormSection
+          title="Cihazlar (opsiyonel)"
+          description="Bu hastaya verilmesi planlanan cihazları burada taslak olarak girebilirsiniz. Hasta kaydından sonra stok modülü ile ilişkilendirilebilir."
+        >
+          <NewPatientDevicesSection
+            items={deviceDrafts}
+            onAddRow={handleAddDeviceRow}
+            onChangeRow={handleChangeDeviceRow}
+            onRemoveRow={handleRemoveDeviceRow}
+          />
         </FormSection>
 
         {/* Submit button */}
