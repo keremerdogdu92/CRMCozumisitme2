@@ -1,6 +1,8 @@
 // src/features/patients/api/api.devices.ts
 // Fetch helpers + React Query hook for inventory-backed patient devices.
 // Lists inventory_items rows linked to a specific patient via sold_patient_id.
+// Ayrıca NewPatientDeviceDraft kullanarak stoktaki cihazları hastaya bağlamak için
+// attachDevicesToPatientFromDrafts yardımcı fonksiyonunu içerir.
 
 import { useQuery } from '@tanstack/react-query';
 import { supabaseClient } from '../../../utils/supabaseClient';
@@ -16,7 +18,8 @@ export const PATIENT_DEVICES_BY_PATIENT_QUERY_KEY = (patientId: string) =>
  *
  * Note:
  * - ear_side is NULL in stock; it is set only after binding to a patient.
- * - We normalise ear_side so that 'none' (if ever stored) is treated as null.
+ * - We normalise ear_side so that only 'right' | 'left' | 'bilateral'
+ *   are surfaced; anything else is treated as null.
  * - manufactured_at is not selected yet. When we add the column to
  *   inventory_items, we can extend the select + PatientDeviceRow.
  */
@@ -60,9 +63,9 @@ export async function fetchPatientDevicesByPatientId(
 
     let ear_side: PatientDeviceRow['ear_side'] = null;
     if (rawEar === 'right' || rawEar === 'left' || rawEar === 'bilateral') {
-      ear_side = rawEar;
+      ear_side = rawEar as PatientDeviceRow['ear_side'];
     }
-    // In stock state or legacy data, ear_side may be null or 'none' – we keep it null.
+    // In stock state or legacy data, ear_side may be null or any other value – we keep it null.
 
     return {
       id: row.id as string,
@@ -97,16 +100,21 @@ export function usePatientDevices(patientId: string | null) {
 /**
  * Attach inventory_items rows to a patient using NewPatientDeviceDraft[].
  *
- * - Only drafts with inventoryItemId and a non-empty side are processed.
- * - For each such draft:
+ * Beklenen NewPatientDeviceDraft alanları:
+ * - inventoryItemId: Bağlanacak stok satırının ID'si
+ * - side: 'right' | 'left' | 'bilateral' (kulağa göre)
+ *
+ * İşleyiş:
+ * - Sadece inventoryItemId dolu ve geçerli kulak yönü olan satırlar işlenir.
+ * - Her satır için:
  *   - inventory_items.sold_patient_id = patientId
  *   - inventory_items.sold_at = now
- *   - inventory_items.ear_side = draft.side (right/left/bilateral)
+ *   - inventory_items.ear_side = draft.side
  *   - inventory_items.status = 'sold'
  *
- * Notes:
- * - Çok fazla cihaz olmayacağı varsayımıyla her satır için ayrı UPDATE
- *   yapılmaktadır. Performans sorunu olursa server-side RPC'e taşınabilir.
+ * Notlar:
+ * - Cihaz sayısı tipik olarak az olacağı için her satır ayrı UPDATE ile gider.
+ *   İleride ihtiyaç olursa server-side RPC'ye taşınabilir.
  */
 export async function attachDevicesToPatientFromDrafts(
   patientId: string,
@@ -119,9 +127,17 @@ export async function attachDevicesToPatientFromDrafts(
     return;
   }
 
-  const rowsToAttach = drafts.filter(
-    (d) => d.inventoryItemId && d.side && d.side !== '',
-  );
+  // TypeScript uyumsuzluğunu tetikleyen '' karşılaştırmasını kaldırıyoruz.
+  // Bunun yerine geçerli kulak yönünü net bir şekilde filtreliyoruz.
+  const rowsToAttach = drafts.filter((d) => {
+    if (!d.inventoryItemId) return false;
+
+    return (
+      d.side === 'right' ||
+      d.side === 'left' ||
+      d.side === 'bilateral'
+    );
+  });
 
   if (rowsToAttach.length === 0) {
     return;
@@ -131,12 +147,12 @@ export async function attachDevicesToPatientFromDrafts(
   const errorMessages: string[] = [];
 
   for (const draft of rowsToAttach) {
-    const ear =
-      draft.side === 'right' ||
-      draft.side === 'left' ||
-      draft.side === 'bilateral'
-        ? draft.side
-        : null;
+    // rowsToAttach filtresinden geçtiği için side burada garanti olarak
+    // 'right' | 'left' | 'bilateral' union'ında.
+    const ear: 'right' | 'left' | 'bilateral' = draft.side as
+      | 'right'
+      | 'left'
+      | 'bilateral';
 
     const { error } = await supabaseClient
       .from('inventory_items')
@@ -160,8 +176,7 @@ export async function attachDevicesToPatientFromDrafts(
   if (errorMessages.length > 0) {
     // Şimdilik ilk hatayı kullanıcıya gösteriyoruz; loglarda detay duruyor.
     throw new Error(
-      'Cihazları hastaya bağlarken hata oluştu: ' +
-        errorMessages[0],
+      'Cihazları hastaya bağlarken hata oluştu: ' + errorMessages[0],
     );
   }
 }
