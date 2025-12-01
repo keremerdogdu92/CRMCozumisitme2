@@ -11,6 +11,7 @@ import {
 import { createPatient } from '../features/patients/api/api.patients';
 import { savePatientSaleBreakdown } from '../features/patients/api/api.saleBreakdown';
 import { upsertPatientInstallmentPlan } from '../features/patients/api/api.payments';
+import { attachDevicesToPatientFromDrafts } from '../features/patients/api/api.devices';
 import type {
   NewPatientForm,
   PatientRow,
@@ -48,7 +49,7 @@ export default function PatientsPage() {
   });
 
   const createMutation = useMutation({
-    // Yeni hasta oluşturma + isteğe bağlı breakdown + senet plan zinciri
+    // Yeni hasta oluşturma + isteğe bağlı breakdown + senet plan + cihaz zinciri
     mutationFn: async (values: NewPatientForm) => {
       // 1) Hasta kaydı
       const patient = await createPatient(values);
@@ -88,6 +89,24 @@ export default function PatientsPage() {
           );
           // Yine: hasta oluşturuldu ama plan kaydı başarısız; hata
           // kullanıcıya yansısın diye yeniden fırlatıyoruz.
+          throw err;
+        }
+      }
+
+      // 4) Cihaz taslakları varsa stok cihazlarını hastaya bağla
+      if (values.deviceDrafts && values.deviceDrafts.length > 0) {
+        try {
+          await attachDevicesToPatientFromDrafts(
+            patient.id,
+            values.deviceDrafts,
+          );
+        } catch (err) {
+          console.error(
+            'NewPatient: attach devices error:',
+            err,
+          );
+          // Hasta oluştu; ancak stok-hasta eşlemesi kritik olduğu için
+          // bu hatayı da kullanıcıya gösteriyoruz.
           throw err;
         }
       }
