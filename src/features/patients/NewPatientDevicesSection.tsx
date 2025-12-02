@@ -1,7 +1,7 @@
 // src/features/patients/NewPatientDevicesSection.tsx
 // Forwarder for NewPatientDevicesSection component.
-// New implementation lives in src/features/patients/components/new/NewPatientDevicesSection.tsx.
-// TODO: Update imports to use the new path directly and then remove this file.
+// New implementation lives in src/features/patients/new/NewPatientDevicesSection.tsx.
+// Prefer importing from '../patients/ui' for new code.
 
-export * from './components/new/NewPatientDevicesSection';
-export { NewPatientDevicesSection as default } from './components/new/NewPatientDevicesSection';
+export * from './new/NewPatientDevicesSection';
+export { NewPatientDevicesSection as default } from './new/NewPatientDevicesSection';
