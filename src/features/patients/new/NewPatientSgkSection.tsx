@@ -1,8 +1,8 @@
-// src/features/patients/components/new/NewPatientSgkSection.tsx
+// src/features/patients/new/NewPatientSgkSection.tsx
 // SGK block used in the NewPatientFormCard: flag + checkboxes +
 // SGK profile dropdown + expected reimbursement (locked) + month (locked).
 
-import { SGK_PROFILES } from '../../sgkProfiles';
+import { SGK_PROFILES } from '../sgkProfiles';
 
 type NewPatientSgkSectionProps = {
   sgkFlag: boolean;
@@ -17,6 +17,12 @@ type NewPatientSgkSectionProps = {
   onChangeSgkProfileId: (value: string) => void;
   onChangeSgkExpectedReimbursement: (value: string) => void;
   onChangeSgkExpectedMonth: (value: string) => void; // "yyyy-MM"
+};
+
+type SgkProfile = {
+  id: string;
+  label: string;
+  netToFirm: number;
 };
 
 export function NewPatientSgkSection({
@@ -48,7 +54,9 @@ export function NewPatientSgkSection({
   const handleChangeProfile = (value: string) => {
     onChangeSgkProfileId(value);
 
-    const profile = SGK_PROFILES.find((p) => p.id === value);
+    const profile = (SGK_PROFILES as SgkProfile[]).find(
+      (p: SgkProfile) => p.id === value,
+    );
     if (profile) {
       // 3rd column: net amount that SGK is expected to pay to the firm.
       // Keep it as a TL string; allow comma in UI.
@@ -124,7 +132,7 @@ export function NewPatientSgkSection({
             className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
           >
             <option value="">Profil seçin...</option>
-            {SGK_PROFILES.map((p) => (
+            {(SGK_PROFILES as SgkProfile[]).map((p: SgkProfile) => (
               <option key={p.id} value={p.id}>
                 {p.label}
               </option>
