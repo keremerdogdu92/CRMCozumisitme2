@@ -148,7 +148,7 @@ export type UpsertPatientInstallmentPlanInput = {
   upfrontPaid: string;
   installmentCount: string;
   firstDueDate: string; // yyyy-MM-dd
-  dayOfMonth: string;   // "1"–"31"
+  dayOfMonth: string; // "1"–"31"
 };
 
 /**
@@ -241,9 +241,9 @@ export type NewPatientForm = {
    * SGK profile selection and expected reimbursement.
    * Optional for now so that older flows (CSV import vb.) still compile.
    */
-  sgkProfileId?: string;             // e.g. 'SGK_0_4_CALISAN'
+  sgkProfileId?: string; // e.g. 'SGK_0_4_CALISAN'
   sgkExpectedReimbursement?: string; // TL string; parsed by parseMoneyToNumber
-  sgkExpectedMonth?: string;         // "yyyy-MM" (input type="month")
+  sgkExpectedMonth?: string; // "yyyy-MM" (input type="month")
 
   /**
    * Payment meta collected at creation time.
