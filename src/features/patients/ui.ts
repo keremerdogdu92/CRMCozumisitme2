@@ -2,11 +2,16 @@
 // Public UI surface for the patients feature.
 // Prefer importing patients UI components from this file instead of deep paths.
 // Example:
-//   import { NewPatientFormCard } from '../patients/ui';
+//   import { NewPatientFormCard } from '../features/patients/ui';
 
-export { NewPatientFormCard } from './components/new/NewPatientFormCard';
-export { NewPatientDevicesSection } from './components/new/NewPatientDevicesSection';
-export { NewPatientPaymentSection } from './components/new/NewPatientPaymentSection';
-export { NewPatientSgkSection } from './components/new/NewPatientSgkSection';
+export { NewPatientFormCard } from './new/NewPatientFormCard';
+export { NewPatientDevicesSection } from './new/NewPatientDevicesSection';
+export { NewPatientPaymentSection } from './new/NewPatientPaymentSection';
+export { NewPatientSgkSection } from './new/NewPatientSgkSection';
+export { NewPatientReferenceField } from './NewPatientReferenceField';
 
-// İleride buraya detay drawer, table, import section gibi bileşenler de eklenebilir.
+// İleride buraya:
+// - PatientsTable
+// - PatientDetailDrawer
+// - PatientsImportSection
+// vb. bileşenler de eklenebilir.
