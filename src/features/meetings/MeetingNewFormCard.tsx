@@ -4,7 +4,11 @@
 
 import { useState, FormEvent, useEffect } from 'react';
 import { useCreateMeetingMutation } from './api';
-import type { MeetingType, NewMeetingForm } from './types';
+import type {
+  MeetingAccessoryDraft,
+  MeetingType,
+  NewMeetingForm,
+} from './types';
 import { useCurrentProfile } from '../auth/useCurrentProfile';
 import { MeetingSubjectSearchField } from './MeetingSubjectSearchField';
 import { MeetingPaymentSection } from './MeetingPaymentSection';
@@ -32,8 +36,22 @@ const EMPTY_FORM: NewMeetingForm = {
   paymentNote: '',
 };
 
+const ACCESSORY_TYPE_OPTIONS: {
+  value: MeetingAccessoryDraft['type'];
+  label: string;
+}[] = [
+  { value: 'Dom', label: 'Dom' },
+  { value: 'Kulak Kalıbı', label: 'Kulak Kalıbı' },
+  { value: 'Receiver', label: 'Receiver' },
+  { value: 'Filtre', label: 'Filtre' },
+  { value: 'Pil', label: 'Pil' },
+  { value: 'Diğer', label: 'Diğer' },
+];
+
 export function MeetingNewFormCard() {
   const [form, setForm] = useState<NewMeetingForm>(EMPTY_FORM);
+  const [accessories, setAccessories] = useState<MeetingAccessoryDraft[]>([]);
+  const [showAccessories, setShowAccessories] = useState(false);
   const { mutateAsync, isPending, isError, error } =
     useCreateMeetingMutation();
 
@@ -58,10 +76,19 @@ export function MeetingNewFormCard() {
     }
   }, [isAdmin, form.meetingType]);
 
+  useEffect(() => {
+    if (form.meetingType !== 'patient') {
+      setAccessories([]);
+      setShowAccessories(false);
+    }
+  }, [form.meetingType]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    await mutateAsync(form);
+    await mutateAsync({ ...form, accessories });
     setForm(EMPTY_FORM);
+    setAccessories([]);
+    setShowAccessories(false);
   };
 
   const handleSubjectSelect = (id: string, name: string) => {
@@ -74,6 +101,39 @@ export function MeetingNewFormCard() {
 
   const showPaymentSection =
     form.meetingType === 'patient' && !!form.subjectId;
+  const showAccessorySection =
+    form.meetingType === 'patient' && !!form.subjectId;
+
+  const handleAddAccessory = () => {
+    const localId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `acc-${Date.now()}-${Math.random()}`;
+
+    setAccessories((prev) => [
+      ...prev,
+      {
+        id: localId,
+        type: 'Dom',
+        customName: '',
+        costPrice: '',
+        salePrice: '',
+      },
+    ]);
+  };
+
+  const handleAccessoryChange = (
+    index: number,
+    patch: Partial<MeetingAccessoryDraft>,
+  ) => {
+    setAccessories((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
+  };
+
+  const handleAccessoryRemove = (index: number) => {
+    setAccessories((prev) => prev.filter((_, i) => i !== index));
+  };
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -215,6 +275,124 @@ export function MeetingNewFormCard() {
               }))
             }
           />
+        )}
+
+        {showAccessorySection && (
+          <div className="border-t border-dashed border-slate-200 pt-2">
+            <button
+              type="button"
+              className="mt-1 text-[11px] text-slate-500 underline"
+              onClick={() => setShowAccessories((v) => !v)}
+            >
+              Aksesuar ekle (opsiyonel)
+            </button>
+
+            {showAccessories && (
+              <div className="mt-2 space-y-2 rounded-md border border-slate-200 p-3">
+                {accessories.length === 0 && (
+                  <p className="text-[11px] text-slate-500">
+                    Bu g�r��me i�in aksesuar eklenmedi.
+                  </p>
+                )}
+
+                {accessories.map((acc, index) => {
+                  const isOther = acc.type === 'Diğer';
+                  return (
+                    <div
+                      key={acc.id ?? index}
+                      className="grid gap-2 rounded-md bg-slate-50 p-2 sm:grid-cols-4"
+                    >
+                      <div className="sm:col-span-2">
+                        <label className="mb-1 block text-[11px] text-slate-600">
+                          Aksesuar
+                        </label>
+                        <select
+                          className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                          value={acc.type}
+                          onChange={(e) =>
+                            handleAccessoryChange(index, {
+                              type: e.target.value as MeetingAccessoryDraft['type'],
+                            })
+                          }
+                        >
+                          {ACCESSORY_TYPE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        {isOther && (
+                          <input
+                            type="text"
+                            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                            placeholder="Aksesuar ad�"
+                            value={acc.customName}
+                            onChange={(e) =>
+                              handleAccessoryChange(index, {
+                                customName: e.target.value,
+                              })
+                            }
+                          />
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-[11px] text-slate-600">
+                          Maliyet (TL)
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                          value={acc.costPrice}
+                          onChange={(e) =>
+                            handleAccessoryChange(index, {
+                              costPrice: e.target.value,
+                            })
+                          }
+                          placeholder="Opsiyonel"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-[11px] text-slate-600">
+                          Hastadan al�nan (TL)
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                          value={acc.salePrice}
+                          onChange={(e) =>
+                            handleAccessoryChange(index, {
+                              salePrice: e.target.value,
+                            })
+                          }
+                          placeholder="Opsiyonel"
+                        />
+                      </div>
+
+                      <div className="flex items-end justify-end">
+                        <button
+                          type="button"
+                          className="text-[11px] text-red-600 underline"
+                          onClick={() => handleAccessoryRemove(index)}
+                        >
+                          Sil
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  className="text-[11px] text-primary-600 underline"
+                  onClick={handleAddAccessory}
+                >
+                  Aksesuar sat�r� ekle
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Note */}

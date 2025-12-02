@@ -3,7 +3,13 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
-import type { MeetingRow, NewMeetingForm, MeetingType } from './types';
+import type {
+  MeetingAccessoryDraft,
+  MeetingAccessoryRow,
+  MeetingRow,
+  NewMeetingForm,
+  MeetingType,
+} from './types';
 
 export const MEETINGS_QUERY_KEY = ['meetings'] as const;
 
@@ -14,6 +20,10 @@ export const MEETINGS_BY_TRIAL_QUERY_KEY = (trialId: string) =>
 // Patient detail için: belirli bir hastaya bağlı görüşmeler
 export const MEETINGS_BY_PATIENT_QUERY_KEY = (patientId: string) =>
   ['meetings', 'patient', patientId] as const;
+
+export const MEETING_ACCESSORIES_BY_MEETING_QUERY_KEY = (
+  meetingId: string,
+) => ['meeting-accessories', meetingId] as const;
 
 export async function fetchMeetings(): Promise<MeetingRow[]> {
   const { data, error } = await supabaseClient
@@ -141,6 +151,102 @@ function parseAmountString(raw: string): number | null {
   return Number(value.toFixed(2));
 }
 
+function parseMoneyAllowZero(raw: string): number {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return 0;
+  const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
+  const value = Number(normalized);
+  if (!Number.isFinite(value) || value < 0) {
+    return 0;
+  }
+  return Number(value.toFixed(2));
+}
+
+export async function insertMeetingAccessoriesForMeeting(
+  orgId: string,
+  meetingId: string,
+  patientId: string,
+  drafts: MeetingAccessoryDraft[] | undefined,
+): Promise<MeetingAccessoryRow[]> {
+  if (!drafts || drafts.length === 0) return [];
+
+  const normalized = drafts
+    .map((draft) => {
+      const type = draft.type ?? 'Diğer';
+      const hasAnyValue =
+        (draft.customName ?? '').trim() !== '' ||
+        (draft.costPrice ?? '').trim() !== '' ||
+        (draft.salePrice ?? '').trim() !== '';
+
+      if (!hasAnyValue) return null;
+
+      const name =
+        type === 'Diğer'
+          ? (draft.customName ?? '').trim() || 'Diğer'
+          : type;
+
+      return {
+        org_id: orgId,
+        meeting_id: meetingId,
+        patient_id: patientId,
+        name,
+        cost_price: parseMoneyAllowZero(draft.costPrice ?? ''),
+        sale_price: parseMoneyAllowZero(draft.salePrice ?? ''),
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => !!row);
+
+  if (normalized.length === 0) return [];
+
+  const { data, error } = await supabaseClient
+    .from('meeting_accessories')
+    .insert(normalized)
+    .select('*');
+
+  if (error) {
+    console.error(
+      'insertMeetingAccessoriesForMeeting insert error:',
+      error,
+    );
+    throw error;
+  }
+
+  return (data ?? []) as MeetingAccessoryRow[];
+}
+
+export async function fetchMeetingAccessoriesByMeetingId(
+  meetingId: string,
+): Promise<MeetingAccessoryRow[]> {
+  if (!meetingId) return [];
+
+  const { data, error } = await supabaseClient
+    .from('meeting_accessories')
+    .select(
+      `
+      id,
+      meeting_id,
+      patient_id,
+      org_id,
+      name,
+      cost_price,
+      sale_price,
+      created_at
+    `,
+    )
+    .eq('meeting_id', meetingId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error(
+      'fetchMeetingAccessoriesByMeetingId query error:',
+      error,
+    );
+    throw error;
+  }
+
+  return (data ?? []) as MeetingAccessoryRow[];
+}
+
 export async function createMeeting(input: NewMeetingForm): Promise<void> {
   // 1) Aktif kullanıcıyı al
   const { data: userData, error: userError } =
@@ -207,6 +313,11 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
     input.meetingType === 'patient' &&
     !!input.subjectId;
 
+  const shouldInsertAccessories =
+    input.meetingType === 'patient' &&
+    !!input.subjectId &&
+    (input.accessories ?? []).length > 0;
+
   // 4) Meeting insert – meeting_type ve subject_x alanlarını da gönder
   const { data: insertedMeetings, error: insertError } = await supabaseClient
     .from('meetings')
@@ -266,6 +377,29 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
       throw new Error(
         'MEET_STEP_PAYMENT_INSERT: ' + paymentError.message,
       );
+    }
+  }
+
+  if (shouldInsertAccessories && input.subjectId) {
+    try {
+      await insertMeetingAccessoriesForMeeting(
+        profile.org_id,
+        meetingId,
+        input.subjectId,
+        input.accessories,
+      );
+    } catch (accErr) {
+      console.error(
+        'Failed to insert meeting accessories (MEET_STEP_ACCESSORIES_INSERT):',
+        accErr,
+      );
+      // Meeting ve ödeme kaydedildi; kullanıcıya yine de hata göstermeyi tercih ediyoruz.
+      if (accErr instanceof Error) {
+        throw new Error(
+          'MEET_STEP_ACCESSORIES_INSERT: ' + accErr.message,
+        );
+      }
+      throw accErr;
     }
   }
 }

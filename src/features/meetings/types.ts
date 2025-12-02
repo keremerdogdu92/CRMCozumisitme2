@@ -3,6 +3,33 @@
 
 export type MeetingType = 'patient' | 'trial' | 'reference';
 
+export type MeetingAccessoryType =
+  | 'Dom'
+  | 'Kulak Kalıbı'
+  | 'Receiver'
+  | 'Filtre'
+  | 'Pil'
+  | 'Diğer';
+
+export type MeetingAccessoryDraft = {
+  id?: string;
+  type: MeetingAccessoryType;
+  customName: string;
+  costPrice: string;
+  salePrice: string;
+};
+
+export type MeetingAccessoryRow = {
+  id: string;
+  meeting_id: string;
+  patient_id: string;
+  org_id: string;
+  name: string;
+  cost_price: number;
+  sale_price: number;
+  created_at: string;
+};
+
 export interface MeetingRow {
   id: string;
   // Supabase columns
@@ -43,4 +70,9 @@ export interface NewMeetingForm {
   hasPayment: boolean;
   paymentAmount: string;
   paymentNote: string;
+
+  /**
+   * Accessories sold in this meeting (only for patient type).
+   */
+  accessories?: MeetingAccessoryDraft[];
 }

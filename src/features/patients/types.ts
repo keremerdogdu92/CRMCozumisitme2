@@ -201,6 +201,32 @@ export type PatientDeviceRow = {
   sold_at: string | null;
 };
 
+export type DeviceRepairStatus =
+  | 'created'
+  | 'shipped'
+  | 'returned_waiting_meeting'
+  | 'scheduled'
+  | 'delivered'
+  | 'cancelled';
+
+export type DeviceRepairRow = {
+  id: string;
+  org_id: string;
+  patient_id: string | null;
+  inventory_item_id: string | null;
+  status: DeviceRepairStatus;
+  reason_note: string | null;
+  cargo_company: string | null;
+  cargo_tracking_no: string | null;
+  shipped_at: string | null;
+  returned_to_clinic_at: string | null;
+  delivered_to_patient_at: string | null;
+  expected_delivery_meeting_id: string | null;
+  last_status_changed: string;
+  cost: number | null;
+  note: string | null;
+};
+
 /**
  * Draft devices collected on "New Patient" form.
  *
