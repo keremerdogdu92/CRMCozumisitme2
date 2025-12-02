@@ -70,3 +70,101 @@ export function NewPatientSgkSection({
   return (
     <div className="flex h-full flex-col gap-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
       <div className="flex items-center gap-2">
+        <input
+          id="sgk-flag"
+          type="checkbox"
+          checked={sgkFlag}
+          onChange={(e) => handleToggleSgkFlag(e.target.checked)}
+          className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+        />
+        <label
+          htmlFor="sgk-flag"
+          className="select-none text-xs font-medium text-slate-700"
+        >
+          SGK hastası
+        </label>
+      </div>
+
+      <div className="flex flex-col gap-1 pl-5 text-xs">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            disabled={!sgkFlag}
+            checked={sgkPrescriptionReceived}
+            onChange={(e) =>
+              onChangeSgkPrescriptionReceived(e.target.checked)
+            }
+            className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+          />
+          <span>Reçete geldi mi?</span>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            disabled={!sgkFlag}
+            checked={sgkRecordedToSystem}
+            onChange={(e) =>
+              onChangeSgkRecordedToSystem(e.target.checked)
+            }
+            className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+          />
+          <span>Sisteme işlendi mi?</span>
+        </label>
+      </div>
+
+      {/* SGK profil seçimi + beklenen ödeme (kilitli) */}
+      <div className="mt-2 flex flex-col gap-2 text-xs">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-slate-700">SGK Profili</span>
+          <select
+            disabled={!sgkFlag}
+            value={sgkProfileId}
+            onChange={(e) => handleChangeProfile(e.target.value)}
+            className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
+          >
+            <option value="">Profil seçin...</option>
+            {SGK_PROFILES.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-slate-700">
+            Beklenen SGK Ödemesi (net)
+          </span>
+          <input
+            type="text"
+            disabled={!sgkFlag}
+            readOnly
+            value={sgkExpectedReimbursement}
+            className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
+            placeholder="Profil seçince otomatik hesaplanır"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-slate-700">
+            Beklenen Ödeme Ayı (SGK)
+          </span>
+          <input
+            type="month"
+            disabled={!sgkFlag}
+            readOnly
+            value={sgkExpectedMonth}
+            className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
+          />
+        </label>
+
+        <p className="mt-1 text-[11px] text-slate-500">
+          Profil seçildiğinde beklenen ödeme tutarı ve ayı sistem tarafından
+          otomatik hesaplanır (yaklaşık 3 ay sonrası). Bu alanlar sonradan
+          elle değiştirilmez.
+        </p>
+      </div>
+    </div>
+  );
+}
