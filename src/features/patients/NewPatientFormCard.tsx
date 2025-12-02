@@ -1,7 +1,7 @@
 // src/features/patients/NewPatientFormCard.tsx
 // Forwarder for NewPatientFormCard component.
-// New implementation lives in src/features/patients/components/new/NewPatientFormCard.tsx.
-// TODO: Update imports to use the new path directly and then remove this file.
+// New implementation lives in src/features/patients/new/NewPatientFormCard.tsx.
+// Prefer importing from '../patients/ui' for new code.
 
-export * from './components/new/NewPatientFormCard';
-export { NewPatientFormCard as default } from './components/new/NewPatientFormCard';
+export * from './new/NewPatientFormCard';
+export { NewPatientFormCard as default } from './new/NewPatientFormCard';
