@@ -1,18 +1,12 @@
-// src/features/patients/components/new/NewPatientDevicesSection.tsx
+// src/features/patients/new/NewPatientDevicesSection.tsx
 // Device draft section used in the "New Patient" form.
 // Allows binding simple per-ear device rows to existing inventory items
 // (inventory_items) via inventoryItemId, while still letting the user
 // override brand/model/prices/note fields if needed.
-//
-// Cihaz taslak bölümü: yeni hasta formunda kulak bazlı cihaz satırlarını
-// stoktaki inventory_items kayıtlarına bağlamak için kullanılır.
 
-import type {
-  NewPatientDeviceDraft,
-  NewPatientDeviceSide,
-} from '../../types';
-import { useInventoryItems } from '../../../inventory/api';
-import type { InventoryItemRow } from '../../../inventory/types';
+import type { NewPatientDeviceDraft, NewPatientDeviceSide } from '../types';
+import { useInventoryItems } from '../../inventory/api';
+import type { InventoryItemRow } from '../../inventory/types';
 
 type NewPatientDevicesSectionProps = {
   items: NewPatientDeviceDraft[];
@@ -46,7 +40,8 @@ export function NewPatientDevicesSection({
   // Stokta olan ve henüz herhangi bir hastaya bağlanmamış cihazlar.
   const availableInventory: InventoryItemRow[] =
     (inventory ?? []).filter(
-      (row) => row.status === 'in_stock' && !row.sold_patient_id,
+      (row: InventoryItemRow) =>
+        row.status === 'in_stock' && !row.sold_patient_id,
     );
 
   return (
@@ -83,7 +78,7 @@ export function NewPatientDevicesSection({
             // - Henüz hiçbir satıra seçilmemiş olanlar
             // - Veya zaten bu satırda seçili olan (değiştirmeden görmek için)
             const options = availableInventory.filter(
-              (row) =>
+              (row: InventoryItemRow) =>
                 !selectedOtherIds.includes(row.id) ||
                 row.id === item.inventoryItemId,
             );
@@ -97,7 +92,7 @@ export function NewPatientDevicesSection({
               }
 
               const inv = availableInventory.find(
-                (row) => row.id === inventoryId,
+                (row: InventoryItemRow) => row.id === inventoryId,
               );
 
               if (!inv) {
@@ -154,7 +149,7 @@ export function NewPatientDevicesSection({
                       className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                     >
                       <option value="">Stoktan seç…</option>
-                      {options.map((row) => (
+                      {options.map((row: InventoryItemRow) => (
                         <option key={row.id} value={row.id}>
                           {row.brand} {row.model}
                           {row.barcode
