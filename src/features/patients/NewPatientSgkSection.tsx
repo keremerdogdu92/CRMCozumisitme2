@@ -1,7 +1,7 @@
 // src/features/patients/NewPatientSgkSection.tsx
 // Forwarder for NewPatientSgkSection component.
-// New implementation lives in src/features/patients/components/new/NewPatientSgkSection.tsx.
-// TODO: Migrate imports to use the new path or ui.ts and then remove this file.
+// New implementation lives in src/features/patients/new/NewPatientSgkSection.tsx.
+// Prefer importing from '../patients/ui' for new code.
 
-export * from './components/new/NewPatientSgkSection';
-export { NewPatientSgkSection as default } from './components/new/NewPatientSgkSection';
+export * from './new/NewPatientSgkSection';
+export { NewPatientSgkSection as default } from './new/NewPatientSgkSection';
