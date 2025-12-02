@@ -7,19 +7,19 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import type { PatientRow } from './types';
-import { SideDrawer } from '../../components/layout/SideDrawer';
+import type { PatientRow } from '../../types';
+import { SideDrawer } from '../../../../components/layout/SideDrawer';
 import { PatientDetailInfoTab } from './PatientDetailInfoTab';
 import { PatientDetailPaymentsTab } from './PatientDetailPaymentsTab';
 import { PatientDetailDevicesTab } from './PatientDetailDevicesTab';
 import { PatientDetailSgkInvoiceTab } from './PatientDetailSgkInvoiceTab';
-import { PATIENTS_QUERY_KEY } from './api/api.core';
-import { updatePatientInvoiceStatus } from './api/api.patients';
-import type { MeetingRow } from '../meetings/types';
+import { PATIENTS_QUERY_KEY } from '../../api/api.core';
+import { updatePatientInvoiceStatus } from '../../api/api.patients';
+import type { MeetingRow } from '../../../meetings/types';
 import {
   MEETINGS_BY_PATIENT_QUERY_KEY,
   fetchMeetingsByPatientId,
-} from '../meetings/api';
+} from '../../../meetings/api';
 
 type PatientDetailTabId =
   | 'info'

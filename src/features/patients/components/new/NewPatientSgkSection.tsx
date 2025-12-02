@@ -2,7 +2,7 @@
 // SGK block used in the NewPatientFormCard: flag + checkboxes +
 // SGK profile dropdown + expected reimbursement (locked) + month (locked).
 
-import { SGK_PROFILES } from '../sgkProfiles';
+import { SGK_PROFILES } from '../../sgkProfiles';
 
 type NewPatientSgkSectionProps = {
   sgkFlag: boolean;

@@ -16,10 +16,12 @@ import type {
   NewPatientForm,
   PatientRow,
 } from '../features/patients/types';
-import { PatientsTable } from '../features/patients/PatientsTable';
-import { NewPatientFormCard } from '../features/patients/NewPatientFormCard';
-import { PatientDetailDrawer } from '../features/patients/PatientDetailDrawer';
-import { PatientsImportSection } from '../features/patients/PatientsImportSection';
+import {
+  NewPatientFormCard,
+  PatientDetailDrawer,
+  PatientsImportSection,
+  PatientsTable,
+} from '../features/patients/ui';
 
 type PatientDetailTabId =
   | 'info'

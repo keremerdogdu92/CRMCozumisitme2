@@ -9,7 +9,7 @@
 //   * Toplam satış + komisyon oranından komisyon tutarı ve net tutar hesaplanır ve gösterilir.
 
 import { useMemo, useState } from 'react';
-import type { PatientPaymentMethodFormValue } from '../types';
+import type { PatientPaymentMethodFormValue } from '../../types';
 
 const PAYMENT_METHOD_OPTIONS: {
   value: PatientPaymentMethodFormValue;

@@ -4,9 +4,9 @@
 // (device_brand, device_model, device_total_price, device_ear_side_summary)
 // and detailed per-device rows from inventory_items via usePatientDevices.
 
-import type { PatientRow, PatientDeviceRow } from './types';
-import { formatAmount } from './patientFormatUtils';
-import { usePatientDevices } from './api/api.devices';
+import type { PatientRow, PatientDeviceRow } from '../../types';
+import { formatAmount } from '../../patientFormatUtils';
+import { usePatientDevices } from '../../api/api.devices';
 
 type PatientDetailDevicesTabProps = {
   patient: PatientRow;

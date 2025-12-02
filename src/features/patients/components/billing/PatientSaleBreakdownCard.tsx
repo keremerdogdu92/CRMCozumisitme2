@@ -4,8 +4,8 @@
 import type {
   UpsertPatientSaleBreakdownItem,
   PatientPaymentMethod,
-} from './types';
-import { formatAmount } from './patientFormatUtils';
+} from '../../types';
+import { formatAmount } from '../../patientFormatUtils';
 
 export type PatientSaleBreakdownCardProps = {
   items: UpsertPatientSaleBreakdownItem[];

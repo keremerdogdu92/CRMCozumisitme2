@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { searchReferencesByName } from '../references/api';
+import { searchReferencesByName } from '../../../references/api';
 
 type ReferenceSearchResult = {
   id: string;

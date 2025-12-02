@@ -7,23 +7,23 @@ import type {
   PatientPaymentRow,
   UpsertPatientInstallmentPlanInput,
   UpsertPatientSaleBreakdownItem,
-} from './types';
+} from '../../types';
 import {
   usePatientInstallmentPlan,
   usePatientPayments,
   useUpsertPatientInstallmentPlanMutation,
-} from './api';
+} from '../../api';
 import {
   addMonths,
   formatAmount,
   formatDateTime,
-} from './patientFormatUtils';
+} from '../../patientFormatUtils';
 import {
   fetchPatientSaleBreakdown,
   savePatientSaleBreakdown,
-} from './api/api.saleBreakdown';
-import { PatientSaleBreakdownCard } from './PatientSaleBreakdownCard';
-import { PatientSenetPlanFormCard } from './PatientSenetPlanFormCard';
+} from '../../api/api.saleBreakdown';
+import { PatientSaleBreakdownCard } from '../billing/PatientSaleBreakdownCard';
+import { PatientSenetPlanFormCard } from '../billing/PatientSenetPlanFormCard';
 
 type PatientDetailPaymentsTabProps = {
   patientId: string;

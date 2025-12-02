@@ -4,9 +4,9 @@
 // (inventory_items) via inventoryItemId, while still letting the user
 // override brand/model/prices/note fields if needed.
 
-import type { NewPatientDeviceDraft, NewPatientDeviceSide } from '../types';
-import { useInventoryItems } from '../../inventory/api';
-import type { InventoryItemRow } from '../../inventory/types';
+import type { NewPatientDeviceDraft, NewPatientDeviceSide } from '../../types';
+import { useInventoryItems } from '../../../inventory/api';
+import type { InventoryItemRow } from '../../../inventory/types';
 
 type NewPatientDevicesSectionProps = {
   items: NewPatientDeviceDraft[];

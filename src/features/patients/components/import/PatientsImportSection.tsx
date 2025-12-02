@@ -9,8 +9,8 @@
 //  - Display a compact summary + per-row errors (if any).
 
 import { useState, type ChangeEvent } from 'react';
-import { usePatientsCsvImportMutation } from './api.import';
-import type { PatientsImportSummary } from './api.import';
+import { usePatientsCsvImportMutation } from '../../api.import';
+import type { PatientsImportSummary } from '../../api.import';
 
 export function PatientsImportSection() {
   const importMutation = usePatientsCsvImportMutation();

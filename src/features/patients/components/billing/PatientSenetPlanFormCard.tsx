@@ -6,7 +6,7 @@ import { useState } from 'react';
 import type {
   PatientInstallmentPlanRow,
   UpsertPatientInstallmentPlanInput,
-} from './types';
+} from '../../types';
 
 export type PatientSenetPlanFormCardProps = {
   plan: PatientInstallmentPlanRow | null;

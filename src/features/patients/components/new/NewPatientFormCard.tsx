@@ -19,14 +19,14 @@ import type {
   UpsertPatientSaleBreakdownItem,
   UpsertPatientInstallmentPlanInput,
   NewPatientDeviceDraft,
-} from '../types';
-import { InlineCreateCard } from '../../../components/layout/InlineCreateCard';
-import { FormSection } from '../../../components/layout/FormSection';
-import { NewPatientReferenceField } from '../NewPatientReferenceField';
+} from '../../types';
+import { InlineCreateCard } from '../../../../components/layout/InlineCreateCard';
+import { FormSection } from '../../../../components/layout/FormSection';
+import { NewPatientReferenceField } from './NewPatientReferenceField';
 import { NewPatientSgkSection } from './NewPatientSgkSection';
 import { NewPatientPaymentSection } from './NewPatientPaymentSection';
-import { PatientSaleBreakdownCard } from '../PatientSaleBreakdownCard';
-import { PatientSenetPlanFormCard } from '../PatientSenetPlanFormCard';
+import { PatientSaleBreakdownCard } from '../billing/PatientSaleBreakdownCard';
+import { PatientSenetPlanFormCard } from '../billing/PatientSenetPlanFormCard';
 import { NewPatientDevicesSection } from './NewPatientDevicesSection';
 
 type NewPatientFormCardProps = {

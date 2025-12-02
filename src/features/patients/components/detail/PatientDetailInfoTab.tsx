@@ -1,8 +1,8 @@
 // src/features/patients/PatientDetailInfoTab.tsx
 // Info tab for patient detail drawer: identity, contact, reference and archive info.
 
-import type { PatientRow } from './types';
-import { formatDate } from './patientFormatUtils';
+import type { PatientRow } from '../../types';
+import { formatDate } from '../../patientFormatUtils';
 
 type PatientDetailInfoTabProps = {
   patient: PatientRow;

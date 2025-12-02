@@ -2,9 +2,9 @@
 // SGK and Invoice tab for patient detail drawer: SGK flags, prescription no,
 // SGK profile-based reimbursement info and invoice status.
 
-import type { PatientRow } from './types';
-import { formatDate } from './patientFormatUtils';
-import { getSgkProfileLabel } from './sgkProfiles';
+import type { PatientRow } from '../../types';
+import { formatDate } from '../../patientFormatUtils';
+import { getSgkProfileLabel } from '../../sgkProfiles';
 
 type PatientDetailSgkInvoiceTabProps = {
   patient: PatientRow;

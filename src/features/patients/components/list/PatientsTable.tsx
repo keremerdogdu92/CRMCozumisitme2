@@ -1,8 +1,8 @@
 // src/features/patients/PatientsTable.tsx
 // Patients listing table with responsive layout: mobile cards + desktop table.
 
-import type { PatientRow } from './types';
-import { ResponsiveTableShell } from '../../components/layout/ResponsiveTableShell';
+import type { PatientRow } from '../../types';
+import { ResponsiveTableShell } from '../../../../components/layout/ResponsiveTableShell';
 
 type PatientsTableProps = {
   patients: PatientRow[];
