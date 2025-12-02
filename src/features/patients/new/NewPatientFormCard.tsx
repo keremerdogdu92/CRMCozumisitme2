@@ -1,15 +1,4 @@
-// src/features/patients/components/new/NewPatientFormCard.tsx
-// Inline "New Patient" form card using InlineCreateCard and modular subsections.
-// Layout:
-// - Row 1 (desktop): Full Name, National ID, Phone
-// - Row 2 (desktop): Kin Phone, Address, Reference
-// - Row 3 (desktop): SGK trio + Payment Method
-//
-// v2 rules:
-// - Required fields: Full Name, National ID, Phone, Payment Method, Total Sale Amount.
-// - Phone is normalized to E.164-like format.
-// - National ID is digits-only and must be 11 digits.
-//
+// src/features/patients/new/NewPatientFormCard.tsx
 // Inline "Yeni Hasta" form card using InlineCreateCard and modular subsections.
 // Layout:
 // - Row 1 (desktop): Ad Soyad, T.C. Kimlik No, Telefon
@@ -30,15 +19,15 @@ import type {
   UpsertPatientSaleBreakdownItem,
   UpsertPatientInstallmentPlanInput,
   NewPatientDeviceDraft,
-} from '../../types';
-import { InlineCreateCard } from '../../../../components/layout/InlineCreateCard';
-import { NewPatientReferenceField } from '../../NewPatientReferenceField';
-import { NewPatientSgkSection } from '../../NewPatientSgkSection';
-import { NewPatientPaymentSection } from '../../NewPatientPaymentSection';
-import { FormSection } from '../../../../components/layout/FormSection';
-import { PatientSaleBreakdownCard } from '../../PatientSaleBreakdownCard';
-import { PatientSenetPlanFormCard } from '../../PatientSenetPlanFormCard';
-import { NewPatientDevicesSection } from '../../NewPatientDevicesSection';
+} from '../types';
+import { InlineCreateCard } from '../../../components/layout/InlineCreateCard';
+import { FormSection } from '../../../components/layout/FormSection';
+import { NewPatientReferenceField } from '../NewPatientReferenceField';
+import { NewPatientSgkSection } from './NewPatientSgkSection';
+import { NewPatientPaymentSection } from './NewPatientPaymentSection';
+import { PatientSaleBreakdownCard } from '../PatientSaleBreakdownCard';
+import { PatientSenetPlanFormCard } from '../PatientSenetPlanFormCard';
+import { NewPatientDevicesSection } from './NewPatientDevicesSection';
 
 type NewPatientFormCardProps = {
   open: boolean;
@@ -469,7 +458,13 @@ export function NewPatientFormCard({
               <NewPatientReferenceField
                 referenceId={formState.referenceId}
                 referenceName={formState.referenceName}
-                onChangeReference={({ id, name }) =>
+                onChangeReference={({
+                  id,
+                  name,
+                }: {
+                  id: string | null;
+                  name: string;
+                }) =>
                   setFormState((s) => ({
                     ...s,
                     referenceId: id,
@@ -495,7 +490,7 @@ export function NewPatientFormCard({
                   formState.sgkExpectedReimbursement ?? ''
                 }
                 sgkExpectedMonth={formState.sgkExpectedMonth ?? ''}
-                onChangeSgkFlag={(value) =>
+                onChangeSgkFlag={(value: boolean) =>
                   setFormState((s) => ({
                     ...s,
                     sgkFlag: value,
@@ -514,31 +509,31 @@ export function NewPatientFormCard({
                       : '',
                   }))
                 }
-                onChangeSgkPrescriptionReceived={(value) =>
+                onChangeSgkPrescriptionReceived={(value: boolean) =>
                   setFormState((s) => ({
                     ...s,
                     sgkPrescriptionReceived: value,
                   }))
                 }
-                onChangeSgkRecordedToSystem={(value) =>
+                onChangeSgkRecordedToSystem={(value: boolean) =>
                   setFormState((s) => ({
                     ...s,
                     sgkRecordedToSystem: value,
                   }))
                 }
-                onChangeSgkProfileId={(value) =>
+                onChangeSgkProfileId={(value: string) =>
                   setFormState((s) => ({
                     ...s,
                     sgkProfileId: value,
                   }))
                 }
-                onChangeSgkExpectedReimbursement={(value) =>
+                onChangeSgkExpectedReimbursement={(value: string) =>
                   setFormState((s) => ({
                     ...s,
                     sgkExpectedReimbursement: value,
                   }))
                 }
-                onChangeSgkExpectedMonth={(value) =>
+                onChangeSgkExpectedMonth={(value: string) =>
                   setFormState((s) => ({
                     ...s,
                     sgkExpectedMonth: value,
@@ -554,13 +549,13 @@ export function NewPatientFormCard({
                 saleTotal={formState.saleTotal}
                 cardFeeRate={formState.cardFeeRate}
                 onChangePaymentMethod={handleChangePaymentMethod}
-                onChangeSaleTotal={(value) =>
+                onChangeSaleTotal={(value: string) =>
                   setFormState((s) => ({
                     ...s,
                     saleTotal: value,
                   }))
                 }
-                onChangeCardFeeRate={(value) =>
+                onChangeCardFeeRate={(value: string) =>
                   setFormState((s) => ({
                     ...s,
                     cardFeeRate: value,
@@ -591,14 +586,17 @@ export function NewPatientFormCard({
                   },
                 ])
               }
-              onChangeRow={(index, patch) =>
+              onChangeRow={(
+                index: number,
+                patch: Partial<UpsertPatientSaleBreakdownItem>,
+              ) =>
                 setBreakdownItems((rows) =>
                   rows.map((row, i) =>
                     i === index ? { ...row, ...patch } : row,
                   ),
                 )
               }
-              onRemoveRow={(index) =>
+              onRemoveRow={(index: number) =>
                 setBreakdownItems((rows) =>
                   rows.filter((_, i) => i !== index),
                 )
@@ -623,7 +621,7 @@ export function NewPatientFormCard({
               installmentCount={senetInstallmentCount}
               firstDueDate={senetFirstDueDate}
               dayOfMonth={senetDayOfMonth}
-              setSaleTotal={(v) =>
+              setSaleTotal={(v: string) =>
                 setFormState((s) => ({
                   ...s,
                   saleTotal: v,
@@ -639,7 +637,9 @@ export function NewPatientFormCard({
               planError={null}
               isPlanSaving={false}
               patientId=""
-              upsertPlan={async (_input: UpsertPatientInstallmentPlanInput) => {
+              upsertPlan={async (
+                _input: UpsertPatientInstallmentPlanInput,
+              ) => {
                 // New patient flow: gerçek upsert, createPatient sonrası
                 // upsertPatientInstallmentPlan ile yapılacak.
                 return;
