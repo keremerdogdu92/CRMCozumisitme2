@@ -7,9 +7,6 @@
 export { NewPatientFormCard } from './components/new/NewPatientFormCard';
 export { NewPatientDevicesSection } from './components/new/NewPatientDevicesSection';
 export { NewPatientPaymentSection } from './components/new/NewPatientPaymentSection';
+export { NewPatientSgkSection } from './components/new/NewPatientSgkSection';
 
-// İleride:
-// export { PatientsTable } from './components/table/PatientsTable';
-// export { PatientDetailDrawer } from './components/detail/PatientDetailDrawer';
-// export { PatientsImportSection } from './components/import/PatientsImportSection';
-// ...
+// İleride buraya detay drawer, table, import section gibi bileşenler de eklenebilir.
