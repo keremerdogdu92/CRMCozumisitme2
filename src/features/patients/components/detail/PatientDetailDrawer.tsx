@@ -13,7 +13,7 @@ import { PatientDetailInfoTab } from './PatientDetailInfoTab';
 import { PatientDetailPaymentsTab } from './PatientDetailPaymentsTab';
 import { PatientDetailDevicesTab } from './PatientDetailDevicesTab';
 import { PatientDetailSgkInvoiceTab } from './PatientDetailSgkInvoiceTab';
-import { PatientDetailAccessoriesTab } from './components/detail/PatientDetailAccessoriesTab';
+import { PatientDetailAccessoriesTab } from './PatientDetailAccessoriesTab';
 import { PATIENTS_QUERY_KEY } from '../../api/api.core';
 import { updatePatientInvoiceStatus } from '../../api/api.patients';
 import type { MeetingRow } from '../../../meetings/types';
