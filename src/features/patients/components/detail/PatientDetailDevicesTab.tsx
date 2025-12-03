@@ -1,4 +1,4 @@
-// src/features/patients/PatientDetailDevicesTab.tsx
+// src/features/patients/components/detail/PatientDetailDevicesTab.tsx
 // Summary: Device & sale summary tab for patient detail drawer.
 // Uses aggregated fields from patient_list_with_device on the PatientRow
 // (device_brand, device_model, device_total_price, device_ear_side_summary)
@@ -12,7 +12,7 @@ import {
   PATIENT_DEVICES_BY_PATIENT_QUERY_KEY,
   usePatientDevices,
 } from '../../api/api.devices';
-import { useCurrentProfile } from '../../auth/useCurrentProfile';
+import { useCurrentProfile } from '../../../auth/useCurrentProfile';
 import {
   DEVICE_REPAIRS_BY_PATIENT_QUERY_KEY,
   createDeviceRepairForInventoryItem,
@@ -190,9 +190,9 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
         </div>
 
         <p className="mt-1 text-[11px] leading-snug text-slate-500">
-          Tavsiye satış toplamı, stokta bu hastaya bağlanan cihazların liste fiyatlarının
-          toplamıdır. Gerçek satış fiyatı ise hasta kaydında girilen ilk satış tutarını
-          gösterir. Sonradan eklenen aksesuar ve tamirler ayrı kalemler olarak
+          Tavsiye satış toplamı, stokta bu hastaya bağlanan cihazların liste
+          fiyatlarının toplamıdır. Gerçek satış fiyatı ise hasta kaydında girilen ilk satış
+          tutarını gösterir. Sonradan eklenen aksesuar ve tamirler ayrı kalemler olarak
           izlenecektir.
         </p>
 
@@ -216,8 +216,8 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
 
         {!isLoading && deviceRows.length === 0 && (
           <p className="text-[11px] text-slate-500">
-            Bu hastaya bağlı stok cihazı bulunamadı. Satışı yapılan cihazları stok modülünden bu
-            hastaya bağladığınızda burada görünecek.
+            Bu hastaya bağlı stok cihazı bulunamadı. Satışı yapılan cihazları stok
+            modülünden bu hastaya bağladığınızda burada görünecek.
           </p>
         )}
 
@@ -304,7 +304,9 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
 
             <div className="mt-3 space-y-2">
               <div>
-                <label className="mb-1 block text-[11px] text-slate-600">Neden / Not</label>
+                <label className="mb-1 block text-[11px] text-slate-600">
+                  Neden / Not
+                </label>
                 <textarea
                   className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
                   rows={2}
@@ -328,7 +330,9 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[11px] text-slate-600">Takip No</label>
+                  <label className="mb-1 block text-[11px] text-slate-600">
+                    Takip No
+                  </label>
                   <input
                     type="text"
                     className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
