@@ -222,7 +222,17 @@ export async function updateDeviceRepairStatus(
 export async function fetchActiveDeviceRepairsSummary(
   orgId: string,
 ): Promise<DeviceRepairsActiveSummary> {
-  if (!orgId) return { total: 0, byStatus: {}, oldestOpen: null };
+  if (!orgId) {
+    const emptyByStatus: Record<DeviceRepairStatus, number> = {
+      created: 0,
+      shipped: 0,
+      returned_waiting_meeting: 0,
+      scheduled: 0,
+      delivered: 0,
+      cancelled: 0,
+    };
+    return { total: 0, byStatus: emptyByStatus, oldestOpen: null };
+  }
 
   const { data, error } = await supabaseClient
     .from('device_repairs')
@@ -266,9 +276,7 @@ export async function fetchActiveDeviceRepairsSummary(
 
   const total = Object.entries(byStatus)
     .filter(([k]) =>
-      ['created', 'shipped', 'returned_waiting_meeting', 'scheduled'].includes(
-        k,
-      ),
+      ['created', 'shipped', 'returned_waiting_meeting', 'scheduled'].includes(k),
     )
     .reduce((sum, [, count]) => sum + count, 0);
 
