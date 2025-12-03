@@ -1,4 +1,4 @@
-// src/features/patients/PatientDetailDrawer.tsx
+// src/features/patients/components/detail/PatientDetailDrawer.tsx
 // Tabbed patient detail drawer using the shared SideDrawer shell and per-tab components.
 
 import { useEffect, useState } from 'react';
