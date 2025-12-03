@@ -13,6 +13,7 @@ import { PatientDetailInfoTab } from './PatientDetailInfoTab';
 import { PatientDetailPaymentsTab } from './PatientDetailPaymentsTab';
 import { PatientDetailDevicesTab } from './PatientDetailDevicesTab';
 import { PatientDetailSgkInvoiceTab } from './PatientDetailSgkInvoiceTab';
+import { PatientDetailAccessoriesTab } from './PatientDetailAccessoriesTab';
 import { PATIENTS_QUERY_KEY } from '../../api/api.core';
 import { updatePatientInvoiceStatus } from '../../api/api.patients';
 import type { MeetingRow } from '../../../meetings/types';
@@ -27,6 +28,7 @@ type PatientDetailTabId =
   | 'devices'
   | 'meetings'
   | 'payments'
+  | 'accessories'
   | 'audiogram';
 
 type PatientDetailDrawerProps = {
@@ -154,6 +156,7 @@ export function PatientDetailDrawer({
     { id: 'devices', label: 'Cihazlar' },
     { id: 'meetings', label: 'Görüşmeler' },
     { id: 'payments', label: 'Ödemeler' },
+    { id: 'accessories', label: 'Aksesuarlar' },
     { id: 'audiogram', label: 'Audiogram' },
   ];
 
@@ -353,6 +356,13 @@ export function PatientDetailDrawer({
 
         {activeTab === 'payments' && (
           <PatientDetailPaymentsTab patientId={patient.id} open={open} />
+        )}
+
+        {activeTab === 'accessories' && (
+          <PatientDetailAccessoriesTab
+            patientId={patient.id}
+            open={open}
+          />
         )}
 
         {activeTab === 'audiogram' && (
