@@ -118,10 +118,7 @@ function parsePaymentMethod(
  *   - sale_total                    (tercih edilen isim)
  *   - card_sale_total               (eski isim; sale_total yoksa fallback)
  *   - card_fee_rate
- *
- * Not: sale_date gibi ek kolonlar CSV'de bulunabilir ancak burada
- * NewPatientForm'a map edilmiyor; ileride ayrı bir migration için
- * kullanılmak üzere sadece CSV tarafında tutulabilir.
+ *   - sale_date                     (opsiyonel; "yyyy-MM-dd", legacy created_at / fatura tarihi için)
  */
 export function mapCsvRowToNewPatientForm(params: {
   row: PatientsCsvRowObj;
@@ -176,6 +173,10 @@ export function mapCsvRowToNewPatientForm(params: {
 
   const cardFeeRate = (row['card_fee_rate'] ?? '').trim();
 
+  // Optional legacy sale date ("yyyy-MM-dd") used to backfill created_at /
+  // invoice_issued_at during CSV imports.
+  const legacySaleDate = (row['sale_date'] ?? '').trim();
+
   const formValues: NewPatientForm = {
     fullName,
     phone,
@@ -187,6 +188,8 @@ export function mapCsvRowToNewPatientForm(params: {
     paymentMethod,
     saleTotal,
     cardFeeRate,
+    // Legacy sale date for imports (optional)
+    legacySaleDate: legacySaleDate || undefined,
     // Referans: CSV'den sadece isim alıyoruz, ID'yi boş bırakıyoruz
     referenceId: null,
     referenceName: referenceName || '',
