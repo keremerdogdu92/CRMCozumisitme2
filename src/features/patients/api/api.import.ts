@@ -46,8 +46,9 @@ export type PatientsImportSummary = {
  *   - sgk_flag
  *   - sgk_prescription_received
  *   - sgk_recorded_to_system
- *   - payment_method
- *   - card_sale_total
+ *   - payment_method        (opsiyonel; boş ise importer "Nakit" yapar)
+ *   - sale_total            (tercih edilen isim)
+ *   - card_sale_total       (eski isim; sale_total yoksa fallback)
  *   - card_fee_rate
  *
  * CSV'den gelen hastalar, iş akışı gereği fiilen "faturası kesilmiş" kabul
