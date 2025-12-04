@@ -88,44 +88,6 @@ function normalizeEarSide(raw: string): InventoryItemRow['ear_side'] {
 }
 
 /**
- * dd.MM.yyyy veya yyyy-MM-dd formatındaki tarihleri ISO stringe çevirir.
- * Geçersizse null döner.
- */
-function parseSoldAtDate(raw: string): string | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-
-  // yyyy-MM-dd veya tam ISO ise:
-  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
-    const d = new Date(trimmed);
-    if (!Number.isNaN(d.getTime())) return d.toISOString();
-  }
-
-  // dd.MM.yyyy formati
-  const m = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-  if (m) {
-    const day = Number(m[1]);
-    const month = Number(m[2]);
-    const year = Number(m[3]);
-    if (
-      Number.isFinite(day) &&
-      Number.isFinite(month) &&
-      Number.isFinite(year) &&
-      month >= 1 &&
-      month <= 12 &&
-      day >= 1 &&
-      day <= 31
-    ) {
-      const d = new Date(Date.UTC(year, month - 1, day));
-      if (!Number.isNaN(d.getTime())) return d.toISOString();
-    }
-  }
-
-  // Diğer formatları kabul etmiyoruz
-  return null;
-}
-
-/**
  * Build payloads and counters for inventory import, given CSV objects.
  * No Supabase calls here; this stays pure so it can be reused/tested.
  *
@@ -140,8 +102,9 @@ function parseSoldAtDate(raw: string): string | null {
  * - purchase_price
  * - list_price / device_price
  * - notes
- * - sold_at (opsiyonel – doluysa status varsayılan olarak "sold")
  * - patient_national_id (şu an sadece ileride kullanmak için okunuyor)
+ *
+ * NOT: sold_at şu an bilinçli olarak import edilmiyor ve doğrulanmıyor.
  */
 export function buildInventoryImportPayload(args: {
   orgId: string;
@@ -177,8 +140,6 @@ export function buildInventoryImportPayload(args: {
       (row['device_price'] ?? '').trim();
 
     const rawNotes = (row['notes'] ?? '').trim();
-
-    const rawSoldAt = (row['sold_at'] ?? '').trim();
     const rawPatientNationalId = (row['patient_national_id'] ?? '').trim();
 
     let valid = true;
@@ -197,7 +158,6 @@ export function buildInventoryImportPayload(args: {
     let earSideDb: InventoryItemRow['ear_side'] = null;
     let purchasePrice: number | null = null;
     let listPrice: number | null = null;
-    let soldAt: string | null = null;
 
     if (valid) {
       try {
@@ -208,7 +168,7 @@ export function buildInventoryImportPayload(args: {
       }
     }
 
-    // Status: varsa normalize et, yoksa sold_at'a göre varsayılan belirle
+    // Status: sadece CSV'deki status alanına göre belirleniyor.
     if (valid) {
       if (rawStatus) {
         try {
@@ -217,8 +177,6 @@ export function buildInventoryImportPayload(args: {
           valid = false;
           validationError = (e as Error).message;
         }
-      } else if (rawSoldAt) {
-        status = 'sold';
       } else {
         status = 'in_stock';
       }
@@ -251,17 +209,6 @@ export function buildInventoryImportPayload(args: {
       }
     }
 
-    if (valid && rawSoldAt) {
-      const iso = parseSoldAtDate(rawSoldAt);
-      if (!iso) {
-        valid = false;
-        validationError =
-          'sold_at geçerli bir tarih olmalıdır (yyyy-MM-dd veya dd.MM.yyyy).';
-      } else {
-        soldAt = iso;
-      }
-    }
-
     importRowsPayload.push({
       job_id: jobId,
       row_index: rowIndex,
@@ -271,7 +218,7 @@ export function buildInventoryImportPayload(args: {
       raw_barcode: rawBarcode || null,
       raw_serial_no: rawSerialNo || null,
       raw_ear_side: rawEarSide || null,
-      raw_status: rawStatus || (rawSoldAt ? 'sold' : null),
+      raw_status: rawStatus || null,
       raw_purchase_price: rawPurchasePrice || null,
       raw_list_price: rawListPrice || null,
       raw_notes:
@@ -301,7 +248,8 @@ export function buildInventoryImportPayload(args: {
         purchase_price: purchasePrice,
         list_price: listPrice,
         sold_patient_id: null,
-        sold_at: soldAt,
+        // NOTE: sold_at is intentionally not imported for now.
+        sold_at: null,
       });
     } else {
       errorCount += 1;
