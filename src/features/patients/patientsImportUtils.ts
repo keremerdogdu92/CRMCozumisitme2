@@ -101,6 +101,49 @@ function parsePaymentMethod(
 }
 
 /**
+ * Try to normalize various legacy date strings into "yyyy-MM-dd".
+ *
+ * Supported examples:
+ * - "2024-11-20"
+ * - "20.11.2024"
+ * - "20/11/2024"
+ *
+ * Returns undefined if parsing fails.
+ */
+function normalizeLegacySaleDate(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  // Already ISO-like "yyyy-MM-dd" → accept as-is.
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (isoMatch) {
+    return trimmed;
+  }
+
+  // "dd.MM.yyyy" or "dd/MM/yyyy"
+  const dotMatch = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(trimmed);
+  if (dotMatch) {
+    const day = dotMatch[1].padStart(2, '0');
+    const month = dotMatch[2].padStart(2, '0');
+    const year = dotMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  // Fallback: last attempt with Date, but only if it yields a valid date.
+  const d = new Date(trimmed);
+  if (!Number.isNaN(d.getTime())) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  console.warn('LEGACY_SALE_DATE_NORMALIZE_FAILED', { raw });
+  return undefined;
+}
+
+/**
  * Map a raw CSV object (header → value) into NewPatientForm.
  * We keep the mapping simple and rely on createPatient(...) to do DB validation.
  *
@@ -118,7 +161,7 @@ function parsePaymentMethod(
  *   - sale_total                    (tercih edilen isim)
  *   - card_sale_total               (eski isim; sale_total yoksa fallback)
  *   - card_fee_rate
- *   - sale_date                     (opsiyonel; "yyyy-MM-dd", legacy created_at / fatura tarihi için)
+ *   - sale_date                     (opsiyonel; "yyyy-MM-dd" veya "dd.MM.yyyy", legacy tarih)
  */
 export function mapCsvRowToNewPatientForm(params: {
   row: PatientsCsvRowObj;
@@ -173,9 +216,8 @@ export function mapCsvRowToNewPatientForm(params: {
 
   const cardFeeRate = (row['card_fee_rate'] ?? '').trim();
 
-  // Optional legacy sale date ("yyyy-MM-dd") used to backfill created_at /
-  // invoice_issued_at during CSV imports.
-  const legacySaleDate = (row['sale_date'] ?? '').trim();
+  // Optional legacy sale date; normalize to "yyyy-MM-dd".
+  const legacySaleDate = normalizeLegacySaleDate(row['sale_date']);
 
   const formValues: NewPatientForm = {
     fullName,
@@ -188,8 +230,8 @@ export function mapCsvRowToNewPatientForm(params: {
     paymentMethod,
     saleTotal,
     cardFeeRate,
-    // Legacy sale date for imports (optional)
-    legacySaleDate: legacySaleDate || undefined,
+    // Legacy sale date for imports (optional, already normalized if present)
+    legacySaleDate,
     // Referans: CSV'den sadece isim alıyoruz, ID'yi boş bırakıyoruz
     referenceId: null,
     referenceName: referenceName || '',
