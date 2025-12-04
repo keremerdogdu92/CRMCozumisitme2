@@ -32,6 +32,19 @@ export type ImportRowPayload = {
 
 export type InventoryImportBuildResult = {
   importRowsPayload: ImportRowPayload[];
+  /**
+   * Draft payloads for inventory_items insert.
+   * Her eleman şu şekildedir:
+   * {
+   *   rowIndex: number;
+   *   item: { ...inventory_items insert row... };
+   *   patientNationalId: string | null;
+   *   soldAtRaw: string | null;
+   * }
+   *
+   * Supabase'e insert etmeden önce patientNationalId kullanılarak
+   * sold_patient_id ve sold_at alanları api.import.ts içinde doldurulur.
+   */
   inventoryItemsPayload: any[];
   totalRows: number;
   importedCount: number;
@@ -82,6 +95,23 @@ function normalizeEarSide(raw: string): InventoryItemRow['ear_side'] {
 /**
  * Build payloads and counters for inventory import, given CSV objects.
  * No Supabase calls here; this stays pure so it can be reused/tested.
+ *
+ * Desteklenen başlıklar (normalize edilmiş):
+ * - brand / device_brand / marka
+ * - model / device_model / modeli
+ * - item_type
+ * - barcode
+ * - serial_no
+ * - ear_side
+ * - status
+ * - purchase_price
+ * - list_price
+ * - notes
+ *
+ * Ek başlıklar (opsiyonel, hasta link'i için):
+ * - patient_national_id
+ * - sold_at
+ * - device_price (veya fiyat) → list_price olarak kullanılır, list_price yoksa.
  */
 export function buildInventoryImportPayload(args: {
   orgId: string;
@@ -99,26 +129,47 @@ export function buildInventoryImportPayload(args: {
 
   csvObjects.forEach((row, idx) => {
     const rowIndex = idx + 2; // 1 = header, so rows start at 2
-    const rawBrand = (row['brand'] ?? '').trim();
-    const rawModel = (row['model'] ?? '').trim();
+
+    // Brand / model alias'ları:
+    const rawBrand =
+      (row['brand'] ?? '').trim() ||
+      (row['device_brand'] ?? '').trim() ||
+      (row['marka'] ?? '').trim();
+
+    const rawModel =
+      (row['model'] ?? '').trim() ||
+      (row['device_model'] ?? '').trim() ||
+      (row['modeli'] ?? '').trim();
+
     const rawItemType = (row['item_type'] ?? '').trim();
     const rawBarcode = (row['barcode'] ?? '').trim();
     const rawSerialNo = (row['serial_no'] ?? '').trim();
     const rawEarSide = (row['ear_side'] ?? '').trim();
     const rawStatus = (row['status'] ?? '').trim();
     const rawPurchasePrice = (row['purchase_price'] ?? '').trim();
-    const rawListPrice = (row['list_price'] ?? '').trim();
+
+    // list_price veya device_price / fiyat
+    const rawListPriceDirect = (row['list_price'] ?? '').trim();
+    const rawDevicePrice = (row['device_price'] ?? '').trim();
+    const rawFiyat = (row['fiyat'] ?? '').trim();
+    const rawListPrice =
+      rawListPriceDirect || rawDevicePrice || rawFiyat || '';
+
     const rawNotes = (row['notes'] ?? '').trim();
+
+    // Hasta bağlantısı için ek alanlar
+    const rawPatientNationalId = (row['patient_national_id'] ?? '').trim();
+    const rawSoldAt = (row['sold_at'] ?? '').trim();
 
     let valid = true;
     let validationError: string | null = null;
 
     if (!rawBrand) {
       valid = false;
-      validationError = 'Marka (brand) alanı boş olamaz.';
+      validationError = 'Marka (brand / device_brand / marka) alanı boş olamaz.';
     } else if (!rawModel) {
       valid = false;
-      validationError = 'Model (model) alanı boş olamaz.';
+      validationError = 'Model (model / device_model / modeli) alanı boş olamaz.';
     }
 
     let itemType: InventoryItemType = 'hearing_aid';
@@ -195,7 +246,7 @@ export function buildInventoryImportPayload(args: {
       // Ear side is not strictly required for import; set when present.
       const ear_side = itemType === 'charger' ? null : earSideDb;
 
-      inventoryItemsPayload.push({
+      const item = {
         org_id: orgId,
         brand: rawBrand,
         model: rawModel,
@@ -208,6 +259,13 @@ export function buildInventoryImportPayload(args: {
         list_price: listPrice,
         sold_patient_id: null,
         sold_at: null,
+      };
+
+      inventoryItemsPayload.push({
+        rowIndex,
+        item,
+        patientNationalId: rawPatientNationalId || null,
+        soldAtRaw: rawSoldAt || null,
       });
     } else {
       errorCount += 1;
