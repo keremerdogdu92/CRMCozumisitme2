@@ -181,6 +181,29 @@ export async function createPatient(
   const orgId = profile.org_id as string;
 
   // ---------------------------------------------------------------------------
+  // Legacy sale date override (mainly for CSV imports)
+  // ---------------------------------------------------------------------------
+  let legacyCreatedAt: string | null = null;
+  let legacyInvoiceIssuedAt: string | null = null;
+
+  if (input.legacySaleDate) {
+    const raw = input.legacySaleDate.trim();
+    if (raw) {
+      const parsed = new Date(raw);
+      if (!Number.isNaN(parsed.getTime())) {
+        const iso = parsed.toISOString();
+        legacyCreatedAt = iso;
+        legacyInvoiceIssuedAt = iso;
+      } else {
+        console.warn(
+          'LEGACY_SALE_DATE_INVALID: Unable to parse legacy sale date on createPatient',
+          { raw },
+        );
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Payment metadata on patient row
   // ---------------------------------------------------------------------------
   if (!input.paymentMethod) {
@@ -273,49 +296,59 @@ export async function createPatient(
 
   // Decide initial invoice state.
   const shouldMarkInvoiceIssued = options?.setInvoiceIssuedTrue === true;
+  const nowIso = new Date().toISOString();
+  const invoiceIssuedAt = shouldMarkInvoiceIssued
+    ? legacyInvoiceIssuedAt ?? nowIso
+    : null;
+
+  // Build insert payload so we can optionally override created_at.
+  const insertPayload: Record<string, any> = {
+    org_id: orgId,
+    full_name: input.fullName.trim(),
+    phone: input.phone.trim() || null,
+    sgk_flag: input.sgkFlag,
+    sgk_prescription_received: input.sgkFlag
+      ? input.sgkPrescriptionReceived
+      : false,
+    sgk_recorded_to_system: input.sgkFlag
+      ? input.sgkRecordedToSystem
+      : false,
+    reference_id: input.referenceId,
+    payment_method,
+    sale_total_amount,
+    card_fee_rate,
+    card_fee_amount,
+
+    // Extended fields: initial values from the new patient form.
+    sgk_prescription_no: null,
+    sgk_docs_received: null,
+    sgk_processed: null,
+    satisfaction_10: null,
+    national_id: input.nationalId.trim() || null,
+    address: input.address.trim() || null,
+    kin_phone: input.kinPhone.trim() || null,
+
+    // SGK profile-based reimbursement metadata.
+    sgk_profile,
+    sgk_expected_reimbursement,
+    sgk_expected_reimbursement_month,
+
+    // Invoice metadata.
+    invoice_issued: shouldMarkInvoiceIssued,
+    invoice_issued_at: invoiceIssuedAt,
+
+    // archive_code is intentionally omitted here; Supabase is expected
+    // to assign it when sale / senet is finalized.
+  };
+
+  if (legacyCreatedAt) {
+    // If legacy sale date is provided and valid, backfill created_at as well.
+    insertPayload.created_at = legacyCreatedAt;
+  }
 
   const { data, error: insertError } = await supabaseClient
     .from('patients')
-    .insert({
-      org_id: orgId,
-      full_name: input.fullName.trim(),
-      phone: input.phone.trim() || null,
-      sgk_flag: input.sgkFlag,
-      sgk_prescription_received: input.sgkFlag
-        ? input.sgkPrescriptionReceived
-        : false,
-      sgk_recorded_to_system: input.sgkFlag
-        ? input.sgkRecordedToSystem
-        : false,
-      reference_id: input.referenceId,
-      payment_method,
-      sale_total_amount,
-      card_fee_rate,
-      card_fee_amount,
-
-      // Extended fields: initial values from the new patient form.
-      sgk_prescription_no: null,
-      sgk_docs_received: null,
-      sgk_processed: null,
-      satisfaction_10: null,
-      national_id: input.nationalId.trim() || null,
-      address: input.address.trim() || null,
-      kin_phone: input.kinPhone.trim() || null,
-
-      // SGK profile-based reimbursement metadata.
-      sgk_profile,
-      sgk_expected_reimbursement,
-      sgk_expected_reimbursement_month,
-
-      // Invoice metadata.
-      invoice_issued: shouldMarkInvoiceIssued,
-      invoice_issued_at: shouldMarkInvoiceIssued
-        ? new Date().toISOString()
-        : null,
-
-      // archive_code is intentionally omitted here; Supabase is expected
-      // to assign it when sale / senet is finalized.
-    })
+    .insert(insertPayload)
     .select(
       [
         'id',
