@@ -281,6 +281,14 @@ export type NewPatientForm = {
   cardFeeRate: string;
 
   /**
+   * Optional legacy sale date used only during CSV imports.
+   * When provided, it is used to backfill patients.created_at and
+   * invoice_issued_at (for rows imported as "invoice already issued").
+   * Expected format: "yyyy-MM-dd".
+   */
+  legacySaleDate?: string;
+
+  /**
    * Optional reference attached while creating the patient.
    * Now fully wired to backend via patients.reference_id.
    */
