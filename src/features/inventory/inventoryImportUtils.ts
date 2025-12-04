@@ -56,13 +56,10 @@ function normalizeItemType(raw: string): InventoryItemType {
  */
 function normalizeStatus(raw: string): InventoryStatus {
   const v = raw.trim().toLowerCase();
-  if (!v || v === 'stok' || v === 'stock' || v === 'in_stock')
-    return 'in_stock';
+  if (!v || v === 'stok' || v === 'stock' || v === 'in_stock') return 'in_stock';
   if (v === 'sold' || v === 'satildi' || v === 'satıldı') return 'sold';
   if (v === 'repair' || v === 'tamirde') return 'repair';
-  throw new Error(
-    'status değeri "in_stock", "sold" veya "repair" olmalıdır.',
-  );
+  throw new Error('status değeri "in_stock", "sold" veya "repair" olmalıdır.');
 }
 
 /**
@@ -88,6 +85,44 @@ function normalizeEarSide(raw: string): InventoryItemRow['ear_side'] {
   throw new Error(
     'ear_side değeri "right", "left" veya "bilateral" (veya karşılığı Türkçe) olmalıdır.',
   );
+}
+
+/**
+ * dd.MM.yyyy veya yyyy-MM-dd formatındaki tarihleri ISO stringe çevirir.
+ * Geçersizse null döner.
+ */
+function parseSoldAtDate(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  // yyyy-MM-dd veya tam ISO ise:
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    const d = new Date(trimmed);
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
+  }
+
+  // dd.MM.yyyy formati
+  const m = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (m) {
+    const day = Number(m[1]);
+    const month = Number(m[2]);
+    const year = Number(m[3]);
+    if (
+      Number.isFinite(day) &&
+      Number.isFinite(month) &&
+      Number.isFinite(year) &&
+      month >= 1 &&
+      month <= 12 &&
+      day >= 1 &&
+      day <= 31
+    ) {
+      const d = new Date(Date.UTC(year, month - 1, day));
+      if (!Number.isNaN(d.getTime())) return d.toISOString();
+    }
+  }
+
+  // Diğer formatları kabul etmiyoruz
+  return null;
 }
 
 /**
@@ -127,10 +162,8 @@ export function buildInventoryImportPayload(args: {
 
     // Eski format: brand / model
     // Yeni format: device_brand / device_model
-    const rawBrand =
-      (row['brand'] ?? row['device_brand'] ?? '').trim();
-    const rawModel =
-      (row['model'] ?? row['device_model'] ?? '').trim();
+    const rawBrand = (row['brand'] ?? row['device_brand'] ?? '').trim();
+    const rawModel = (row['model'] ?? row['device_model'] ?? '').trim();
 
     const rawItemType = (row['item_type'] ?? '').trim();
     const rawBarcode = (row['barcode'] ?? '').trim();
@@ -219,13 +252,13 @@ export function buildInventoryImportPayload(args: {
     }
 
     if (valid && rawSoldAt) {
-      const d = new Date(rawSoldAt);
-      if (Number.isNaN(d.getTime())) {
+      const iso = parseSoldAtDate(rawSoldAt);
+      if (!iso) {
         valid = false;
         validationError =
-          'sold_at geçerli bir tarih olmalıdır (YYYY-AA-GG).';
+          'sold_at geçerli bir tarih olmalıdır (yyyy-MM-dd veya dd.MM.yyyy).';
       } else {
-        soldAt = d.toISOString();
+        soldAt = iso;
       }
     }
 
