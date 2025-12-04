@@ -42,9 +42,19 @@ function parseBoolLike(raw: string | undefined): boolean | null {
 }
 
 /**
+ * Default payment method for legacy CSV imports where payment_method
+ * is not provided in the file.
+ *
+ * For your current legacy patients we treat all as "Nakit" unless the CSV
+ * explicitly specifies another method.
+ */
+const DEFAULT_IMPORT_PAYMENT_METHOD: PatientPaymentMethodFormValue = 'Nakit';
+
+/**
  * Normalize a raw payment method string coming from CSV
  * into a valid PatientPaymentMethodFormValue union.
- * Unknown / empty values fall back to '' (no selection).
+ * Unknown / empty values fall back to '' (no selection),
+ * and the caller may apply a default if needed.
  */
 function parsePaymentMethod(
   raw: string | undefined,
@@ -86,7 +96,7 @@ function parsePaymentMethod(
     return 'Senet';
   }
 
-  // Fallback: leave as "no selection" and let UI/validation handle it.
+  // Fallback: leave as "no selection" and let caller handle default.
   return '';
 }
 
@@ -95,7 +105,7 @@ function parsePaymentMethod(
  * We keep the mapping simple and rely on createPatient(...) to do DB validation.
  *
  * Expected / supported header keys (normalized):
- *   - full_name (zorunlu)
+ *   - full_name (zorunlu)           | alternatif: ad_soyad
  *   - phone
  *   - national_id
  *   - kin_phone
@@ -104,9 +114,14 @@ function parsePaymentMethod(
  *   - sgk_flag
  *   - sgk_prescription_received
  *   - sgk_recorded_to_system
- *   - payment_method
- *   - card_sale_total
+ *   - payment_method                (opsiyonel; boş ise DEFAULT_IMPORT_PAYMENT_METHOD kullanılır)
+ *   - sale_total                    (tercih edilen isim)
+ *   - card_sale_total               (eski isim; sale_total yoksa fallback)
  *   - card_fee_rate
+ *
+ * Not: sale_date gibi ek kolonlar CSV'de bulunabilir ancak burada
+ * NewPatientForm'a map edilmiyor; ileride ayrı bir migration için
+ * kullanılmak üzere sadece CSV tarafında tutulabilir.
  */
 export function mapCsvRowToNewPatientForm(params: {
   row: PatientsCsvRowObj;
@@ -142,13 +157,23 @@ export function mapCsvRowToNewPatientForm(params: {
   const sgkPrescriptionParsed = parseBoolLike(sgkPrescriptionRaw);
   const sgkRecordedParsed = parseBoolLike(sgkRecordedRaw);
 
-  // Varsayılan: SGK yok → false
+  // Default: SGK yok → false
   const sgkFlag = sgkFlagParsed ?? false;
 
   const paymentMethodRaw = row['payment_method'];
-  const paymentMethod = parsePaymentMethod(paymentMethodRaw);
+  let paymentMethod = parsePaymentMethod(paymentMethodRaw);
 
-  const saleTotal = (row['card_sale_total'] ?? '').trim();
+  // If CSV does not provide a payment method, fall back to a sane default
+  // for legacy imports (e.g. all treated as "Nakit").
+  if (!paymentMethod) {
+    paymentMethod = DEFAULT_IMPORT_PAYMENT_METHOD;
+  }
+
+  // Prefer "sale_total" header; fall back to older "card_sale_total" if needed.
+  const saleTotal =
+    (row['sale_total'] ?? '').trim() ||
+    (row['card_sale_total'] ?? '').trim();
+
   const cardFeeRate = (row['card_fee_rate'] ?? '').trim();
 
   const formValues: NewPatientForm = {
