@@ -268,7 +268,7 @@ export function NewPatientFormCard({
           ? formState.sgkExpectedMonth
           : '',
         sgkPrescriptionNo: formState.sgkFlag
-          ? formState.sgkPrescriptionNo.trim()
+          ? (formState.sgkPrescriptionNo ?? '').trim()
           : '',
         paymentMethod,
         saleTotal: saleTotalRaw,
