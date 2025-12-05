@@ -71,7 +71,6 @@ function normalizePhone(input: string): string {
   const digits = v.replace(/\D/g, '');
 
   if (digits.length === 10) {
-    // Example: 5XXXXXXXXX or 05XXXXXXXX
     if (digits.startsWith('0')) {
       return `+90${digits.slice(1)}`;
     }
@@ -79,7 +78,6 @@ function normalizePhone(input: string): string {
   }
 
   if (digits.length === 11 && digits.startsWith('0')) {
-    // Example: 05XXXXXXXXX
     return `+90${digits.slice(1)}`;
   }
 
@@ -121,6 +119,7 @@ export function NewPatientFormCard({
     sgkProfileId: '',
     sgkExpectedReimbursement: '',
     sgkExpectedMonth: '',
+    sgkPrescriptionNo: '',
     paymentMethod: '',
     saleTotal: '',
     cardFeeRate: '',
@@ -175,6 +174,7 @@ export function NewPatientFormCard({
       sgkProfileId: '',
       sgkExpectedReimbursement: '',
       sgkExpectedMonth: '',
+      sgkPrescriptionNo: '',
       paymentMethod: '',
       saleTotal: '',
       cardFeeRate: '',
@@ -267,6 +267,9 @@ export function NewPatientFormCard({
         sgkExpectedMonth: formState.sgkFlag
           ? formState.sgkExpectedMonth
           : '',
+        sgkPrescriptionNo: formState.sgkFlag
+          ? formState.sgkPrescriptionNo.trim()
+          : '',
         paymentMethod,
         saleTotal: saleTotalRaw,
         cardFeeRate: formState.cardFeeRate,
@@ -275,17 +278,12 @@ export function NewPatientFormCard({
         nationalId: normalizedNationalId,
         kinPhone: formState.kinPhone.trim(),
         address: formState.address.trim(),
-        // Financial drafts: createPatient doğrudan kullanmaz; create sonrası
-        // savePatientSaleBreakdown + upsertPatientInstallmentPlan zincirinde
-        // kullanılmak üzere üst levele taşınıyor.
         saleBreakdownDraft: breakdownItems,
         installmentPlanDraft,
-        // Device drafts: create sonrası hasta cihazlarına bağlanmak için
-        // üst levele taşınıyor.
         deviceDrafts,
       });
 
-      // Başarılı kayıttan sonra üst komponent isterse resetFormState çağırabilir.
+      // Üst seviye isterse success sonrası resetFormState çağırabilir.
       // resetFormState();
     } catch (err) {
       const message =
@@ -496,6 +494,7 @@ export function NewPatientFormCard({
                   formState.sgkExpectedReimbursement ?? ''
                 }
                 sgkExpectedMonth={formState.sgkExpectedMonth ?? ''}
+                sgkPrescriptionNo={formState.sgkPrescriptionNo ?? ''}
                 onChangeSgkFlag={(value: boolean) =>
                   setFormState((s) => ({
                     ...s,
@@ -510,8 +509,9 @@ export function NewPatientFormCard({
                     sgkExpectedReimbursement: value
                       ? s.sgkExpectedReimbursement ?? ''
                       : '',
-                    sgkExpectedMonth: value
-                      ? s.sgkExpectedMonth ?? ''
+                    sgkExpectedMonth: value ? s.sgkExpectedMonth ?? '' : '',
+                    sgkPrescriptionNo: value
+                      ? s.sgkPrescriptionNo ?? ''
                       : '',
                   }))
                 }
@@ -543,6 +543,12 @@ export function NewPatientFormCard({
                   setFormState((s) => ({
                     ...s,
                     sgkExpectedMonth: value,
+                  }))
+                }
+                onChangeSgkPrescriptionNo={(value: string) =>
+                  setFormState((s) => ({
+                    ...s,
+                    sgkPrescriptionNo: value,
                   }))
                 }
               />
@@ -608,10 +614,6 @@ export function NewPatientFormCard({
                 )
               }
               onSave={() => {
-                // New patient flow: gerçek kayıt, createPatient sonrası
-                // savePatientSaleBreakdown ile yapılacak.
-                // Bu handler, taslağın zaten form state'inde tutulduğu
-                // için ekstra işlem yapmıyor.
                 return;
               }}
               totalAmount={breakdownTotal}
@@ -646,8 +648,6 @@ export function NewPatientFormCard({
               upsertPlan={async (
                 _input: UpsertPatientInstallmentPlanInput,
               ) => {
-                // New patient flow: gerçek upsert, createPatient sonrası
-                // upsertPatientInstallmentPlan ile yapılacak.
                 return;
               }}
             />
