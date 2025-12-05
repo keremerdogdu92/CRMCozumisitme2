@@ -1,9 +1,9 @@
-// src/features/patients/new/NewPatientFormCard.tsx
+// src/features/patients/components/new/NewPatientFormCard.tsx
 // Inline "Yeni Hasta" form card using InlineCreateCard and modular subsections.
 // Layout:
-// - Row 1 (desktop): Ad Soyad, T.C. Kimlik No, Telefon
-// - Row 2 (desktop): Yakın Telefonu, Adres, Referans
-// - Row 3 (desktop): SGK üçlüsü + Ödeme Şekli
+// - Column 1 (desktop): Ad Soyad, T.C. Kimlik No
+// - Column 2 (desktop): Telefon, Yakın Telefon
+// - Column 3 (desktop): Referans, Adres
 //
 // v2 kuralları:
 // - Zorunlu alanlar: Ad Soyad, T.C. Kimlik No, Telefon, Ödeme Şekli, Toplam Satış Tutarı.
@@ -28,14 +28,7 @@ import { NewPatientPaymentSection } from './NewPatientPaymentSection';
 import { PatientSaleBreakdownCard } from '../billing/PatientSaleBreakdownCard';
 import { PatientSenetPlanFormCard } from '../billing/PatientSenetPlanFormCard';
 import { NewPatientDevicesSection } from './NewPatientDevicesSection';
-
-type NewPatientFormCardProps = {
-  open: boolean;
-  onToggle: () => void;
-  onSubmit: (values: NewPatientForm) => void;
-  isSubmitting: boolean;
-  errorMessage?: string;
-};
+import { Button } from '../../../../components/ui/Button';
 
 // Normalize phone for storage / future WhatsApp links.
 // - Accepts:
@@ -103,6 +96,14 @@ function normalizeNationalId(input: string): string {
   }
   return digits;
 }
+
+type NewPatientFormCardProps = {
+  open: boolean;
+  onToggle: () => void;
+  onSubmit: (values: NewPatientForm) => void;
+  isSubmitting: boolean;
+  errorMessage?: string;
+};
 
 export function NewPatientFormCard({
   open,
@@ -350,128 +351,133 @@ export function NewPatientFormCard({
           title="Özlük Bilgileri"
           description='Bu bilgiler hasta detayında "Özlük Bilgileri" bölümünde görüntülenir. Doldurmak zorunlu değildir; gerektiğinde daha sonra da güncellenebilir.'
         >
-          {/* Row 1: Ad Soyad / T.C. / Telefon */}
           <div className="grid gap-3 md:grid-cols-12">
-            {/* Ad Soyad */}
-            <div className="md:col-span-5">
-              <label className="mb-1 block text-xs font-medium text-slate-600">
-                Ad Soyad
-              </label>
-              <input
-                type="text"
-                required
-                value={formState.fullName}
-                onChange={(e) =>
-                  setFormState((s) => ({
-                    ...s,
-                    fullName: e.target.value,
-                  }))
-                }
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                placeholder="Örn. Ahmet Yılmaz"
-              />
+            {/* Column 1: Ad Soyad + T.C. Kimlik No */}
+            <div className="space-y-2 md:col-span-4">
+              {/* Ad Soyad */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Ad Soyad
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formState.fullName}
+                  onChange={(e) =>
+                    setFormState((s) => ({
+                      ...s,
+                      fullName: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="Örn. Ahmet Yılmaz"
+                />
+              </div>
+
+              {/* T.C. Kimlik No */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  T.C. Kimlik No
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formState.nationalId}
+                  onChange={(e) =>
+                    setFormState((s) => ({
+                      ...s,
+                      nationalId: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="11 haneli T.C. no"
+                />
+              </div>
             </div>
 
-            {/* T.C. Kimlik No */}
-            <div className="md:col-span-3">
-              <label className="mb-1 block text-xs font-medium text-slate-600">
-                T.C. Kimlik No
-              </label>
-              <input
-                type="text"
-                required
-                value={formState.nationalId}
-                onChange={(e) =>
-                  setFormState((s) => ({
-                    ...s,
-                    nationalId: e.target.value,
-                  }))
-                }
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                placeholder="11 haneli T.C. no"
-              />
+            {/* Column 2: Telefon + Yakın Telefon */}
+            <div className="space-y-2 md:col-span-4">
+              {/* Telefon */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Telefon
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={formState.phone}
+                  onChange={(e) =>
+                    setFormState((s) => ({
+                      ...s,
+                      phone: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="05XXXXXXXXX veya +49..."
+                />
+              </div>
+
+              {/* Yakın Telefonu */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Yakın Telefonu
+                </label>
+                <input
+                  type="tel"
+                  value={formState.kinPhone}
+                  onChange={(e) =>
+                    setFormState((s) => ({
+                      ...s,
+                      kinPhone: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="Acil durumda aranacak kişi"
+                />
+              </div>
             </div>
 
-            {/* Telefon */}
-            <div className="md:col-span-4">
-              <label className="mb-1 block text-xs font-medium text-slate-600">
-                Telefon
-              </label>
-              <input
-                type="tel"
-                required
-                value={formState.phone}
-                onChange={(e) =>
-                  setFormState((s) => ({
-                    ...s,
-                    phone: e.target.value,
-                  }))
-                }
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                placeholder="05XXXXXXXXX veya +49..."
-              />
-            </div>
-          </div>
+            {/* Column 3: Referans + Adres */}
+            <div className="space-y-2 md:col-span-4">
+              {/* Referans */}
+              <div className="relative">
+                <NewPatientReferenceField
+                  referenceId={formState.referenceId}
+                  referenceName={formState.referenceName}
+                  onChangeReference={({
+                    id,
+                    name,
+                  }: {
+                    id: string | null;
+                    name: string;
+                  }) =>
+                    setFormState((s) => ({
+                      ...s,
+                      referenceId: id,
+                      referenceName: name,
+                    }))
+                  }
+                />
+              </div>
 
-          {/* Row 2: Yakın Telefonu / Adres / Referans */}
-          <div className="grid gap-3 md:grid-cols-12">
-            {/* Yakın Telefonu */}
-            <div className="md:col-span-3">
-              <label className="mb-1 block text-xs font-medium text-slate-600">
-                Yakın Telefonu (opsiyonel)
-              </label>
-              <input
-                type="tel"
-                value={formState.kinPhone}
-                onChange={(e) =>
-                  setFormState((s) => ({
-                    ...s,
-                    kinPhone: e.target.value,
-                  }))
-                }
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                placeholder="Acil durumda aranacak kişi"
-              />
-            </div>
-
-            {/* Adres */}
-            <div className="md:col-span-5">
-              <label className="mb-1 block text-xs font-medium text-slate-600">
-                Adres (opsiyonel)
-              </label>
-              <textarea
-                value={formState.address}
-                onChange={(e) =>
-                  setFormState((s) => ({
-                    ...s,
-                    address: e.target.value,
-                  }))
-                }
-                rows={2}
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                placeholder="Kısa adres bilgisi"
-              />
-            </div>
-
-            {/* Referans (opsiyonel) */}
-            <div className="relative md:col-span-4">
-              <NewPatientReferenceField
-                referenceId={formState.referenceId}
-                referenceName={formState.referenceName}
-                onChangeReference={({
-                  id,
-                  name,
-                }: {
-                  id: string | null;
-                  name: string;
-                }) =>
-                  setFormState((s) => ({
-                    ...s,
-                    referenceId: id,
-                    referenceName: name,
-                  }))
-                }
-              />
+              {/* Adres */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Adres
+                </label>
+                <textarea
+                  value={formState.address}
+                  onChange={(e) =>
+                    setFormState((s) => ({
+                      ...s,
+                      address: e.target.value,
+                    }))
+                  }
+                  rows={2}
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="Kısa adres bilgisi"
+                />
+              </div>
             </div>
           </div>
         </FormSection>
@@ -648,9 +654,9 @@ export function NewPatientFormCard({
           </div>
         </FormSection>
 
-        {/* Cihaz taslakları bloğu */}
+        {/* Cihazlar bloğu */}
         <FormSection
-          title="Cihazlar (opsiyonel)"
+          title="Cihazlar"
           description="Stoktaki cihazları bu hastaya bağlamak için kulak yönü ve cihaz seçimlerini burada yapabilirsiniz. Hasta kaydından sonra inventory'de ilgili satırlar 'satıldı' olarak işaretlenecek."
         >
           <NewPatientDevicesSection
@@ -663,13 +669,14 @@ export function NewPatientFormCard({
 
         {/* Submit button */}
         <div className="flex justify-end">
-          <button
+          <Button
             type="submit"
+            variant="primary"
+            size="md"
             disabled={isSubmitting}
-            className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
           >
             {isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
-          </button>
+          </Button>
         </div>
       </form>
     </InlineCreateCard>
