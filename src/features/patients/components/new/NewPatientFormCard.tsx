@@ -12,11 +12,10 @@
 //   * Diğer girişler TR olarak varsayılır ve +90 ile normalize edilir.
 // - T.C. Kimlik No sadece rakamlardan oluşur ve 11 hanelidir.
 
-import { useState, useMemo, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import type {
   NewPatientForm,
   PatientPaymentMethodFormValue,
-  UpsertPatientSaleBreakdownItem,
   UpsertPatientInstallmentPlanInput,
   NewPatientDeviceDraft,
 } from '../../types';
@@ -25,7 +24,6 @@ import { FormSection } from '../../../../components/layout/FormSection';
 import { NewPatientReferenceField } from './NewPatientReferenceField';
 import { NewPatientSgkSection } from './NewPatientSgkSection';
 import { NewPatientPaymentSection } from './NewPatientPaymentSection';
-import { PatientSaleBreakdownCard } from '../billing/PatientSaleBreakdownCard';
 import { PatientSenetPlanFormCard } from '../billing/PatientSenetPlanFormCard';
 import { NewPatientDevicesSection } from './NewPatientDevicesSection';
 import { Button } from '../../../../components/ui/Button';
@@ -33,7 +31,7 @@ import { Button } from '../../../../components/ui/Button';
 // Normalize phone for storage / future WhatsApp links.
 // - Accepts:
 //   * +<country><number> (e.g. +491234...)
-//   * 00<country><number> (converted to +...)
+//   * 00<country><number> (converted to '+')
 //   * TR local numbers (05XXXXXXXXX or 5XXXXXXXXX etc.)
 // - Returns E.164-like string starting with '+'.
 function normalizePhone(input: string): string {
@@ -95,6 +93,18 @@ function normalizeNationalId(input: string): string {
   return digits;
 }
 
+function createEmptyDeviceDraft(): NewPatientDeviceDraft {
+  return {
+    inventoryItemId: null,
+    side: '',
+    brand: '',
+    model: '',
+    listPrice: '',
+    salePrice: '',
+    note: '',
+  };
+}
+
 type NewPatientFormCardProps = {
   open: boolean;
   onToggle: () => void;
@@ -128,17 +138,10 @@ export function NewPatientFormCard({
     nationalId: '',
     kinPhone: '',
     address: '',
-    // Financial draft fields are optional; initialize as empty.
-    saleBreakdownDraft: [],
-    installmentPlanDraft: null,
-    deviceDrafts: [],
+    // Taslaklar submit sırasında hesaplanıyor; state içinde tutulmaları gerekmiyor.
   });
 
   const [localError, setLocalError] = useState<string | null>(null);
-
-  // Draft: breakdown lines for this new patient.
-  const [breakdownItems, setBreakdownItems] =
-    useState<UpsertPatientSaleBreakdownItem[]>([]);
 
   // Draft: senet plan fields for this new patient.
   const [senetUpfrontPaid, setSenetUpfrontPaid] = useState<string>('');
@@ -149,20 +152,10 @@ export function NewPatientFormCard({
   const [senetDayOfMonth, setSenetDayOfMonth] = useState<string>('');
 
   // Draft: device rows for this new patient.
+  // En az bir cihaz satırı her zaman açık olsun.
   const [deviceDrafts, setDeviceDrafts] = useState<NewPatientDeviceDraft[]>(
-    [],
+    [createEmptyDeviceDraft()],
   );
-
-  const breakdownTotal = useMemo(() => {
-    return breakdownItems.reduce((sum, item) => {
-      const raw = (item.amount ?? '').trim();
-      if (!raw) return sum;
-      const normalized = raw.replace(/\./g, '').replace(',', '.');
-      const num = Number(normalized);
-      if (!Number.isFinite(num) || num <= 0) return sum;
-      return sum + num;
-    }, 0);
-  }, [breakdownItems]);
 
   const resetFormState = () => {
     setFormState({
@@ -183,16 +176,12 @@ export function NewPatientFormCard({
       nationalId: '',
       kinPhone: '',
       address: '',
-      saleBreakdownDraft: [],
-      installmentPlanDraft: null,
-      deviceDrafts: [],
     });
-    setBreakdownItems([]);
     setSenetUpfrontPaid('');
     setSenetInstallmentCount('');
     setSenetFirstDueDate('');
     setSenetDayOfMonth('');
-    setDeviceDrafts([]);
+    setDeviceDrafts([createEmptyDeviceDraft()]);
     setLocalError(null);
   };
 
@@ -278,7 +267,6 @@ export function NewPatientFormCard({
         nationalId: normalizedNationalId,
         kinPhone: formState.kinPhone.trim(),
         address: formState.address.trim(),
-        saleBreakdownDraft: breakdownItems,
         installmentPlanDraft,
         deviceDrafts,
       });
@@ -306,18 +294,7 @@ export function NewPatientFormCard({
   };
 
   const handleAddDeviceRow = () => {
-    setDeviceDrafts((rows) => [
-      ...rows,
-      {
-        inventoryItemId: null,
-        side: '',
-        brand: '',
-        model: '',
-        listPrice: '',
-        salePrice: '',
-        note: '',
-      },
-    ]);
+    setDeviceDrafts((rows) => [...rows, createEmptyDeviceDraft()]);
   };
 
   const handleChangeDeviceRow = (
@@ -334,7 +311,6 @@ export function NewPatientFormCard({
   };
 
   const combinedError = localError || errorMessage || undefined;
-  const isSenet = formState.paymentMethod === 'Senet';
 
   return (
     <InlineCreateCard
@@ -578,86 +554,47 @@ export function NewPatientFormCard({
             </div>
           </div>
 
-          {/* Gelişmiş ödeme taslakları: breakdown + senet planı */}
+          {/* Senet taslağı bloğu – formun doğal devamı gibi render ediliyor */}
           <div className="mt-3 space-y-3">
             <p className="text-[11px] text-slate-600">
-              Aşağıdaki alanlar bu yeni hasta için ödeme dağılımı ve senet
-              planı taslağını tutar. Hasta kaydından sonra bu bilgiler
-              detay ekranındaki Ödemeler sekmesinde de düzenlenebilir.
+              Aşağıdaki alanlar bu yeni hasta için senet planı taslağını tutar.
+              Hasta kaydından sonra bu bilgiler detay ekranındaki Ödemeler
+              sekmesinde de düzenlenebilir.
             </p>
 
-            <PatientSaleBreakdownCard
-              items={breakdownItems}
-              onAddRow={() =>
-                setBreakdownItems((rows) => [
-                  ...rows,
-                  {
-                    id: undefined,
-                    method: 'Kredi_Kartı',
-                    amount: '',
-                    note: '',
-                  },
-                ])
+            <PatientSenetPlanFormCard
+              plan={null}
+              saleTotal={formState.saleTotal}
+              upfrontPaid={senetUpfrontPaid}
+              installmentCount={senetInstallmentCount}
+              firstDueDate={senetFirstDueDate}
+              dayOfMonth={senetDayOfMonth}
+              setSaleTotal={(v: string) =>
+                setFormState((s) => ({
+                  ...s,
+                  saleTotal: v,
+                }))
               }
-              onChangeRow={(
-                index: number,
-                patch: Partial<UpsertPatientSaleBreakdownItem>,
-              ) =>
-                setBreakdownItems((rows) =>
-                  rows.map((row, i) =>
-                    i === index ? { ...row, ...patch } : row,
-                  ),
-                )
-              }
-              onRemoveRow={(index: number) =>
-                setBreakdownItems((rows) =>
-                  rows.filter((_, i) => i !== index),
-                )
-              }
-              onSave={() => {
+              setUpfrontPaid={setSenetUpfrontPaid}
+              setInstallmentCount={setSenetInstallmentCount}
+              setFirstDueDate={setSenetFirstDueDate}
+              setDayOfMonth={setSenetDayOfMonth}
+              isPlanSaveError={false}
+              planSaveError={null}
+              isPlanError={false}
+              planError={null}
+              isPlanSaving={false}
+              patientId=""
+              upsertPlan={async (
+                _input: UpsertPatientInstallmentPlanInput,
+              ) => {
                 return;
               }}
-              totalAmount={breakdownTotal}
-              isLoading={false}
-              isSaving={false}
-              errorMessage={null}
             />
-
-            {isSenet && (
-              <PatientSenetPlanFormCard
-                plan={null}
-                saleTotal={formState.saleTotal}
-                upfrontPaid={senetUpfrontPaid}
-                installmentCount={senetInstallmentCount}
-                firstDueDate={senetFirstDueDate}
-                dayOfMonth={senetDayOfMonth}
-                setSaleTotal={(v: string) =>
-                  setFormState((s) => ({
-                    ...s,
-                    saleTotal: v,
-                  }))
-                }
-                setUpfrontPaid={setSenetUpfrontPaid}
-                setInstallmentCount={setSenetInstallmentCount}
-                setFirstDueDate={setSenetFirstDueDate}
-                setDayOfMonth={setSenetDayOfMonth}
-                isPlanSaveError={false}
-                planSaveError={null}
-                isPlanError={false}
-                planError={null}
-                isPlanSaving={false}
-                patientId=""
-                upsertPlan={async (
-                  _input: UpsertPatientInstallmentPlanInput,
-                ) => {
-                  return;
-                }}
-              />
-            )}
           </div>
         </FormSection>
 
-        {/* Cihazlar bloğu */}
+        {/* Cihazlar bloğu – her zaman en az bir satır açık */}
         <FormSection
           title="Cihazlar"
           description="Stoktaki cihazları bu hastaya bağlamak için kulak yönü ve cihaz seçimlerini burada yapabilirsiniz. Hasta kaydından sonra inventory'de ilgili satırlar 'satıldı' olarak işaretlenecek."
