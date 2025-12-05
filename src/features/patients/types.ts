@@ -270,6 +270,7 @@ export type NewPatientForm = {
   sgkProfileId?: string; // e.g. 'SGK_0_4_CALISAN'
   sgkExpectedReimbursement?: string; // TL string; parsed by parseMoneyToNumber
   sgkExpectedMonth?: string; // "yyyy-MM" (input type="month")
+  sgkPrescriptionNo?: string;
 
   /**
    * Payment meta collected at creation time.
