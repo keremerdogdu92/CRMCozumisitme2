@@ -334,6 +334,7 @@ export function NewPatientFormCard({
   };
 
   const combinedError = localError || errorMessage || undefined;
+  const isSenet = formState.paymentMethod === 'Senet';
 
   return (
     <InlineCreateCard
@@ -622,35 +623,37 @@ export function NewPatientFormCard({
               errorMessage={null}
             />
 
-            <PatientSenetPlanFormCard
-              plan={null}
-              saleTotal={formState.saleTotal}
-              upfrontPaid={senetUpfrontPaid}
-              installmentCount={senetInstallmentCount}
-              firstDueDate={senetFirstDueDate}
-              dayOfMonth={senetDayOfMonth}
-              setSaleTotal={(v: string) =>
-                setFormState((s) => ({
-                  ...s,
-                  saleTotal: v,
-                }))
-              }
-              setUpfrontPaid={setSenetUpfrontPaid}
-              setInstallmentCount={setSenetInstallmentCount}
-              setFirstDueDate={setSenetFirstDueDate}
-              setDayOfMonth={setSenetDayOfMonth}
-              isPlanSaveError={false}
-              planSaveError={null}
-              isPlanError={false}
-              planError={null}
-              isPlanSaving={false}
-              patientId=""
-              upsertPlan={async (
-                _input: UpsertPatientInstallmentPlanInput,
-              ) => {
-                return;
-              }}
-            />
+            {isSenet && (
+              <PatientSenetPlanFormCard
+                plan={null}
+                saleTotal={formState.saleTotal}
+                upfrontPaid={senetUpfrontPaid}
+                installmentCount={senetInstallmentCount}
+                firstDueDate={senetFirstDueDate}
+                dayOfMonth={senetDayOfMonth}
+                setSaleTotal={(v: string) =>
+                  setFormState((s) => ({
+                    ...s,
+                    saleTotal: v,
+                  }))
+                }
+                setUpfrontPaid={setSenetUpfrontPaid}
+                setInstallmentCount={setSenetInstallmentCount}
+                setFirstDueDate={setSenetFirstDueDate}
+                setDayOfMonth={setSenetDayOfMonth}
+                isPlanSaveError={false}
+                planSaveError={null}
+                isPlanError={false}
+                planError={null}
+                isPlanSaving={false}
+                patientId=""
+                upsertPlan={async (
+                  _input: UpsertPatientInstallmentPlanInput,
+                ) => {
+                  return;
+                }}
+              />
+            )}
           </div>
         </FormSection>
 
