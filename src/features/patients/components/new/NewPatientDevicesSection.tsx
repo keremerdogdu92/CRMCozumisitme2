@@ -3,6 +3,14 @@
 // Allows binding simple per-ear device rows to existing inventory items
 // (inventory_items) via inventoryItemId, while still letting the user
 // override brand/model/prices/note fields if needed.
+//
+// v2 form düzeni:
+// - En az bir cihaz satırı her zaman açık gelir; ek satırlar "Cihaz ekle" ile eklenir.
+// - Üstte ayrı "Stoktan cihaz seç" bloğu yoktur.
+// - Marka ve model form alanları doldurulduktan sonra, bu kombinasyona uyan
+//   stok satırlarının seri numaraları ayrı bir dropdown üzerinden seçilir.
+//   Seçilen seri numarası inventoryItemId ile eşlenir ve liste fiyatı gerekiyorsa
+//   stoktan otomatik doldurulur.
 
 import type { NewPatientDeviceDraft, NewPatientDeviceSide } from '../../types';
 import { useInventoryItems } from '../../../inventory/api';
@@ -59,8 +67,6 @@ export function NewPatientDevicesSection({
         </p>
       )}
 
-      {/* Bu formda en az bir cihaz satırı açık geliyor; boş state uyarısı kaldırıldı. */}
-
       {items.length > 0 && (
         <div className="space-y-3">
           {items.map((item, index) => {
@@ -72,10 +78,13 @@ export function NewPatientDevicesSection({
             // Mevcut satır için uygun stok satırları:
             // - Henüz hiçbir satıra seçilmemiş olanlar
             // - Veya zaten bu satırda seçili olan (değiştirmeden görmek için)
-            const options = availableInventory.filter(
+            // Ek olarak, mümkünse aynı marka + model ile eşleşenler.
+            const serialOptions = availableInventory.filter(
               (row: InventoryItemRow) =>
-                !selectedOtherIds.includes(row.id) ||
-                row.id === item.inventoryItemId,
+                (!selectedOtherIds.includes(row.id) ||
+                  row.id === item.inventoryItemId) &&
+                (!item.brand || row.brand === item.brand) &&
+                (!item.model || row.model === item.model),
             );
 
             const handleSelectInventory = (inventoryId: string | null) => {
@@ -126,43 +135,6 @@ export function NewPatientDevicesSection({
                   >
                     Sil
                   </button>
-                </div>
-
-                {/* Inventory selection row */}
-                <div className="grid gap-2 md:grid-cols-12">
-                  <div className="md:col-span-7">
-                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                      Stoktan cihaz seç
-                    </label>
-                    <select
-                      value={item.inventoryItemId ?? ''}
-                      onChange={(e) =>
-                        handleSelectInventory(
-                          e.target.value ? e.target.value : null,
-                        )
-                      }
-                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    >
-                      <option value="">Stoktan seç…</option>
-                      {options.map((row: InventoryItemRow) => (
-                        <option key={row.id} value={row.id}>
-                          {row.brand} {row.model}
-                          {row.barcode
-                            ? ` • ${row.barcode}`
-                            : row.serial_no
-                            ? ` • ${row.serial_no}`
-                            : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="md:col-span-5">
-                    <p className="mt-5 text-[10px] text-slate-400">
-                      Seçilen stok satırı, hasta kaydından sonra bu
-                      hastaya &quot;satıldı&quot; olarak işaretlenir
-                      (kulak yönüyle birlikte).
-                    </p>
-                  </div>
                 </div>
 
                 {/* Row 1: Side + Brand + Model */}
@@ -222,7 +194,43 @@ export function NewPatientDevicesSection({
                   </div>
                 </div>
 
-                {/* Row 2: Prices */}
+                {/* Row 2: Serial binding from inventory */}
+                <div className="grid gap-2 md:grid-cols-12">
+                  <div className="md:col-span-6">
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      Seri No (stoktan bağla)
+                    </label>
+                    <select
+                      value={item.inventoryItemId ?? ''}
+                      onChange={(e) =>
+                        handleSelectInventory(
+                          e.target.value ? e.target.value : null,
+                        )
+                      }
+                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    >
+                      <option value="">Seri numarası seç...</option>
+                      {serialOptions.map((row: InventoryItemRow) => (
+                        <option key={row.id} value={row.id}>
+                          {(row.serial_no || row.barcode || 'Seri yok') +
+                            ' • ' +
+                            row.brand +
+                            ' ' +
+                            row.model}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="md:col-span-6">
+                    <p className="mt-5 text-[10px] text-slate-400">
+                      Seçilen seri numarası, hasta kaydından sonra bu
+                      hastaya &quot;satıldı&quot; olarak işaretlenir
+                      (kulak yönüyle birlikte).
+                    </p>
+                  </div>
+                </div>
+
+                {/* Row 3: Prices */}
                 <div className="grid gap-2 md:grid-cols-12">
                   <div className="md:col-span-4">
                     <label className="mb-1 block text-[11px] font-medium text-slate-600">
@@ -256,7 +264,7 @@ export function NewPatientDevicesSection({
 
                   <div className="md:col-span-4">
                     <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                      Not (opsiyonel)
+                      Not
                     </label>
                     <input
                       type="text"
@@ -281,7 +289,7 @@ export function NewPatientDevicesSection({
           onClick={onAddRow}
           className="inline-flex items-center rounded-md border border-dashed border-primary-300 px-3 py-1.5 text-xs font-medium text-primary-700 hover:border-primary-400 hover:bg-primary-50"
         >
-          {items.length === 0 ? 'Cihaz ekle' : 'Ek cihaz ekle'}
+          Cihaz ekle
         </button>
       </div>
     </div>
