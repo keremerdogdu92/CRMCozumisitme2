@@ -12,10 +12,12 @@
 //   * Diğer girişler TR olarak varsayılır ve +90 ile normalize edilir.
 // - T.C. Kimlik No sadece rakamlardan oluşur ve 11 hanelidir.
 
-import { useState, FormEvent } from 'react';
+import { useState, useMemo, FormEvent } from 'react';
 import type {
   NewPatientForm,
   PatientPaymentMethodFormValue,
+  PatientPaymentMethod,
+  UpsertPatientSaleBreakdownItem,
   UpsertPatientInstallmentPlanInput,
   NewPatientDeviceDraft,
 } from '../../types';
@@ -93,6 +95,30 @@ function normalizeNationalId(input: string): string {
   return digits;
 }
 
+// Money helpers (TR format destekli).
+function parseMoneyLikeToNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replace(/\./g, '').replace(',', '.');
+  const num = Number(normalized);
+  if (!Number.isFinite(num)) return null;
+  return num;
+}
+
+function formatCurrencyTry(amount: number | null): string {
+  if (amount == null) return '-';
+  try {
+    return amount.toLocaleString('tr-TR', {
+      style: 'currency',
+      currency: 'TRY',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  } catch {
+    return `${amount}`;
+  }
+}
+
 function createEmptyDeviceDraft(): NewPatientDeviceDraft {
   return {
     inventoryItemId: null,
@@ -102,6 +128,20 @@ function createEmptyDeviceDraft(): NewPatientDeviceDraft {
     listPrice: '',
     salePrice: '',
     note: '',
+  };
+}
+
+type PaymentRowDraft = {
+  paymentMethod: PatientPaymentMethodFormValue;
+  amount: string;
+  cardFeeRate: string;
+};
+
+function createEmptyPaymentRow(): PaymentRowDraft {
+  return {
+    paymentMethod: '',
+    amount: '',
+    cardFeeRate: '',
   };
 }
 
@@ -138,12 +178,20 @@ export function NewPatientFormCard({
     nationalId: '',
     kinPhone: '',
     address: '',
-    // Taslaklar submit sırasında hesaplanıyor; state içinde tutulmaları gerekmiyor.
+    // NewPatientForm tipine uyum için placeholder alanlar:
+    saleBreakdownDraft: [],
+    installmentPlanDraft: null,
+    deviceDrafts: [],
   });
 
   const [localError, setLocalError] = useState<string | null>(null);
 
-  // Draft: senet plan fields for this new patient.
+  // Çoklu ödeme satırları (tek tek NewPatientPaymentSection ile çiziliyor).
+  const [paymentRows, setPaymentRows] = useState<PaymentRowDraft[]>([
+    createEmptyPaymentRow(),
+  ]);
+
+  // Senet plan taslağı.
   const [senetUpfrontPaid, setSenetUpfrontPaid] = useState<string>('');
   const [senetInstallmentCount, setSenetInstallmentCount] =
     useState<string>('');
@@ -151,10 +199,22 @@ export function NewPatientFormCard({
     useState<string>('');
   const [senetDayOfMonth, setSenetDayOfMonth] = useState<string>('');
 
-  // Draft: device rows for this new patient.
-  // En az bir cihaz satırı her zaman açık olsun.
+  // Cihaz taslakları: form en az bir cihaz satırı ile açılır.
   const [deviceDrafts, setDeviceDrafts] = useState<NewPatientDeviceDraft[]>(
     [createEmptyDeviceDraft()],
+  );
+
+  const paymentsTotal = useMemo(() => {
+    return paymentRows.reduce((sum, row) => {
+      const val = parseMoneyLikeToNumber(row.amount);
+      if (val == null || val <= 0) return sum;
+      return sum + val;
+    }, 0);
+  }, [paymentRows]);
+
+  const hasSenetPayment = useMemo(
+    () => paymentRows.some((row) => row.paymentMethod === 'Senet'),
+    [paymentRows],
   );
 
   const resetFormState = () => {
@@ -176,7 +236,11 @@ export function NewPatientFormCard({
       nationalId: '',
       kinPhone: '',
       address: '',
+      saleBreakdownDraft: [],
+      installmentPlanDraft: null,
+      deviceDrafts: [],
     });
+    setPaymentRows([createEmptyPaymentRow()]);
     setSenetUpfrontPaid('');
     setSenetInstallmentCount('');
     setSenetFirstDueDate('');
@@ -185,14 +249,48 @@ export function NewPatientFormCard({
     setLocalError(null);
   };
 
+  const handleAddPaymentRow = () => {
+    setPaymentRows((rows) => [...rows, createEmptyPaymentRow()]);
+  };
+
+  const handleChangePaymentRow = (
+    index: number,
+    patch: Partial<PaymentRowDraft>,
+  ) => {
+    setPaymentRows((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
+  };
+
+  const handleRemovePaymentRow = (index: number) => {
+    setPaymentRows((rows) =>
+      rows.length <= 1 ? rows : rows.filter((_, i) => i !== index),
+    );
+  };
+
+  const handleAddDeviceRow = () => {
+    setDeviceDrafts((rows) => [...rows, createEmptyDeviceDraft()]);
+  };
+
+  const handleChangeDeviceRow = (
+    index: number,
+    patch: Partial<NewPatientDeviceDraft>,
+  ) => {
+    setDeviceDrafts((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
+  };
+
+  const handleRemoveDeviceRow = (index: number) => {
+    setDeviceDrafts((rows) => rows.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
 
     const fullName = formState.fullName.trim();
     const tcRaw = formState.nationalId;
     const phoneRaw = formState.phone;
-    const paymentMethod = formState.paymentMethod;
-    const saleTotalRaw = formState.saleTotal.trim();
 
     if (!fullName) {
       setLocalError('Ad Soyad alanı zorunludur.');
@@ -206,10 +304,26 @@ export function NewPatientFormCard({
       setLocalError('Telefon alanı zorunludur.');
       return;
     }
-    if (!paymentMethod) {
-      setLocalError('Ödeme şeklini seçmeniz gerekiyor.');
+
+    if (paymentRows.length === 0) {
+      setLocalError('En az bir ödeme satırı eklemeniz gerekiyor.');
       return;
     }
+
+    const primaryPayment = paymentRows[0];
+    if (!primaryPayment.paymentMethod) {
+      setLocalError('İlk ödeme satırında bir ödeme şekli seçmelisiniz.');
+      return;
+    }
+    if (!primaryPayment.amount.trim()) {
+      setLocalError('İlk ödeme satırında bir tutar girmelisiniz.');
+      return;
+    }
+
+    const saleTotalNumber = paymentsTotal;
+    const saleTotalRaw =
+      saleTotalNumber > 0 ? saleTotalNumber.toString() : '';
+
     if (!saleTotalRaw) {
       setLocalError('Toplam satış tutarı zorunludur.');
       return;
@@ -239,6 +353,20 @@ export function NewPatientFormCard({
             }
           : null;
 
+      // Çoklu ödeme satırlarından saleBreakdownDraft üret.
+      const saleBreakdownDraft: UpsertPatientSaleBreakdownItem[] =
+        paymentRows
+          .filter(
+            (row) =>
+              !!row.paymentMethod && row.amount.trim().length > 0,
+          )
+          .map((row) => ({
+            id: undefined,
+            method: row.paymentMethod as PatientPaymentMethod,
+            amount: row.amount.trim(),
+            note: '',
+          }));
+
       onSubmit({
         fullName,
         phone: normalizedPhone,
@@ -259,14 +387,18 @@ export function NewPatientFormCard({
         sgkPrescriptionNo: formState.sgkFlag
           ? (formState.sgkPrescriptionNo ?? '').trim()
           : '',
-        paymentMethod,
+        paymentMethod: primaryPayment.paymentMethod,
         saleTotal: saleTotalRaw,
-        cardFeeRate: formState.cardFeeRate,
+        cardFeeRate:
+          primaryPayment.paymentMethod === 'Kredi_Kartı'
+            ? primaryPayment.cardFeeRate
+            : '',
         referenceId: formState.referenceId,
         referenceName: formState.referenceName,
         nationalId: normalizedNationalId,
         kinPhone: formState.kinPhone.trim(),
         address: formState.address.trim(),
+        saleBreakdownDraft,
         installmentPlanDraft,
         deviceDrafts,
       });
@@ -280,34 +412,6 @@ export function NewPatientFormCard({
           : 'Form doğrulaması sırasında hata oluştu.';
       setLocalError(message);
     }
-  };
-
-  const handleChangePaymentMethod = (
-    value: PatientPaymentMethodFormValue,
-  ) => {
-    setFormState((s) => ({
-      ...s,
-      paymentMethod: value,
-      // Komisyon oranı sadece kartta kullanılıyor.
-      cardFeeRate: value === 'Kredi_Kartı' ? s.cardFeeRate : '',
-    }));
-  };
-
-  const handleAddDeviceRow = () => {
-    setDeviceDrafts((rows) => [...rows, createEmptyDeviceDraft()]);
-  };
-
-  const handleChangeDeviceRow = (
-    index: number,
-    patch: Partial<NewPatientDeviceDraft>,
-  ) => {
-    setDeviceDrafts((rows) =>
-      rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
-    );
-  };
-
-  const handleRemoveDeviceRow = (index: number) => {
-    setDeviceDrafts((rows) => rows.filter((_, i) => i !== index));
   };
 
   const combinedError = localError || errorMessage || undefined;
@@ -531,67 +635,107 @@ export function NewPatientFormCard({
               />
             </div>
 
-            {/* Ödeme şekli + kart detayları */}
-            <div className="md:col-span-8">
-              <NewPatientPaymentSection
-                paymentMethod={formState.paymentMethod}
-                saleTotal={formState.saleTotal}
-                cardFeeRate={formState.cardFeeRate}
-                onChangePaymentMethod={handleChangePaymentMethod}
-                onChangeSaleTotal={(value: string) =>
-                  setFormState((s) => ({
-                    ...s,
-                    saleTotal: value,
-                  }))
-                }
-                onChangeCardFeeRate={(value: string) =>
-                  setFormState((s) => ({
-                    ...s,
-                    cardFeeRate: value,
-                  }))
-                }
-              />
+            {/* Çoklu ödeme satırları */}
+            <div className="md:col-span-8 space-y-3">
+              {paymentRows.map((row, index) => (
+                <div
+                  key={index}
+                  className="space-y-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2"
+                >
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-slate-700">
+                      Ödeme #{index + 1}
+                    </span>
+                    {paymentRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePaymentRow(index)}
+                        className="text-[11px] font-medium text-red-600 hover:underline"
+                      >
+                        Satırı sil
+                      </button>
+                    )}
+                  </div>
+
+                  <NewPatientPaymentSection
+                    paymentMethod={row.paymentMethod}
+                    saleTotal={row.amount}
+                    cardFeeRate={row.cardFeeRate}
+                    onChangePaymentMethod={(value) =>
+                      handleChangePaymentRow(index, {
+                        paymentMethod: value,
+                      })
+                    }
+                    onChangeSaleTotal={(value) =>
+                      handleChangePaymentRow(index, { amount: value })
+                    }
+                    onChangeCardFeeRate={(value) =>
+                      handleChangePaymentRow(index, {
+                        cardFeeRate: value,
+                      })
+                    }
+                  />
+                </div>
+              ))}
+
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={handleAddPaymentRow}
+                  className="inline-flex items-center rounded-md border border-dashed border-primary-300 px-3 py-1.5 text-xs font-medium text-primary-700 hover:border-primary-400 hover:bg-primary-50"
+                >
+                  Yeni ödeme satırı ekle
+                </button>
+                <p className="text-[11px] text-slate-700">
+                  Çoklu ödemelerin toplamı:{' '}
+                  <span className="font-semibold">
+                    {formatCurrencyTry(
+                      paymentsTotal > 0 ? paymentsTotal : null,
+                    )}
+                  </span>
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Senet taslağı bloğu – formun doğal devamı gibi render ediliyor */}
-          <div className="mt-3 space-y-3">
-            <p className="text-[11px] text-slate-600">
-              Aşağıdaki alanlar bu yeni hasta için senet planı taslağını tutar.
-              Hasta kaydından sonra bu bilgiler detay ekranındaki Ödemeler
-              sekmesinde de düzenlenebilir.
-            </p>
+          {/* Senet planı – yalnızca en az bir satırda "Senet" seçildiyse gösterilir */}
+          {hasSenetPayment && (
+            <div className="mt-3 space-y-3">
+              <p className="text-[11px] text-slate-600">
+                Aşağıdaki alanlar bu yeni hasta için senet planı taslağını
+                tutar. Hasta kaydından sonra bu bilgiler detay ekranındaki
+                Ödemeler sekmesinde de düzenlenebilir.
+              </p>
 
-            <PatientSenetPlanFormCard
-              plan={null}
-              saleTotal={formState.saleTotal}
-              upfrontPaid={senetUpfrontPaid}
-              installmentCount={senetInstallmentCount}
-              firstDueDate={senetFirstDueDate}
-              dayOfMonth={senetDayOfMonth}
-              setSaleTotal={(v: string) =>
-                setFormState((s) => ({
-                  ...s,
-                  saleTotal: v,
-                }))
-              }
-              setUpfrontPaid={setSenetUpfrontPaid}
-              setInstallmentCount={setSenetInstallmentCount}
-              setFirstDueDate={setSenetFirstDueDate}
-              setDayOfMonth={setSenetDayOfMonth}
-              isPlanSaveError={false}
-              planSaveError={null}
-              isPlanError={false}
-              planError={null}
-              isPlanSaving={false}
-              patientId=""
-              upsertPlan={async (
-                _input: UpsertPatientInstallmentPlanInput,
-              ) => {
-                return;
-              }}
-            />
-          </div>
+              <PatientSenetPlanFormCard
+                plan={null}
+                saleTotal={paymentsTotal.toString()}
+                upfrontPaid={senetUpfrontPaid}
+                installmentCount={senetInstallmentCount}
+                firstDueDate={senetFirstDueDate}
+                dayOfMonth={senetDayOfMonth}
+                setSaleTotal={(_v: string) => {
+                  // Toplam, ödeme satırlarından geldiği için burada manuel set etmiyoruz.
+                  return;
+                }}
+                setUpfrontPaid={setSenetUpfrontPaid}
+                setInstallmentCount={setSenetInstallmentCount}
+                setFirstDueDate={setSenetFirstDueDate}
+                setDayOfMonth={setSenetDayOfMonth}
+                isPlanSaveError={false}
+                planSaveError={null}
+                isPlanError={false}
+                planError={null}
+                isPlanSaving={false}
+                patientId=""
+                upsertPlan={async (
+                  _input: UpsertPatientInstallmentPlanInput,
+                ) => {
+                  return;
+                }}
+              />
+            </div>
+          )}
         </FormSection>
 
         {/* Cihazlar bloğu – her zaman en az bir satır açık */}
