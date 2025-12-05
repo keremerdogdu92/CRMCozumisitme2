@@ -59,12 +59,7 @@ export function NewPatientDevicesSection({
         </p>
       )}
 
-      {items.length === 0 && (
-        <p className="text-[11px] text-slate-500">
-          Henüz cihaz eklenmedi. Aşağıdan &quot;Cihaz ekle&quot; butonuna
-          basarak kulak yönü seçip stoktan cihaz bağlayabilirsiniz.
-        </p>
-      )}
+      {/* Bu formda en az bir cihaz satırı açık geliyor; boş state uyarısı kaldırıldı. */}
 
       {items.length > 0 && (
         <div className="space-y-3">
@@ -137,7 +132,7 @@ export function NewPatientDevicesSection({
                 <div className="grid gap-2 md:grid-cols-12">
                   <div className="md:col-span-7">
                     <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                      Stoktan cihaz seç (opsiyonel)
+                      Stoktan cihaz seç
                     </label>
                     <select
                       value={item.inventoryItemId ?? ''}
@@ -286,7 +281,7 @@ export function NewPatientDevicesSection({
           onClick={onAddRow}
           className="inline-flex items-center rounded-md border border-dashed border-primary-300 px-3 py-1.5 text-xs font-medium text-primary-700 hover:border-primary-400 hover:bg-primary-50"
         >
-          Cihaz ekle
+          {items.length === 0 ? 'Cihaz ekle' : 'Ek cihaz ekle'}
         </button>
       </div>
     </div>
