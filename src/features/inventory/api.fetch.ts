@@ -33,7 +33,8 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
       sold_patient_id,
       sold_at,
       created_at,
-      updated_at
+      updated_at,
+      deleted_at
     `,
     )
     .order('created_at', { ascending: false });
@@ -53,12 +54,14 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
     serial_no: (row.serial_no as string | null) ?? null,
     ear_side: (row.ear_side as InventoryItemRow['ear_side']) ?? null,
     status: row.status as InventoryStatus,
-    purchase_price: row.purchase_price === null ? null : Number(row.purchase_price),
+    purchase_price:
+      row.purchase_price === null ? null : Number(row.purchase_price),
     list_price: row.list_price === null ? null : Number(row.list_price),
     sold_patient_id: (row.sold_patient_id as string | null) ?? null,
     sold_at: (row.sold_at as string | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
+    deleted_at: (row.deleted_at as string | null) ?? null,
     sold_patient_name: null,
   }));
 
@@ -78,7 +81,10 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
       .in('id', soldIds);
 
     if (patientsError) {
-      console.error('Supabase inventory patient lookup error:', patientsError);
+      console.error(
+        'Supabase inventory patient lookup error:',
+        patientsError,
+      );
       return baseRows;
     }
 
@@ -91,7 +97,8 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
 
     baseRows.forEach((row) => {
       if (row.sold_patient_id) {
-        row.sold_patient_name = nameMap.get(row.sold_patient_id) ?? null;
+        row.sold_patient_name =
+          nameMap.get(row.sold_patient_id) ?? null;
       }
     });
   }
