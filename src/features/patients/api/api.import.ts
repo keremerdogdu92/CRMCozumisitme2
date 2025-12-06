@@ -47,9 +47,10 @@ export type PatientsImportSummary = {
  *   - sgk_prescription_received
  *   - sgk_recorded_to_system
  *   - payment_method        (opsiyonel; boş ise importer "Nakit" yapar)
- *   - sale_total            (tercih edilen isim)
- *   - card_sale_total       (eski isim; sale_total yoksa fallback)
+ *   - sale_total            (tercih edilen isim; zorunlu kolondur)
+ *   - card_sale_total       (eski isim; sale_total yoksa fallback kolonu olarak kabul edilir)
  *   - card_fee_rate
+ *   - sale_date             (opsiyonel; "yyyy-MM-dd" veya "dd.MM.yyyy", legacy tarih)
  *
  * CSV'den gelen hastalar, iş akışı gereği fiilen "faturası kesilmiş" kabul
  * edildiği için createPatient(...) çağrısına setInvoiceIssuedTrue: true
@@ -68,15 +69,6 @@ export async function importPatientsFromCsv(
   // Normalize headers once
   const headerKeys = headers.map((h) => normalizeHeaderKey(h));
 
-  // Build row objects
-  const csvObjects: PatientsCsvRowObj[] = rows.map((cols) => {
-    const obj: PatientsCsvRowObj = {};
-    headerKeys.forEach((key, idx) => {
-      obj[key] = cols[idx] ?? '';
-    });
-    return obj;
-  });
-
   // Require at least a full_name / ad_soyad column
   const hasFullName =
     headerKeys.includes('full_name') || headerKeys.includes('ad_soyad');
@@ -86,6 +78,27 @@ export async function importPatientsFromCsv(
       'CSV başlık satırında en az "full_name" (veya "ad_soyad") kolonu bulunmalıdır.',
     );
   }
+
+  // Require at least one "sale_total"-like column so toplam satış tutarı
+  // her satır için doldurulabilsin.
+  const hasSaleTotalLike =
+    headerKeys.includes('sale_total') ||
+    headerKeys.includes('card_sale_total');
+
+  if (!hasSaleTotalLike) {
+    throw new Error(
+      'CSV başlık satırında satış tutarı için en az "sale_total" veya "card_sale_total" kolonu bulunmalıdır.',
+    );
+  }
+
+  // Build row objects
+  const csvObjects: PatientsCsvRowObj[] = rows.map((cols) => {
+    const obj: PatientsCsvRowObj = {};
+    headerKeys.forEach((key, idx) => {
+      obj[key] = cols[idx] ?? '';
+    });
+    return obj;
+  });
 
   const totalRows = csvObjects.length;
   let importedCount = 0;
