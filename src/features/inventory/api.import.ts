@@ -66,7 +66,7 @@ export async function importInventoryFromCsv(
 
   if (!hasBrand || !hasModel) {
     throw new Error(
-      'CSV başlık satırında en az "brand" (veya device_brand) ve "model" (veya device_model) kolonları bulunmalıdır.',
+      'CSV başlık satırında en az "brand" (veya "device_brand") ve "model" (veya "device_model") kolonları bulunmalıdır.',
     );
   }
 
@@ -220,8 +220,4 @@ export function useInventoryCsvImportMutation() {
   return useMutation({
     mutationFn: importInventoryFromCsv,
     onSuccess: () => {
-      // After import, refresh inventory list
-      void queryClient.invalidateQueries({ queryKey: INVENTORY_QUERY_KEY });
-    },
-  });
-}
+      // After import
