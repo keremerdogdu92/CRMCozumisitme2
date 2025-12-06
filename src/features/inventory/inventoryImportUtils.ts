@@ -1,6 +1,11 @@
 // src/features/inventory/inventoryImportUtils.ts
 // Pure helpers for Inventory CSV import: row normalization, validation and
 // payload building for import_jobs + inventory_items pipelines.
+//
+// This module is intentionally "pure":
+// - No Supabase calls
+// - No React Query
+// So that it is easy to unit test and reuse in other contexts.
 
 import type {
   InventoryItemRow,
@@ -40,6 +45,10 @@ export type InventoryImportBuildResult = {
 
 /**
  * Normalize item_type from CSV.
+ *
+ * Supported (case-insensitive):
+ * - "hearing_aid", "cihaz"   → "hearing_aid"
+ * - "charger", "aksesuar", "sarg", "şarj" → "charger"
  */
 function normalizeItemType(raw: string): InventoryItemType {
   const v = raw.trim().toLowerCase();
@@ -53,6 +62,11 @@ function normalizeItemType(raw: string): InventoryItemType {
 
 /**
  * Normalize status from CSV.
+ *
+ * Supported (case-insensitive):
+ * - empty / "stok" / "stock" / "in_stock"        → "in_stock"
+ * - "sold" / "satildi" / "satıldı"               → "sold"
+ * - "repair" / "tamirde"                         → "repair"
  */
 function normalizeStatus(raw: string): InventoryStatus {
   const v = raw.trim().toLowerCase();
@@ -67,7 +81,7 @@ function normalizeStatus(raw: string): InventoryStatus {
  * Returns 'right' | 'left' | 'bilateral' | null.
  *
  * Notlar:
- * - 'ÇİFT' / 'cift' → 'bilateral'
+ * - 'ÇİFT' / 'cift' / 'both' → 'bilateral'
  * - 'TEK' → null (hangi kulak olduğu belli değil; sonradan düzeltilebilir)
  */
 function normalizeEarSide(raw: string): InventoryItemRow['ear_side'] {
@@ -91,18 +105,19 @@ function normalizeEarSide(raw: string): InventoryItemRow['ear_side'] {
  * Build payloads and counters for inventory import, given CSV objects.
  * No Supabase calls here; this stays pure so it can be reused/tested.
  *
- * Desteklenen başlıklar (normalize edilmis halleri):
- * - brand / device_brand
- * - model / device_model
- * - item_type
- * - barcode
- * - serial_no
- * - ear_side
- * - status
- * - purchase_price
- * - list_price / device_price
- * - notes
- * - patient_national_id (şu an sadece ileride kullanmak için okunuyor)
+ * Desteklenen başlıklar (normalize edilmiş halleri):
+ * - brand / device_brand          → marka (zorunlu)
+ * - model / device_model          → model (zorunlu)
+ * - item_type                     → "hearing_aid" | "charger" (opsiyonel, boş ise hearing_aid)
+ * - barcode                       → barkod (opsiyonel)
+ * - serial_no                     → seri numarası (opsiyonel)
+ * - ear_side                      → right/left/bilateral/tek/çift (opsiyonel)
+ * - status                        → in_stock/sold/repair (opsiyonel, boş ise in_stock)
+ * - purchase_price                → alış fiyatı (opsiyonel)
+ * - list_price / device_price     → liste fiyatı (opsiyonel ama tavsiye edilir)
+ * - notes                         → serbest metin (opsiyonel)
+ * - patient_national_id           → legacy hasta TC (opsiyonel; notlara
+ *                                   "legacy_patient_national_id=..." olarak eklenir)
  *
  * NOT: sold_at şu an bilinçli olarak import edilmiyor ve doğrulanmıyor.
  */
