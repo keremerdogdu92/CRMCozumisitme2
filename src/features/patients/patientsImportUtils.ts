@@ -158,8 +158,8 @@ function normalizeLegacySaleDate(raw: string | undefined): string | undefined {
  *   - sgk_prescription_received
  *   - sgk_recorded_to_system
  *   - payment_method                (opsiyonel; boş ise DEFAULT_IMPORT_PAYMENT_METHOD kullanılır)
- *   - sale_total                    (tercih edilen isim)
- *   - card_sale_total               (eski isim; sale_total yoksa fallback)
+ *   - sale_total                    (tercih edilen isim; zorunlu kolondur, değer satırda boş bırakılamaz)
+ *   - card_sale_total               (eski isim; sale_total yoksa fallback; yine satırda boş bırakılamaz)
  *   - card_fee_rate
  *   - sale_date                     (opsiyonel; "yyyy-MM-dd" veya "dd.MM.yyyy", legacy tarih)
  */
@@ -210,9 +210,18 @@ export function mapCsvRowToNewPatientForm(params: {
   }
 
   // Prefer "sale_total" header; fall back to older "card_sale_total" if needed.
-  const saleTotal =
+  const saleTotalRaw =
     (row['sale_total'] ?? '').trim() ||
     (row['card_sale_total'] ?? '').trim();
+
+  if (!saleTotalRaw) {
+    return {
+      rowIndex,
+      formValues: null,
+      error:
+        'Satış tutarı için "sale_total" veya "card_sale_total" kolonunda değer bulunmalıdır.',
+    };
+  }
 
   const cardFeeRate = (row['card_fee_rate'] ?? '').trim();
 
@@ -228,7 +237,7 @@ export function mapCsvRowToNewPatientForm(params: {
     sgkRecordedToSystem: sgkFlag ? !!sgkRecordedParsed : false,
     // Payment info
     paymentMethod,
-    saleTotal,
+    saleTotal: saleTotalRaw,
     cardFeeRate,
     // Legacy sale date for imports (optional, already normalized if present)
     legacySaleDate,
