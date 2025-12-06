@@ -5,10 +5,10 @@
 // - Column 2 (desktop): Telefon, Yakın Telefon
 // - Column 3 (desktop): Referans, Adres
 //
-// v2 rules (business requirements):
-// - Required fields: Ad Soyad, T.C. Kimlik No, Telefon, Ödeme Şekli, Toplam Satış Tutarı.
-// - Phone is normalized to E.164-like format via useNewPatientForm hook.
-// - National ID is digit-only, 11 digits, normalized via useNewPatientForm hook.
+// v2 kuralları:
+// - Zorunlu alanlar: Ad Soyad, T.C. Kimlik No, Telefon, Ödeme Şekli, Toplam Satış Tutarı.
+// - Telefon E.164 uyumlu normalize edilir (hook içinde).
+// - T.C. Kimlik No sadece rakamlardan oluşur ve 11 hanelidir (hook içinde).
 
 import type { NewPatientForm } from '../../types';
 import { InlineCreateCard } from '../../../../components/layout/InlineCreateCard';
@@ -19,7 +19,10 @@ import { NewPatientPaymentSection } from './NewPatientPaymentSection';
 import { PatientSenetPlanFormCard } from '../billing/PatientSenetPlanFormCard';
 import { NewPatientDevicesSection } from './NewPatientDevicesSection';
 import { Button } from '../../../../components/ui/Button';
-import { useNewPatientForm } from '../../hooks/useNewPatientForm';
+import {
+  useNewPatientForm,
+  formatCurrencyTry,
+} from '../../hooks/useNewPatientForm';
 
 type NewPatientFormCardProps = {
   open: boolean;
@@ -39,11 +42,14 @@ export function NewPatientFormCard({
   const {
     formState,
     setFormState,
+    paymentRows,
+    handleAddPaymentRow,
+    handleChangePaymentRow,
+    handleRemovePaymentRow,
     deviceDrafts,
     handleAddDeviceRow,
     handleChangeDeviceRow,
     handleRemoveDeviceRow,
-    handleChangePaymentMethod,
     senetUpfrontPaid,
     setSenetUpfrontPaid,
     senetInstallmentCount,
@@ -52,9 +58,10 @@ export function NewPatientFormCard({
     setSenetFirstDueDate,
     senetDayOfMonth,
     setSenetDayOfMonth,
-    isSenet,
-    combinedError,
+    paymentsTotal,
+    hasSenetPayment,
     handleSubmit,
+    combinedError,
   } = useNewPatientForm({
     onSubmit,
     externalErrorMessage: errorMessage,
@@ -208,7 +215,7 @@ export function NewPatientFormCard({
         {/* SGK + Ödeme bloğu */}
         <FormSection title="SGK ve Ödeme">
           <div className="grid gap-3 md:grid-cols-12 md:items-start">
-            {/* SGK üçlüsü + profil (sol sütun) */}
+            {/* SGK üçlüsü + profil */}
             <div className="md:col-span-4">
               <NewPatientSgkSection
                 sgkFlag={formState.sgkFlag}
@@ -279,62 +286,108 @@ export function NewPatientFormCard({
               />
             </div>
 
-            {/* Ödeme bloğu + (gerekirse) senet planı (sağ sütun) */}
-            <div className="space-y-3 md:col-span-8">
-              <NewPatientPaymentSection
-                paymentMethod={formState.paymentMethod}
-                saleTotal={formState.saleTotal}
-                cardFeeRate={formState.cardFeeRate}
-                onChangePaymentMethod={handleChangePaymentMethod}
-                onChangeSaleTotal={(value: string) =>
-                  setFormState((s) => ({
-                    ...s,
-                    saleTotal: value,
-                  }))
-                }
-                onChangeCardFeeRate={(value: string) =>
-                  setFormState((s) => ({
-                    ...s,
-                    cardFeeRate: value,
-                  }))
-                }
-              />
+            {/* Çoklu ödeme satırları + toplam */}
+            <div className="md:col-span-8 space-y-3">
+              {paymentRows.map((row, index) => (
+                <div
+                  key={index}
+                  className="space-y-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2"
+                >
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-slate-700">
+                      Ödeme #{index + 1}
+                    </span>
+                    {paymentRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePaymentRow(index)}
+                        className="text-[11px] font-medium text-red-600 hover:underline"
+                      >
+                        Satırı sil
+                      </button>
+                    )}
+                  </div>
 
-              {/* Senet seçildiyse: ödeme bloğunun devamı gibi senet plan formu */}
-              {isSenet && (
-                <PatientSenetPlanFormCard
-                  plan={null}
-                  saleTotal={formState.saleTotal}
-                  upfrontPaid={senetUpfrontPaid}
-                  installmentCount={senetInstallmentCount}
-                  firstDueDate={senetFirstDueDate}
-                  dayOfMonth={senetDayOfMonth}
-                  setSaleTotal={(v: string) =>
-                    setFormState((s) => ({
-                      ...s,
-                      saleTotal: v,
-                    }))
-                  }
-                  setUpfrontPaid={setSenetUpfrontPaid}
-                  setInstallmentCount={setSenetInstallmentCount}
-                  setFirstDueDate={setSenetFirstDueDate}
-                  setDayOfMonth={setSenetDayOfMonth}
-                  isPlanSaveError={false}
-                  planSaveError={null}
-                  isPlanError={false}
-                  planError={null}
-                  isPlanSaving={false}
-                  patientId=""
-                  upsertPlan={async () => {
-                    return;
-                  }}
-                />
-              )}
+                  <NewPatientPaymentSection
+                    paymentMethod={row.paymentMethod}
+                    saleTotal={row.amount}
+                    cardFeeRate={row.cardFeeRate}
+                    onChangePaymentMethod={(value) =>
+                      handleChangePaymentRow(index, {
+                        paymentMethod: value,
+                      })
+                    }
+                    onChangeSaleTotal={(value) =>
+                      handleChangePaymentRow(index, { amount: value })
+                    }
+                    onChangeCardFeeRate={(value) =>
+                      handleChangePaymentRow(index, {
+                        cardFeeRate: value,
+                      })
+                    }
+                  />
+                </div>
+              ))}
+
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={handleAddPaymentRow}
+                  className="inline-flex items-center rounded-md border border-dashed border-primary-300 px-3 py-1.5 text-xs font-medium text-primary-700 hover:border-primary-400 hover:bg-primary-50"
+                >
+                  Yeni ödeme satırı ekle
+                </button>
+                <p className="text-[11px] text-slate-700">
+                  Çoklu ödemelerin toplamı:{' '}
+                  <span className="font-semibold">
+                    {formatCurrencyTry(
+                      paymentsTotal > 0 ? paymentsTotal : null,
+                    )}
+                  </span>
+                </p>
+              </div>
             </div>
           </div>
+
+          {/* Senet planı – yalnızca en az bir satırda "Senet" seçildiyse */}
+          {hasSenetPayment && (
+            <div className="mt-3 space-y-3">
+              <p className="text-[11px] text-slate-600">
+                Aşağıdaki alanlar bu yeni hasta için senet planı taslağını
+                tutar. Hasta kaydından sonra bu bilgiler detay ekranındaki
+                Ödemeler sekmesinde de düzenlenebilir.
+              </p>
+
+              <PatientSenetPlanFormCard
+                plan={null}
+                saleTotal={paymentsTotal.toString()}
+                upfrontPaid={senetUpfrontPaid}
+                installmentCount={senetInstallmentCount}
+                firstDueDate={senetFirstDueDate}
+                dayOfMonth={senetDayOfMonth}
+                setSaleTotal={(_v: string) => {
+                  // Toplam, ödeme satırlarından geldiği için burada manuel set edilmiyor.
+                  return;
+                }}
+                setUpfrontPaid={setSenetUpfrontPaid}
+                setInstallmentCount={setSenetInstallmentCount}
+                setFirstDueDate={setSenetFirstDueDate}
+                setDayOfMonth={setSenetDayOfMonth}
+                isPlanSaveError={false}
+                planSaveError={null}
+                isPlanError={false}
+                planError={null}
+                isPlanSaving={false}
+                patientId=""
+                upsertPlan={async () => {
+                  return;
+                }}
+              />
+            </div>
+          )}
         </FormSection>
 
-        {/* Cihazlar bloğu */}
+        {/* Cihazlar bloğu – her zaman en az bir satır açık */}
         <FormSection
           title="Cihazlar"
           description="Stoktaki cihazları bu hastaya bağlamak için kulak yönü ve cihaz seçimlerini burada yapabilirsiniz. Hasta kaydından sonra inventory'de ilgili satırlar 'satıldı' olarak işaretlenecek."
