@@ -220,4 +220,8 @@ export function useInventoryCsvImportMutation() {
   return useMutation({
     mutationFn: importInventoryFromCsv,
     onSuccess: () => {
-      // After import
+      // After import, refresh inventory list
+      void queryClient.invalidateQueries({ queryKey: INVENTORY_QUERY_KEY });
+    },
+  });
+}
