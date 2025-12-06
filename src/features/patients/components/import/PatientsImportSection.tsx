@@ -139,14 +139,21 @@ export function PatientsImportSection() {
               </code>
               ,{' '}
               <code className="rounded bg-slate-100 px-1 py-0.5">
+                sale_total
+              </code>{' '}
+              (veya eski dosyalar için{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">
                 card_sale_total
               </code>
-              ,{' '}
+              ),{' '}
               <code className="rounded bg-slate-100 px-1 py-0.5">
                 card_fee_rate
               </code>
-              . Bunlar normal &quot;Yeni Hasta&quot; formundaki alanlara birebir
-              gider.
+              . Her satırda{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">
+                sale_total/card_sale_total
+              </code>{' '}
+              boş bırakılamaz.
             </li>
           </ul>
         </div>
@@ -156,7 +163,7 @@ export function PatientsImportSection() {
             Örnek başlık satırı:
           </p>
           <pre className="overflow-x-auto whitespace-pre-wrap rounded bg-slate-900 p-2 text-[10px] text-slate-50">
-full_name,phone,national_id,kin_phone,address,reference_name,sgk_flag,sgk_prescription_received,sgk_recorded_to_system,payment_method,card_sale_total,card_fee_rate
+full_name,phone,national_id,kin_phone,address,reference_name,sgk_flag,sgk_prescription_received,sgk_recorded_to_system,payment_method,sale_total,card_fee_rate
           </pre>
         </div>
       </div>
