@@ -1,239 +1,227 @@
-// src/features/inventory/InventoryImportCard.tsx
-// Inline card to import inventory items from a CSV file.
+// src/features/inventory/api.import.ts
+// CSV import pipeline for Inventory + React Query mutation wrapper.
 //
-// Responsibilities:
-// - Let user pick a CSV file.
-// - Call useInventoryCsvImportMutation() to import rows.
-// - Explain required/optional columns clearly so the user can validate
-//   their Excel/CSV structure before import.
-// - Show a compact summary (row counts + job id).
+// Supabase erişimi, import_jobs yaşam döngüsü ve React Query entegrasyonu
+// bu dosyada kalır. Satır bazlı doğrulama ve payload inşası
+// inventoryImportUtils.ts içinde tutulur.
 
-import { FormEvent, useState, ChangeEvent } from 'react';
-import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
-import { useInventoryCsvImportMutation } from './api';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabaseClient } from '../../utils/supabaseClient';
+import { parseSimpleCsv } from '../../utils/csvUtils';
 import type { InventoryImportSummary } from './types';
+import { INVENTORY_QUERY_KEY } from './api.keys';
+import {
+  buildInventoryImportPayload,
+  type CsvRowObj,
+} from './inventoryImportUtils';
 
-type Props = {
-  open: boolean;
-  onToggle: () => void;
-};
+/**
+ * Basit header normalizasyonu:
+ * - Baştaki/sondaki boşlukları kırp
+ * - Küçük harfe çevir
+ * - Birden fazla boşluğu '_' yap
+ *
+ * Örnek:
+ *   "Device Brand"  → "device_brand"
+ *   "brand"         → "brand"
+ */
+function normalizeHeaderKey(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, '_');
+}
 
-export function InventoryImportCard({ open, onToggle }: Props) {
-  const [file, setFile] = useState<File | null>(null);
-  const [localError, setLocalError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<InventoryImportSummary | null>(null);
+/**
+ * Import inventory from a CSV file.
+ * - Creates an import_jobs row.
+ * - Stores every CSV row in inventory_import_rows with validation info.
+ * - Inserts valid rows into inventory_items.
+ */
+export async function importInventoryFromCsv(
+  file: File,
+): Promise<InventoryImportSummary> {
+  const text = await file.text();
+  const { headers, rows } = parseSimpleCsv(text);
 
-  const importMutation = useInventoryCsvImportMutation();
+  if (headers.length === 0 || rows.length === 0) {
+    throw new Error('CSV dosyası boş görünüyor.');
+  }
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setLocalError(null);
-    setSummary(null);
+  // Build row objects with normalized header → value mapping
+  const headerKeys = headers.map((h) => normalizeHeaderKey(h));
 
-    const f = e.target.files?.[0] ?? null;
-    setFile(f ?? null);
+  const csvObjects: CsvRowObj[] = rows.map((cols) => {
+    const obj: CsvRowObj = {};
+    headerKeys.forEach((key, idx) => {
+      obj[key] = cols[idx] ?? '';
+    });
+    return obj;
+  });
+
+  // Require at least brand + model columns.
+  // Eski format:  brand, model
+  // Yeni format:  device_brand, device_model
+  const hasBrand =
+    headerKeys.includes('brand') || headerKeys.includes('device_brand');
+  const hasModel =
+    headerKeys.includes('model') || headerKeys.includes('device_model');
+
+  if (!hasBrand || !hasModel) {
+    throw new Error(
+      'CSV başlık satırında en az "brand" (veya "device_brand") ve "model" (veya "device_model") kolonları bulunmalıdır.',
+    );
+  }
+
+  // Current user & org
+  const { data: userData, error: userError } =
+    await supabaseClient.auth.getUser();
+  if (userError) {
+    console.error('Failed to get current user for inventory import:', userError);
+    throw new Error('IMPORT_USER: ' + userError.message);
+  }
+  const user = userData.user;
+  if (!user) {
+    throw new Error('IMPORT_USER: Kullanıcı oturumu bulunamadı.');
+  }
+
+  const { data: profile, error: profileError } = await supabaseClient
+    .from('profiles')
+    .select('id, org_id')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError) {
+    console.error('Failed to load profile for inventory import:', profileError);
+    throw new Error('IMPORT_PROFILE: ' + profileError.message);
+  }
+
+  if (!profile?.org_id) {
+    throw new Error('IMPORT_NO_ORG: Profilde org_id bulunamadı.');
+  }
+
+  const orgId: string = profile.org_id as string;
+  const createdBy: string = profile.id as string;
+
+  // 1) Create import_jobs row (status = processing)
+  const { data: jobData, error: jobError } = await supabaseClient
+    .from('import_jobs')
+    .insert({
+      org_id: orgId,
+      target_entity: 'inventory',
+      status: 'processing',
+      source_filename: file.name,
+      row_count: csvObjects.length,
+      error_count: 0,
+      created_by: createdBy,
+    })
+    .select('id')
+    .single();
+
+  if (jobError || !jobData?.id) {
+    console.error('Failed to create import_jobs row:', jobError);
+    throw new Error(
+      'IMPORT_JOB: ' + (jobError?.message ?? 'job oluşturulamadı.'),
+    );
+  }
+
+  const jobId: string = jobData.id as string;
+
+  // 2) Build per-row payloads and counters using shared utility
+  const {
+    importRowsPayload,
+    inventoryItemsPayload,
+    totalRows,
+    importedCount,
+    errorCount,
+  } = buildInventoryImportPayload({
+    orgId,
+    jobId,
+    csvObjects,
+  });
+
+  try {
+    // 3) inventory_import_rows insert
+    if (importRowsPayload.length > 0) {
+      const { error: rowsError } = await supabaseClient
+        .from('inventory_import_rows')
+        .insert(importRowsPayload);
+
+      if (rowsError) {
+        console.error('Failed to insert inventory_import_rows:', rowsError);
+        throw new Error('IMPORT_ROWS: ' + rowsError.message);
+      }
+    }
+
+    // 4) valid rows → inventory_items insert
+    if (inventoryItemsPayload.length > 0) {
+      const { error: itemsError } = await supabaseClient
+        .from('inventory_items')
+        .insert(inventoryItemsPayload);
+
+      if (itemsError) {
+        console.error(
+          'Failed to insert inventory_items from import:',
+          itemsError,
+        );
+        throw new Error('IMPORT_ITEMS: ' + itemsError.message);
+      }
+    }
+
+    // 5) job update → completed
+    const { error: updateError } = await supabaseClient
+      .from('import_jobs')
+      .update({
+        status: 'completed',
+        row_count: totalRows,
+        error_count: errorCount,
+        finished_at: new Date().toISOString(),
+        error_message:
+          errorCount > 0
+            ? 'Bazı satırlar hatalı; detay için inventory_import_rows tablosuna bakın.'
+            : null,
+      })
+      .eq('id', jobId);
+
+    if (updateError) {
+      console.error(
+        'Failed to update import_jobs after completion:',
+        updateError,
+      );
+      // Import is already done; do not rethrow here.
+    }
+  } catch (err) {
+    // Mark job as failed
+    await supabaseClient
+      .from('import_jobs')
+      .update({
+        status: 'failed',
+        row_count: totalRows,
+        error_count: errorCount,
+        finished_at: new Date().toISOString(),
+        error_message: (err as Error).message,
+      })
+      .eq('id', jobId);
+
+    throw err;
+  }
+
+  return {
+    jobId,
+    totalRows,
+    importedCount,
+    errorCount,
   };
+}
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setLocalError(null);
-    setSummary(null);
+/**
+ * React Query mutation wrapper for CSV import.
+ */
+export function useInventoryCsvImportMutation() {
+  const queryClient = useQueryClient();
 
-    if (!file) {
-      setLocalError('Lütfen bir CSV dosyası seçin.');
-      return;
-    }
-
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      setLocalError('Sadece .csv uzantılı dosyalar desteklenir.');
-      return;
-    }
-
-    try {
-      const result = await importMutation.mutateAsync(file);
-      setSummary(result);
-    } catch (err) {
-      setLocalError((err as Error).message);
-    }
-  };
-
-  const errorMessage =
-    localError ??
-    (importMutation.isError
-      ? (importMutation.error as Error).message
-      : undefined);
-
-  return (
-    <InlineCreateCard
-      title="Excel / CSV'den Stok İçe Aktar"
-      description="Marka, model, tip, seri numarası ve (opsiyonel) hasta T.C. bilgilerini içeren CSV dosyasını yükleyerek toplu stok ekleyin."
-      open={open}
-      onToggle={onToggle}
-      errorMessage={errorMessage}
-    >
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <div className="grid gap-3 md:grid-cols-2 md:items-start">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              CSV Dosyası
-            </label>
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={handleFileChange}
-              className="block w-full text-xs text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-primary-600 file:px-3 file:py-2 file:text-xs file:font-medium file:text-white hover:file:bg-primary-700"
-            />
-            <p className="mt-1 text-[11px] text-slate-500">
-              Ayraç olarak virgül (<code>,</code>) veya noktalı virgül (
-              <code>;</code>) kullanılabilir. Başlık satırı zorunludur.
-            </p>
-
-            {summary && (
-              <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-700">
-                <p>
-                  Toplam satır: <strong>{summary.totalRows}</strong>
-                </p>
-                <p>
-                  Başarıyla eklenen: <strong>{summary.importedCount}</strong>
-                </p>
-                <p>
-                  Hatalı satır: <strong>{summary.errorCount}</strong>
-                </p>
-                <p className="mt-1 text-[10px] text-slate-500">
-                  Import job ID:{' '}
-                  <span className="font-mono">{summary.jobId}</span> — detaylı
-                  hata için{' '}
-                  <span className="font-mono">inventory_import_rows</span> ve{' '}
-                  <span className="font-mono">import_jobs</span> tablolarına
-                  bakabilirsiniz.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* CSV kolon açıklaması */}
-          <div className="rounded-md bg-slate-50 p-3 text-[11px] text-slate-700">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              CSV kolonları
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <ul className="space-y-1">
-                <li>
-                  <span className="font-semibold">Zorunlu:</span>{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    brand
-                  </code>{' '}
-                  veya{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    device_brand
-                  </code>
-                  ,{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    model
-                  </code>{' '}
-                  veya{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    device_model
-                  </code>
-                  .
-                </li>
-                <li>
-                  <span className="font-semibold">Önerilen:</span>{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    item_type
-                  </code>{' '}
-                  (<span className="font-mono">hearing_aid</span> /
-                  <span className="font-mono">charger</span>),{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    status
-                  </code>{' '}
-                  (<span className="font-mono">in_stock</span>,{' '}
-                  <span className="font-mono">sold</span>,{' '}
-                  <span className="font-mono">repair</span>),{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    purchase_price
-                  </code>
-                  ,{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    list_price
-                  </code>{' '}
-                  veya{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    device_price
-                  </code>
-                  .
-                </li>
-                <li>
-                  <span className="font-semibold">Seri/Barkod:</span>{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    barcode
-                  </code>
-                  ,{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    serial_no
-                  </code>
-                  .
-                </li>
-              </ul>
-
-              <ul className="space-y-1">
-                <li>
-                  <span className="font-semibold">Kulak:</span>{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    ear_side
-                  </code>{' '}
-                  (
-                  <span className="font-mono">
-                    right / left / bilateral / tek / çift
-                  </span>
-                  ).{' '}
-                  <span className="text-[10px] text-slate-500">
-                    Charger için otomatik olarak boş bırakılır.
-                  </span>
-                </li>
-                <li>
-                  <span className="font-semibold">Not:</span>{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    notes
-                  </code>{' '}
-                  (serbest metin; import sırasında ek açıklamalar için
-                  kullanılabilir).
-                </li>
-                <li>
-                  <span className="font-semibold">Hasta ile eşleştirme:</span>{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    patient_national_id
-                  </code>{' '}
-                  (opsiyonel). Bu alan doluysa, notlara{' '}
-                  <code className="rounded bg-slate-100 px-1 py-0.5">
-                    legacy_patient_national_id=...
-                  </code>{' '}
-                  şeklinde eklenir ve daha sonra SQL ile hastalara
-                  bağlanabilir.
-                </li>
-              </ul>
-            </div>
-
-            <div className="mt-3">
-              <p className="mb-1 text-[11px] font-semibold text-slate-500">
-                Örnek başlık satırı:
-              </p>
-              <pre className="overflow-x-auto whitespace-pre-wrap rounded bg-slate-900 p-2 text-[10px] text-slate-50">
-brand,model,item_type,barcode,serial_no,ear_side,status,purchase_price,list_price,notes,patient_national_id
-              </pre>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={importMutation.isPending}
-            className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-          >
-            {importMutation.isPending ? 'İçe aktarılıyor...' : 'CSV İçe Aktar'}
-          </button>
-        </div>
-      </form>
-    </InlineCreateCard>
-  );
+  return useMutation({
+    mutationFn: importInventoryFromCsv,
+    onSuccess: () => {
+      // After import, refresh inventory list
+      void queryClient.invalidateQueries({ queryKey: INVENTORY_QUERY_KEY });
+    },
+  });
 }
