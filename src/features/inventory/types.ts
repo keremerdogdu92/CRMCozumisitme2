@@ -34,6 +34,8 @@ export type InventoryItemRow = {
   sold_patient_name: string | null;
   created_at: string;
   updated_at: string;
+  /** Soft delete timestamp; null if aktif satır. */
+  deleted_at: string | null;
 };
 
 /**
