@@ -54,7 +54,6 @@ CREATE INDEX IF NOT EXISTS idx_meeting_payments_org_id
 -- Row Level Security (RLS)
 -- ---------------------------------------------------------------------------
 
--- Enable RLS for this table
 ALTER TABLE public.meeting_payments ENABLE ROW LEVEL SECURITY;
 
 -- Org-scoped SELECT: user must belong to same org as the payment row.
@@ -66,7 +65,7 @@ TO public
 USING (
   EXISTS (
     SELECT 1
-    FROM profiles p
+    FROM public.profiles p
     WHERE p.id = auth.uid()
       AND p.org_id = meeting_payments.org_id
   )
@@ -81,7 +80,7 @@ TO public
 WITH CHECK (
   EXISTS (
     SELECT 1
-    FROM profiles p
+    FROM public.profiles p
     WHERE p.id = auth.uid()
       AND p.org_id = meeting_payments.org_id
   )
@@ -96,7 +95,7 @@ TO public
 USING (
   EXISTS (
     SELECT 1
-    FROM profiles p
+    FROM public.profiles p
     WHERE p.id = auth.uid()
       AND p.org_id = meeting_payments.org_id
   )
@@ -104,7 +103,7 @@ USING (
 WITH CHECK (
   EXISTS (
     SELECT 1
-    FROM profiles p
+    FROM public.profiles p
     WHERE p.id = auth.uid()
       AND p.org_id = meeting_payments.org_id
   )
@@ -117,7 +116,7 @@ WITH CHECK (
 -- TODO-SECURITY-BEFORE-PROD (meeting_payments)
 -- ---------------------------------------------------------------------------
 -- - Keep RLS enabled; do NOT disable RLS on this table in production.
--- - Ensure `profiles` always has exactly one row per auth user with correct org_id.
+-- - Ensure `public.profiles` always has exactly one row per auth user with correct org_id.
 -- - Frontend must never allow editing `org_id` directly; it should come from JWT/profile.
 -- - If a DELETE policy is ever added, it must use the same org_id filter as above.
 -- - When adding any CSV/import or background jobs that touch this table with
