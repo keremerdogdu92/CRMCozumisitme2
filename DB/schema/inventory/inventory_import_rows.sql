@@ -1,9 +1,13 @@
 -- db/schema/inventory/inventory_import_rows.sql
 -- Purpose: Supabase table definition for `inventory_import_rows`.
 -- Stores per-row parsed/validated data for inventory CSV imports.
--- Includes: CREATE TABLE + constraints.
+-- Includes: CREATE TABLE, constraints and RLS policies.
 -- Source of truth: Supabase table editor / migrations.
--- NOTE: RLS policies will be added separately.
+-- 
+-- NOTES:
+--   - Rows are temporary staging data for CSV imports.
+--   - Access is org-scoped via import_jobs + profiles.
+--   - A separate cleanup function can delete rows for jobs older than N days.
 
 CREATE TABLE public.inventory_import_rows (
   id bigserial NOT NULL,
@@ -28,7 +32,47 @@ CREATE TABLE public.inventory_import_rows (
     FOREIGN KEY (job_id) REFERENCES public.import_jobs (id) ON DELETE CASCADE
 ) TABLESPACE pg_default;
 
--- RLS POLICIES PLACEHOLDER
--- TODO: Paste Supabase RLS definitions for `public.inventory_import_rows`.
---   ALTER TABLE public.inventory_import_rows ENABLE ROW LEVEL SECURITY;
---   CREATE POLICY ...;
+-- ============================================================
+-- RLS POLICIES FOR public.inventory_import_rows
+-- ============================================================
+
+ALTER TABLE public.inventory_import_rows ENABLE ROW LEVEL SECURITY;
+
+-- Backend (service_role) full access
+CREATE POLICY inventory_import_rows_service_full_access
+ON public.inventory_import_rows
+AS PERMISSIVE
+FOR ALL
+TO public
+USING (auth.role() = 'service_role'::text)
+WITH CHECK (auth.role() = 'service_role'::text);
+
+-- Org-scoped access for authenticated users
+CREATE POLICY inventory_import_rows_org_all
+ON public.inventory_import_rows
+AS PERMISSIVE
+FOR SELECT, INSERT, UPDATE, DELETE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.import_jobs j
+    JOIN public.profiles p ON p.org_id = j.org_id
+    WHERE j.id = inventory_import_rows.job_id
+      AND p.id = auth.uid()
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.import_jobs j
+    JOIN public.profiles p ON p.org_id = j.org_id
+    WHERE j.id = inventory_import_rows.job_id
+      AND p.id = auth.uid()
+  )
+);
+
+-- [TODO-CLEANUP]
+--   Create and schedule a periodic call to:
+--     SELECT public.purge_old_inventory_import_rows();
+--   Function body is defined in the DB migration for housekeeping.
