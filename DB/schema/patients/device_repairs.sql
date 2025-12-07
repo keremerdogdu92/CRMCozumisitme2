@@ -106,20 +106,22 @@ FOR SELECT
 TO authenticated
 USING (
   auth.role() = 'service_role'::text
-  OR (device_repairs.org_id)::text = (auth.jwt() ->> 'org_id')::text
+  OR device_repairs.org_id = (auth.jwt() ->> 'org_id')::uuid
 );
 
 -- 2) Org-level WRITE (INSERT/UPDATE/DELETE) for all authenticated users
+--    Note: Postgres policy syntax only allows a single command token,
+--    so we use FOR ALL to cover INSERT/UPDATE/DELETE together.
 CREATE POLICY device_repairs_org_write
 ON public.device_repairs
 AS PERMISSIVE
-FOR INSERT, UPDATE, DELETE
+FOR ALL
 TO authenticated
 USING (
   auth.role() = 'service_role'::text
-  OR (device_repairs.org_id)::text = (auth.jwt() ->> 'org_id')::text
+  OR device_repairs.org_id = (auth.jwt() ->> 'org_id')::uuid
 )
 WITH CHECK (
   auth.role() = 'service_role'::text
-  OR (device_repairs.org_id)::text = (auth.jwt() ->> 'org_id')::text
+  OR device_repairs.org_id = (auth.jwt() ->> 'org_id')::uuid
 );
