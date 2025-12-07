@@ -1,9 +1,17 @@
 -- db/schema/meetings/meeting_accessories.sql
 -- Purpose: Supabase table definition for `meeting_accessories`.
 -- Stores accessory sales linked to meetings (filters, wax guards, batteries, etc.)
--- Includes: CREATE TABLE, constraints, and indexes.
+-- Includes: CREATE TABLE, constraints, indexes and RLS policies.
 -- Source of truth: Supabase table editor / migrations.
--- NOTE: RLS policies will be added in a separate step.
+--
+-- [TODO-SECURITY-BEFORE-PROD]
+--   1) Confirm that every auth user has exactly one row in public.profiles
+--      with the correct org_id, otherwise org-based RLS will fail.
+--   2) Decide whether DELETE should be supported for this table.
+--      - Currently there is NO delete policy → deletes are effectively blocked.
+--      - If you allow deletes later, add a policy mirroring the same org_id check.
+--   3) If background jobs / imports run with service_role, decide whether they
+--      should bypass RLS or still go through a “profiles”-based org filter.
 
 CREATE TABLE public.meeting_accessories (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -40,7 +48,65 @@ CREATE INDEX IF NOT EXISTS idx_meeting_accessories_org_id
   ON public.meeting_accessories USING btree (org_id)
   TABLESPACE pg_default;
 
--- RLS POLICIES PLACEHOLDER
--- TODO: Paste Supabase RLS definitions for `public.meeting_accessories`.
---   ALTER TABLE public.meeting_accessories ENABLE ROW LEVEL SECURITY;
---   CREATE POLICY ...;
+-- ============================================================
+-- Row Level Security (RLS) for public.meeting_accessories
+-- ============================================================
+
+ALTER TABLE public.meeting_accessories ENABLE ROW LEVEL SECURITY;
+
+-- SELECT: user must belong to the same org as the accessory row.
+CREATE POLICY meeting_accessories_select_by_org
+ON public.meeting_accessories
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = meeting_accessories.org_id
+  )
+);
+
+-- INSERT: user can only insert rows for their own org.
+CREATE POLICY meeting_accessories_insert_by_org
+ON public.meeting_accessories
+AS PERMISSIVE
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = meeting_accessories.org_id
+  )
+);
+
+-- UPDATE: user can only read/update rows for their own org.
+CREATE POLICY meeting_accessories_update_by_org
+ON public.meeting_accessories
+AS PERMISSIVE
+FOR UPDATE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = meeting_accessories.org_id
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = meeting_accessories.org_id
+  )
+);
+
+-- NOTE: There is intentionally NO DELETE policy defined.
+-- If user-side DELETE is needed later, add a policy with the same
+-- org_id filter as above.
