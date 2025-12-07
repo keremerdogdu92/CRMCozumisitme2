@@ -1,10 +1,11 @@
 -- db/schema/catalogs/current_device_model_prices_public.view.sql
 -- Purpose: Public view exposing the *latest* device model prices per model.
 -- Uses a LATERAL join to pick the most recent price from device_catalog_prices.
--- Source of truth: Supabase view definition.
--- NOTE: No RLS policies are defined on the view itself.
+-- Security:
+--   - security_invoker = on → ensures RLS on underlying tables works correctly.
 
-CREATE VIEW public.current_device_model_prices_public AS
+CREATE VIEW public.current_device_model_prices_public
+WITH (security_invoker = on) AS
 SELECT
   m.id,
   m.org_id,
