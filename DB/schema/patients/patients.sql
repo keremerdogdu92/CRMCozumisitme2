@@ -17,6 +17,10 @@
 --      - Single-org usage
 --      - Multi-org separation (users from org A cannot see/edit org B’s patients)
 --      - Service role (backend) access to all orgs.
+--   5) Decide and document the deletion model for patients:
+--      - Şu anda `patients_write` FOR ALL DELETE’i de kapsıyor.
+--      - Hard delete mi yapacağız, yoksa ileride soft-delete kolonu (deleted_at) mi eklenecek?
+--      - `archive_code` üretim kuralı ile çelişmeyecek şekilde tasarla (kod çakışması olmasın).
 
 CREATE TABLE public.patients (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
