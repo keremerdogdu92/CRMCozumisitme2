@@ -1,0 +1,22 @@
+{
+  "tables": [
+    "current_device_catalog_prices_public",
+    "current_device_model_prices_public",
+    "device_repairs",
+    "import_jobs",
+    "inventory_import_rows",
+    "inventory_items",
+    "meeting_accessories",
+    "meeting_payments",
+    "meetings",
+    "patient_installment_plans",
+    "patient_list_with_device",
+    "patient_sale_breakdown",
+    "patients",
+    "profiles",
+    "references",
+    "trial_devices",
+    "trials"
+  ],
+  "rpc_functions": []
+}
