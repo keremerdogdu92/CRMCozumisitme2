@@ -3,8 +3,12 @@
 -- This is a thin wrapper over current_device_model_prices_public.
 -- Source of truth: Supabase view definition.
 -- NOTE: No RLS policies are defined on views; underlying tables enforce access.
+-- Security:
+--   - security_invoker = on → runs with caller's permissions,
+--     so RLS on underlying tables/views is respected.
 
-CREATE VIEW public.current_device_catalog_prices_public AS
+CREATE VIEW public.current_device_catalog_prices_public
+WITH (security_invoker = on) AS
 SELECT
   id,
   org_id,
