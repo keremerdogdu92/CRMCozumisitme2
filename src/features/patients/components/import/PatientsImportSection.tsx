@@ -1,58 +1,102 @@
-// src/features/patients/PatientsImportSection.tsx
-// Reusable CSV import section for Patients feature.
-// Can be rendered on PatientsPage now, and later moved to a Settings page.
-//
-// Responsibilities:
-//  - Let user pick a CSV file.
-//  - Call usePatientsCsvImportMutation() to import rows via createPatient.
-//  - Show a clear explanation of required/optional columns.
-//  - Display a compact summary + per-row errors (if any).
-
+// src/features/patients/components/import/PatientsImportSection.tsx
+// Patients CSV import UI wired to the v2 staging + processor pipeline.
 import { useState, type ChangeEvent } from 'react';
-import { usePatientsCsvImportMutation } from '../../api.import';
-import type { PatientsImportSummary } from '../../api.import';
+import {
+  createPatientsImportJob,
+  getPatientsImportJobSummary,
+  insertPatientsImportRows,
+} from '../../import/api.jobs';
+import type { PatientsImportStatusSummary } from '../../import/types';
+import { parseSimpleCsv } from '../../../../utils/csvUtils';
+import { normalizeHeaderKey } from '../../patientsImportUtils';
+
+type ImportPhase = 'idle' | 'uploading' | 'processing';
 
 export function PatientsImportSection() {
-  const importMutation = usePatientsCsvImportMutation();
   const [file, setFile] = useState<File | null>(null);
-  const [lastSummary, setLastSummary] = useState<PatientsImportSummary | null>(
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [phase, setPhase] = useState<ImportPhase>('idle');
+  const [summary, setSummary] = useState<PatientsImportStatusSummary | null>(
     null,
   );
+  const [error, setError] = useState<string | null>(null);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0] ?? null;
     setFile(selected);
-    // Yeni dosya seçildiğinde önceki sonucu temizleyebiliriz
-    setLastSummary(null);
+    setSummary(null);
+    setError(null);
+    setJobId(null);
   };
 
-  const handleImportClick = () => {
+  const handleImport = async () => {
     if (!file) return;
 
-    importMutation.mutate(file, {
-      onSuccess: (summary) => {
-        setLastSummary(summary);
-      },
-    });
+    setError(null);
+    setSummary(null);
+    setPhase('uploading');
+
+    try {
+      const text = await file.text();
+      const { headers, rows } = parseSimpleCsv(text);
+
+      if (headers.length === 0 || rows.length === 0) {
+        throw new Error('CSV appears to be empty.');
+      }
+
+      const normalizedHeaders = headers.map((h) => normalizeHeaderKey(h));
+      const stagedRows = rows.map((cols, idx) => {
+        const rowObj: Record<string, string> = {};
+        normalizedHeaders.forEach((key, colIdx) => {
+          rowObj[key] = cols[colIdx] ?? '';
+        });
+        return { rowIndex: idx + 1, rawRow: rowObj };
+      });
+
+      const { jobId: createdJobId, orgId } = await createPatientsImportJob(
+        file.name || 'patients.csv',
+        stagedRows.length,
+      );
+      setJobId(createdJobId);
+
+      await insertPatientsImportRows(createdJobId, orgId, stagedRows);
+
+      setPhase('processing');
+
+      const response = await fetch('/api/patients-import-processor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: createdJobId }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        const message =
+          body?.error || `Processor request failed with ${response.status}`;
+        throw new Error(message);
+      }
+
+      const nextSummary = await getPatientsImportJobSummary(createdJobId);
+      setSummary(nextSummary);
+    } catch (err) {
+      setError((err as Error)?.message || 'Import failed.');
+    } finally {
+      setPhase('idle');
+    }
   };
 
-  const isRunning = importMutation.isPending;
+  const isBusy = phase !== 'idle';
 
   return (
     <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">
-            CSV&apos;den Hasta İçe Aktar
+            CSV&apos;den Hasta İçe Aktar (v2, staged)
           </h3>
           <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
-            Eski sistemden aldığınız hasta listesini{' '}
-            <span className="font-medium">full_name</span> ve diğer kolonlar ile
-            CSV olarak içe aktarabilirsiniz. Her satır arka planda{' '}
-            <code className="rounded bg-slate-100 px-1 py-0.5 text-[10px]">
-              createPatient
-            </code>{' '}
-            akışıyla kaydedilir.
+            Rows are staged into <code className="font-mono">patients_import_rows</code> and
+            processed via the import job pipeline.
           </p>
         </div>
 
@@ -65,139 +109,77 @@ export function PatientsImportSection() {
           />
           <button
             type="button"
-            onClick={handleImportClick}
-            disabled={!file || isRunning}
+            onClick={handleImport}
+            disabled={!file || isBusy}
             className="inline-flex items-center justify-center rounded-md bg-primary-600 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
           >
-            {isRunning ? 'İçe aktarılıyor...' : 'CSV ile içe aktar'}
+            {phase === 'uploading'
+              ? 'Uploading...'
+              : phase === 'processing'
+                ? 'Processing...'
+                : 'Import CSV'}
           </button>
         </div>
       </div>
 
-      {/* Kolon açıklaması */}
       <div className="rounded-md bg-slate-50 p-3">
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          CSV kolonları
+          CSV columns
         </p>
         <div className="grid gap-2 text-[11px] text-slate-700 sm:grid-cols-2">
           <ul className="space-y-1">
             <li>
-              <span className="font-semibold">Zorunlu:</span>{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                full_name
-              </code>{' '}
-              veya{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                ad_soyad
-              </code>
+              <span className="font-semibold">Required:</span>{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">full_name</code>{' '}
+              or{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">ad_soyad</code>
             </li>
             <li>
-              <span className="font-semibold">Önerilen:</span>{' '}
+              <span className="font-semibold">Identity:</span>{' '}
               <code className="rounded bg-slate-100 px-1 py-0.5">phone</code>,{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                national_id
-              </code>
-              ,{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                kin_phone
-              </code>
-              ,{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">address</code>
-            </li>
-            <li>
-              <span className="font-semibold">Referans:</span>{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                reference_name
-              </code>{' '}
-              (sadece isim; ID atanmaz)
+              <code className="rounded bg-slate-100 px-1 py-0.5">national_id</code>
             </li>
           </ul>
           <ul className="space-y-1">
             <li>
-              <span className="font-semibold">SGK kolonları:</span>{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                sgk_flag
-              </code>
-              ,{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                sgk_prescription_received
-              </code>
-              ,{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                sgk_recorded_to_system
-              </code>
-              . Değerler:{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                1/0, true/false, evet/hayir
-              </code>
-              .
+              <span className="font-semibold">Payment:</span>{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">payment_method</code>,{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">sale_total</code>{' '}
+              (or legacy{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">card_sale_total</code>
+              ),{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">card_fee_rate</code>
             </li>
             <li>
-              <span className="font-semibold">Ödeme kolonları:</span>{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                payment_method
-              </code>
+              <span className="font-semibold">Optional:</span>{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">sgk_flag</code>,{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">sgk_prescription_received</code>
               ,{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                sale_total
-              </code>{' '}
-              (veya eski dosyalar için{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                card_sale_total
-              </code>
-              ),{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                card_fee_rate
-              </code>
-              . Her satırda{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">
-                sale_total/card_sale_total
-              </code>{' '}
-              boş bırakılamaz.
+              <code className="rounded bg-slate-100 px-1 py-0.5">sgk_recorded_to_system</code>,{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">sale_date</code>
             </li>
           </ul>
         </div>
-
-        <div className="mt-3">
-          <p className="mb-1 text-[11px] font-semibold text-slate-500">
-            Örnek başlık satırı:
-          </p>
-          <pre className="overflow-x-auto whitespace-pre-wrap rounded bg-slate-900 p-2 text-[10px] text-slate-50">
-full_name,phone,national_id,kin_phone,address,reference_name,sgk_flag,sgk_prescription_received,sgk_recorded_to_system,payment_method,sale_total,card_fee_rate
-          </pre>
-        </div>
       </div>
 
-      {/* Sonuç özet kutusu */}
-      {lastSummary && (
-        <div className="rounded-md bg-emerald-50 p-3 text-[11px] text-emerald-900">
-          <p className="font-semibold">
-            İçe aktarma tamamlandı: {lastSummary.importedCount} satır eklendi,{' '}
-            {lastSummary.errorCount} satır hatalı.
-          </p>
-          {lastSummary.errorCount > 0 && (
-            <div className="mt-2 max-h-40 overflow-auto rounded border border-emerald-100 bg-white/70 p-2 text-[10px] text-emerald-900">
-              <p className="mb-1 font-semibold">
-                Hatalı satırlar (Excel satır numarası):
-              </p>
-              <ul className="space-y-1">
-                {lastSummary.rowErrors.map((err) => (
-                  <li key={err.rowIndex}>
-                    <span className="font-semibold">Satır {err.rowIndex}:</span>{' '}
-                    {err.message}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+      {error && (
+        <div className="rounded-md bg-red-50 p-2 text-[11px] text-red-700">
+          Import failed: {error}
         </div>
       )}
 
-      {/* Genel hata mesajı */}
-      {importMutation.isError && !lastSummary && (
-        <div className="rounded-md bg-red-50 p-2 text-[11px] text-red-700">
-          İçe aktarma sırasında bir hata oluştu:{' '}
-          {(importMutation.error as Error).message}
+      {summary && (
+        <div className="rounded-md bg-emerald-50 p-3 text-[11px] text-emerald-900">
+          <p className="font-semibold">
+            Import completed for job {jobId ?? '-'}.
+          </p>
+          <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <li>Total rows: {summary.totalRows}</li>
+            <li>Imported: {summary.importedRows}</li>
+            <li>Errors: {summary.errorRows}</li>
+            <li>Validated: {summary.validatedRows}</li>
+            <li>Warnings: {summary.warningRows}</li>
+          </ul>
         </div>
       )}
     </section>

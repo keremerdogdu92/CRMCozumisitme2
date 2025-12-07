@@ -23,6 +23,7 @@ const ProfitCalculatorPage = lazy(
 );
 // NEW: inventory page
 const InventoryPage = lazy(() => import('./pages/InventoryPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 /**
  * ProtectedLayout:
@@ -120,6 +121,10 @@ const router = createBrowserRouter([
       {
         path: 'profit-calculator',
         element: <ProfitCalculatorPage />,
+      },
+      {
+        path: 'settings',
+        element: <SettingsPage />,
       },
     ],
   },

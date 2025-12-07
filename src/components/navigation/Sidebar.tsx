@@ -1,18 +1,17 @@
 // src/components/navigation/Sidebar.tsx
-// Left-hand navigation sidebar for the main app shell.
-// v2 – Adds SidebarMobile for small screens.
-
+// Navigation sidebar for desktop and mobile, including a Settings entry.
 import { NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import {
-  ClipboardList,
-  Users,
-  FlaskConical,
+  Activity,
+  BookUser,
   Boxes,
   CalendarClock,
-  BookUser,
-  Activity,
   Calculator,
+  ClipboardList,
+  FlaskConical,
+  Settings,
+  Users,
   X,
 } from 'lucide-react';
 
@@ -47,6 +46,11 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Kar Hesaplayıcı',
     icon: <Calculator className="h-5 w-5" />,
   },
+  {
+    path: '/settings',
+    label: 'Settings',
+    icon: <Settings className="h-5 w-5" />,
+  },
 ];
 
 function SidebarNav({ onItemClick }: { onItemClick?: () => void }) {
@@ -74,17 +78,13 @@ function SidebarNav({ onItemClick }: { onItemClick?: () => void }) {
   );
 }
 
-/**
- * Desktop sidebar – always visible on lg+ screens.
- */
 export function Sidebar() {
   return (
     <aside className="hidden w-64 flex-shrink-0 border-r border-slate-200 bg-white lg:flex">
       <div className="flex h-full flex-col">
-        {/* Logo / brand */}
         <div className="flex items-center gap-2 border-b border-slate-200 px-6 py-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500 font-semibold text-white">
-            Çİ
+            Ç
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-900">Çözüm İşitme</p>
@@ -98,9 +98,6 @@ export function Sidebar() {
   );
 }
 
-/**
- * Mobile sidebar drawer – shown only when open=true on small screens.
- */
 type SidebarMobileProps = {
   open: boolean;
   onClose: () => void;
@@ -111,19 +108,17 @@ export function SidebarMobile({ open, onClose }: SidebarMobileProps) {
 
   return (
     <div className="fixed inset-0 z-40 flex lg:hidden" aria-modal="true" role="dialog">
-      {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-900/40"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Drawer */}
       <aside className="relative z-50 flex w-64 flex-col border-r border-slate-200 bg-white shadow-lg">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-500 text-sm font-semibold text-white">
-              Çİ
+              Ç
             </div>
             <div>
               <p className="text-sm font-semibold text-slate-900">Çözüm İşitme</p>
