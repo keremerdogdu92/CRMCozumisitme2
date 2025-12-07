@@ -3,6 +3,10 @@
 -- Stores payments recorded during meetings for patients (Senet, Kredi Kartı, Nakit, etc.)
 -- Includes: CREATE TABLE, constraints, indexes and RLS policies.
 -- Source of truth: Supabase table editor / migrations.
+-- Deletion model: meeting_payments currently has no soft-delete column.
+-- Hard DELETE is not enabled via RLS (no DELETE policy). Prefer keeping rows,
+-- or add a soft-delete column if deletion is needed later.
+
 
 CREATE TABLE public.meeting_payments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
