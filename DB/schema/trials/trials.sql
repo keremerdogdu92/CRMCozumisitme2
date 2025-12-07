@@ -1,9 +1,19 @@
 -- db/schema/trials/trials.sql
 -- Purpose: Supabase table definition for `trials`.
 -- Represents trial customers (deneme kullanıcıları) before becoming patients.
--- Includes: CREATE TABLE + constraints.
+-- Includes: CREATE TABLE, constraints and RLS policies.
 -- Source of truth: Supabase table editor / migrations.
--- NOTE: RLS policies will be added in a later step.
+--
+-- [TODO-SECURITY-BEFORE-PROD]
+--   1) Tek bir org çözüm stratejisine standardize et:
+--        - auth.jwt()->>'org_id' (bu dosyada kullanılan)
+--        - veya public.profiles.org_id
+--      Sonra patients / trial_devices / meetings vb. hepsini aynı modele çek.
+--   2) Mevcut client’ların JWT’lerinde org_id claim’inin geldiğinden emin ol.
+--   3) Regression:
+--      - Tek klinik senaryosu (CRUD)
+--      - Çoklu klinik senaryosu (org izolasyonu)
+--      - service_role ile tüm org’lara erişim.
 
 CREATE TABLE public.trials (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -21,7 +31,60 @@ CREATE TABLE public.trials (
     FOREIGN KEY (org_id) REFERENCES public.orgs (id) ON DELETE CASCADE
 ) TABLESPACE pg_default;
 
--- RLS POLICIES PLACEHOLDER
--- TODO: Paste Supabase RLS definitions for `public.trials`.
---   ALTER TABLE public.trials ENABLE ROW LEVEL SECURITY;
---   CREATE POLICY ...;
+-- =========================================================
+-- RLS POLICIES FOR public.trials
+-- =========================================================
+
+ALTER TABLE public.trials ENABLE ROW LEVEL SECURITY;
+
+-- Backend için full access (service_role)
+CREATE POLICY "trials_service_full_access"
+ON public.trials
+AS PERMISSIVE
+FOR ALL
+TO public
+USING (auth.role() = 'service_role'::text)
+WITH CHECK (auth.role() = 'service_role'::text);
+
+-- Org-bazlı SELECT (normal kullanıcılar)
+CREATE POLICY "trials_org_select"
+ON public.trials
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
+USING (
+  (org_id)::text = (auth.jwt() ->> 'org_id'::text)
+);
+
+-- Org-bazlı INSERT (normal kullanıcılar)
+CREATE POLICY "trials_org_insert"
+ON public.trials
+AS PERMISSIVE
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  (org_id)::text = (auth.jwt() ->> 'org_id'::text)
+);
+
+-- Org-bazlı UPDATE (normal kullanıcılar)
+CREATE POLICY "trials_org_update"
+ON public.trials
+AS PERMISSIVE
+FOR UPDATE
+TO authenticated
+USING (
+  (org_id)::text = (auth.jwt() ->> 'org_id'::text)
+)
+WITH CHECK (
+  (org_id)::text = (auth.jwt() ->> 'org_id'::text)
+);
+
+-- Org-bazlı DELETE (normal kullanıcılar)
+CREATE POLICY "trials_org_delete"
+ON public.trials
+AS PERMISSIVE
+FOR DELETE
+TO authenticated
+USING (
+  (org_id)::text = (auth.jwt() ->> 'org_id'::text)
+);
