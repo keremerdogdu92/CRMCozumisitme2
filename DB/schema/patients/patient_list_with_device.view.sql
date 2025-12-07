@@ -3,8 +3,13 @@
 -- Combines patients with their sold devices and reference info for listing screens.
 -- Includes: CREATE VIEW with internal CTE aggregation over inventory_items.
 -- Source of truth: Supabase view definition.
+--
+-- Security:
+--   - security_invoker = on → view runs with caller's permissions,
+--     so RLS on patients / inventory_items / references is enforced.
 
-CREATE VIEW public.patient_list_with_device AS
+CREATE VIEW public.patient_list_with_device
+WITH (security_invoker = on) AS
 WITH device_agg AS (
   SELECT
     i.org_id,
