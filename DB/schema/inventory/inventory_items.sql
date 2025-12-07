@@ -3,6 +3,9 @@
 -- Includes: CREATE TABLE, constraints, indexes and RLS policies for inventory stock items.
 -- Source of truth: Supabase table editor / migrations.
 --
+-- Deletion model: this table supports *soft delete* via `deleted_at`.
+-- Hard DELETE için henüz RLS policy yok; PROD öncesi net karar ver.
+--
 -- [TODO-SECURITY-BEFORE-PROD]
 --   1) Confirm that org isolation for inventory uses *profiles.org_id* consistently.
 --      - Patients tarafında JWT org_id + user_metadata.org_id da kullanılıyor.
@@ -134,3 +137,7 @@ WITH CHECK (
       AND p.org_id = inventory_items.org_id
   )
 );
+
+-- NOTE:
+-- - No DELETE policy is defined; prefer soft delete via `deleted_at`.
+-- - Eğer hard DELETE eklenecekse, org_id kontrolü yukarıdaki ile birebir aynı olmalı.
