@@ -1,9 +1,8 @@
 -- db/schema/inventory/import_jobs.sql
 -- Purpose: Supabase table definition for `import_jobs`.
 -- Tracks bulk import operations (inventory, patients, trials) with status and error metadata.
--- Includes: CREATE TABLE, constraints, and enum-like checks.
+-- Includes: CREATE TABLE, constraints, enum-like checks and RLS.
 -- Source of truth: Supabase table editor / migrations.
--- NOTE: RLS policies will be added later.
 
 CREATE TABLE public.import_jobs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -27,28 +26,96 @@ CREATE TABLE public.import_jobs (
     FOREIGN KEY (org_id) REFERENCES public.orgs (id) ON DELETE CASCADE,
 
   CONSTRAINT import_jobs_status_check CHECK (
-    status = ANY (
-      ARRAY[
-        'pending'::text,
-        'processing'::text,
-        'completed'::text,
-        'failed'::text
-      ]
-    )
+    status = ANY (ARRAY['pending'::text,'processing'::text,'completed'::text,'failed'::text])
   ),
 
   CONSTRAINT import_jobs_target_entity_check CHECK (
-    target_entity = ANY (
-      ARRAY[
-        'inventory'::text,
-        'patients'::text,
-        'trials'::text
-      ]
-    )
+    target_entity = ANY (ARRAY['inventory'::text,'patients'::text,'trials'::text])
   )
 ) TABLESPACE pg_default;
 
--- RLS POLICIES PLACEHOLDER
--- TODO: Paste Supabase RLS definitions for `public.import_jobs`.
---   ALTER TABLE public.import_jobs ENABLE ROW LEVEL SECURITY;
---   CREATE POLICY ...;
+-- ============================================================
+-- RLS POLICIES FOR public.import_jobs
+-- ============================================================
+
+ALTER TABLE public.import_jobs ENABLE ROW LEVEL SECURITY;
+
+-- service_role full access
+CREATE POLICY import_jobs_service_full_access
+ON public.import_jobs
+AS PERMISSIVE
+FOR ALL
+TO public
+USING (auth.role() = 'service_role'::text)
+WITH CHECK (auth.role() = 'service_role'::text);
+
+-- org-level SELECT
+CREATE POLICY import_jobs_org_select
+ON public.import_jobs
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = import_jobs.org_id
+  )
+);
+
+-- org-level INSERT (staff + admin)
+CREATE POLICY import_jobs_org_insert
+ON public.import_jobs
+AS PERMISSIVE
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = import_jobs.org_id
+  )
+);
+
+-- admin-only UPDATE
+CREATE POLICY import_jobs_admin_update
+ON public.import_jobs
+AS PERMISSIVE
+FOR UPDATE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = import_jobs.org_id
+      AND p.role = 'admin'::text
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = import_jobs.org_id
+      AND p.role = 'admin'::text
+  )
+);
+
+-- admin-only DELETE
+CREATE POLICY import_jobs_admin_delete
+ON public.import_jobs
+AS PERMISSIVE
+FOR DELETE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = import_jobs.org_id
+      AND p.role = 'admin'::text
+  )
+);
