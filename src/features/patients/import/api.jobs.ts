@@ -1,5 +1,6 @@
 // src/features/patients/import/api.jobs.ts
 // Client-side helpers to create patients import jobs and push CSV rows into staging.
+
 import { supabaseClient } from '../../../utils/supabaseClient';
 import type {
   PatientsImportRow,
@@ -9,6 +10,7 @@ import type {
 const MAX_BATCH_SIZE = 200;
 
 async function getOrgContext(): Promise<{ orgId: string; userId: string }> {
+  // 1) Aktif kullanıcının UID'sini al
   const { data: userData, error: userError } =
     await supabaseClient.auth.getUser();
   if (userError) {
@@ -19,16 +21,31 @@ async function getOrgContext(): Promise<{ orgId: string; userId: string }> {
     throw new Error('User is not authenticated.');
   }
 
-  const { data: profile, error: profileError } = await supabaseClient
+  // 2) profiles tablosundan org_id çek
+  // .single() yerine explicit dizi kontrolü yapıyoruz ki hata mesajı net olsun.
+  const { data: profiles, error: profileError } = await supabaseClient
     .from('profiles')
-    .select('org_id')
-    .eq('id', user.id)
-    .single();
+    .select('id, org_id')
+    .eq('id', user.id);
 
   if (profileError) {
     throw new Error('Failed to load profile: ' + profileError.message);
   }
-  if (!profile?.org_id) {
+
+  if (!profiles || profiles.length === 0) {
+    throw new Error(
+      'Failed to load profile: no profile row found for current user. Please create a profile row in `profiles` for this user.',
+    );
+  }
+
+  if (profiles.length > 1) {
+    throw new Error(
+      'Failed to load profile: multiple profile rows found for current user. Please ensure only one row exists in `profiles` for this user id.',
+    );
+  }
+
+  const profile = profiles[0];
+  if (!profile.org_id) {
     throw new Error('Profile org_id is missing.');
   }
 

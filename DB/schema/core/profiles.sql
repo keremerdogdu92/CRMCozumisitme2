@@ -6,7 +6,7 @@
 --
 -- SECURITY NOTES
 --  - Multi-tenant isolation:
---      * Users only see profiles that belong to the same org_id.
+--      * Users only see profiles that belong to the same org_id or their own id.
 --  - Write access:
 --      * INSERT/UPDATE/DELETE is restricted to service_role (backend).
 --      * Frontend clients (authenticated users) cannot mutate profiles directly.
@@ -48,17 +48,21 @@ CREATE TABLE public.profiles (
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- 1) Org-level SELECT for all authenticated users.
---    Used by other RLS policies (EXISTS (...) FROM public.profiles p ...)
---    and by any future "staff list" screens.
-CREATE POLICY profiles_org_select
+-- 1) SELECT for authenticated users:
+--    - User can always see their own profile row (id = auth.uid()).
+--    - Additionally, user can see profiles that share the same org_id
+--      as carried in the JWT (root org_id or user_metadata.org_id).
+CREATE POLICY profiles_select_self_and_org
 ON public.profiles
 AS PERMISSIVE
 FOR SELECT
 TO authenticated
 USING (
-  auth.role() = 'service_role'::text
-  OR (org_id)::text = (auth.jwt() ->> 'org_id'::text)
+  id = auth.uid()
+  OR org_id::text = coalesce(
+    auth.jwt() ->> 'org_id',
+    (auth.jwt() -> 'user_metadata' ->> 'org_id')
+  )
 );
 
 -- 2) INSERT/UPDATE/DELETE only allowed for service_role (backend).
