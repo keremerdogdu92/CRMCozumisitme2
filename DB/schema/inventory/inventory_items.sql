@@ -1,8 +1,27 @@
 -- db/schema/inventory/inventory_items.sql
 -- Purpose: Supabase table definition for `inventory_items`.
--- Includes: CREATE TABLE, constraints, and indexes for inventory stock items.
+-- Includes: CREATE TABLE, constraints, indexes and RLS policies for inventory stock items.
 -- Source of truth: Supabase table editor / migrations.
--- NOTE: RLS policies for `inventory_items` will be added in a separate pass below.
+--
+-- [TODO-SECURITY-BEFORE-PROD]
+--   1) Confirm that org isolation for inventory uses *profiles.org_id* consistently.
+--      - Patients tarafında JWT org_id + user_metadata.org_id da kullanılıyor.
+--      - Burada ise yalnızca profiles.org_id ile kontrol yapıyoruz.
+--      Karar ver:
+--        * Tüm sistem profiles.org_id mi kullanacak?
+--        * Yoksa JWT claim'ine mi standardize edeceğiz?
+--   2) Decide whether service_role should bypass RLS for this table.
+--      - Şu an policies, service_role için özel bir istisna içermiyor.
+--      - Eğer backend/cron işleri tüm org'ların stoklarını görmeli ise
+--        auth.role() = 'service_role' için ayrı bir policy ekle.
+--   3) Evaluate if DELETE operations are needed.
+--      - Şu an sadece SELECT, INSERT, UPDATE için policy var.
+--      - Eğer hard delete yapacaksan, DELETE için de org bazlı bir policy ekle
+--        veya tamamen yasakla.
+--   4) Re-run regression tests for:
+--      - Single-org usage (stok CRUD)
+--      - Multi-org izolasyonu (org A stokları org B tarafından görünmesin)
+--      - Import jobs + inventory_import_rows ile birlikte çalışması.
 
 CREATE TABLE public.inventory_items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -23,7 +42,7 @@ CREATE TABLE public.inventory_items (
   deleted_at timestamp with time zone NULL,
   CONSTRAINT inventory_items_pkey PRIMARY KEY (id),
   CONSTRAINT inventory_items_org_id_fkey FOREIGN KEY (org_id)
-    REFERENCES orgs (id) ON DELETE CASCADE,
+    REFERENCES public.orgs (id) ON DELETE CASCADE,
   CONSTRAINT inventory_items_ear_side_check CHECK (
     ear_side IS NULL
     OR ear_side = ANY (
@@ -55,8 +74,63 @@ CREATE INDEX IF NOT EXISTS inventory_items_org_brand_model_idx
 ON public.inventory_items USING btree (org_id, brand, model)
 TABLESPACE pg_default;
 
--- RLS POLICIES PLACEHOLDER
--- TODO: Export and paste the RLS policy definitions for `public.inventory_items` here.
--- Example structure (do NOT invent policies, just paste from Supabase):
---   ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
---   CREATE POLICY ... ON public.inventory_items USING (...);
+-- ============================================================
+-- RLS POLICIES FOR public.inventory_items
+-- Exported from Supabase UI (policies tab).
+-- ============================================================
+
+ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
+
+-- 1) INSERT: only allow if there exists a profile with same org_id as the row
+--    for the current auth.uid().
+CREATE POLICY "inventory_items_insert_by_org"
+ON public.inventory_items
+AS PERMISSIVE
+FOR INSERT
+TO public
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = inventory_items.org_id
+  )
+);
+
+-- 2) SELECT: only allow reading rows where user's profile org_id matches row org_id.
+CREATE POLICY "inventory_items_select_by_org"
+ON public.inventory_items
+AS PERMISSIVE
+FOR SELECT
+TO public
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = inventory_items.org_id
+  )
+);
+
+-- 3) UPDATE: only allow updating rows within user's org.
+CREATE POLICY "inventory_items_update_by_org"
+ON public.inventory_items
+AS PERMISSIVE
+FOR UPDATE
+TO public
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = inventory_items.org_id
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = inventory_items.org_id
+  )
+);
