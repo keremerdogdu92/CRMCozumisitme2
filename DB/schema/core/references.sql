@@ -62,15 +62,32 @@ USING (
     SELECT 1
     FROM public.profiles p
     WHERE p.id = auth.uid()
-      AND p.org_id = references.org_id
+      AND p.org_id = org_id
   )
 );
 
--- 2) Admin-only write (INSERT/UPDATE/DELETE) per org
-CREATE POLICY references_admin_write
+-- 2) Admin-only INSERT per org
+CREATE POLICY references_admin_insert
 ON public.references
 AS PERMISSIVE
-FOR INSERT, UPDATE, DELETE
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  auth.role() = 'service_role'::text
+  OR EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = org_id
+      AND p.role = 'admin'::text
+  )
+);
+
+-- 3) Admin-only UPDATE per org
+CREATE POLICY references_admin_update
+ON public.references
+AS PERMISSIVE
+FOR UPDATE
 TO authenticated
 USING (
   auth.role() = 'service_role'::text
@@ -78,7 +95,7 @@ USING (
     SELECT 1
     FROM public.profiles p
     WHERE p.id = auth.uid()
-      AND p.org_id = references.org_id
+      AND p.org_id = org_id
       AND p.role = 'admin'::text
   )
 )
@@ -88,7 +105,24 @@ WITH CHECK (
     SELECT 1
     FROM public.profiles p
     WHERE p.id = auth.uid()
-      AND p.org_id = references.org_id
+      AND p.org_id = org_id
+      AND p.role = 'admin'::text
+  )
+);
+
+-- 4) Admin-only DELETE per org
+CREATE POLICY references_admin_delete
+ON public.references
+AS PERMISSIVE
+FOR DELETE
+TO authenticated
+USING (
+  auth.role() = 'service_role'::text
+  OR EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.org_id = org_id
       AND p.role = 'admin'::text
   )
 );
