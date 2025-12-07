@@ -1,9 +1,17 @@
 -- db/schema/patients/device_repairs.sql
 -- Purpose: Supabase table definition for `device_repairs`.
 -- Handles repair workflow for devices linked to patients, meetings, and inventory.
--- Includes: CREATE TABLE, constraints, and indexes.
+-- Includes: CREATE TABLE, constraints, indexes and RLS policies.
 -- Source of truth: Supabase table editor / migrations.
--- NOTE: RLS policies will be added separately.
+--
+-- [SECURITY NOTES]
+--   - Row visibility:
+--       * All authenticated users of the same org can SELECT.
+--       * All authenticated users of the same org can INSERT/UPDATE/DELETE
+--         repair records (staff + admin).
+--       * `service_role` bypasses org checks and has full access.
+--   - Multi-tenant isolation:
+--       * org_id is enforced via JWT claim: auth.jwt()->>'org_id'.
 
 CREATE TABLE public.device_repairs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -84,7 +92,34 @@ WHERE status = ANY (
   ]
 );
 
--- RLS POLICIES PLACEHOLDER
--- TODO: Paste actual Supabase RLS policies for `public.device_repairs`.
---   ALTER TABLE public.device_repairs ENABLE ROW LEVEL SECURITY;
---   CREATE POLICY ...;
+-- ============================================================
+-- RLS POLICIES FOR public.device_repairs
+-- ============================================================
+
+ALTER TABLE public.device_repairs ENABLE ROW LEVEL SECURITY;
+
+-- 1) Org-level SELECT for all authenticated users (staff + admin)
+CREATE POLICY device_repairs_org_select
+ON public.device_repairs
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
+USING (
+  auth.role() = 'service_role'::text
+  OR (device_repairs.org_id)::text = (auth.jwt() ->> 'org_id')::text
+);
+
+-- 2) Org-level WRITE (INSERT/UPDATE/DELETE) for all authenticated users
+CREATE POLICY device_repairs_org_write
+ON public.device_repairs
+AS PERMISSIVE
+FOR INSERT, UPDATE, DELETE
+TO authenticated
+USING (
+  auth.role() = 'service_role'::text
+  OR (device_repairs.org_id)::text = (auth.jwt() ->> 'org_id')::text
+)
+WITH CHECK (
+  auth.role() = 'service_role'::text
+  OR (device_repairs.org_id)::text = (auth.jwt() ->> 'org_id')::text
+);
