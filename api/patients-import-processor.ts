@@ -22,12 +22,16 @@ type ApiResponse = {
   };
 };
 
-// Minimal process declaration so we don't need @types/node; only env is used.
+// Minimal process declaration so we don't need @types/node (only for env).
+// At runtime the real process object is provided by Node.
 declare const process: {
   env: {
     SUPABASE_URL?: string;
-    SUPABASE_SERVICE_ROLE_KEY?: string;
-    SUPABASE_SERVICE_ROLE?: string;
+    VITE_SUPABASE_URL?: string;
+    SUPABASE_ANON_KEY?: string;
+    VITE_SUPABASE_ANON_KEY?: string;
+    SUPABASE_SERVICE_ROLE_KEY?: string; // new name we used
+    SUPABASE_SERVICE_ROLE?: string;     // name you already have in Vercel
     [key: string]: string | undefined;
   };
 };
@@ -45,17 +49,22 @@ type StagingRow = {
 };
 
 function createAdminSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  // Support both env names, prefer *_KEY if set.
+  // Allow both SUPABASE_URL and legacy VITE_SUPABASE_URL
+  const supabaseUrl =
+    process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+
+  // Allow both SUPABASE_SERVICE_ROLE_KEY and SUPABASE_SERVICE_ROLE
   const serviceRoleKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE;
 
   if (!supabaseUrl) {
-    throw new Error('Missing SUPABASE_URL environment variable.');
+    throw new Error(
+      'Missing SUPABASE_URL (or VITE_SUPABASE_URL) environment variable.',
+    );
   }
   if (!serviceRoleKey) {
     throw new Error(
-      'Missing SUPABASE_SERVICE_ROLE or SUPABASE_SERVICE_ROLE_KEY environment variable.',
+      'Missing SUPABASE_SERVICE_ROLE (or SUPABASE_SERVICE_ROLE_KEY) environment variable.',
     );
   }
 
@@ -93,7 +102,7 @@ async function detectDuplicatePatientId(params: {
     throw new Error('Duplicate check failed: ' + error.message);
   }
 
-  return data?.id ?? null;
+  return (data as { id: string } | null)?.id ?? null;
 }
 
 async function fetchStagingRows(
@@ -174,206 +183,218 @@ async function countByStatus(
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-
-  const jobId =
-    (req.body && typeof req.body.job_id === 'string' && req.body.job_id) ||
-    (req.body && typeof req.body.jobId === 'string' && req.body.jobId) ||
-    (typeof req.query.job_id === 'string' ? req.query.job_id : null) ||
-    (typeof req.query.jobId === 'string' ? req.query.jobId : null);
-
-  if (!jobId) {
-    res.status(400).json({ error: 'job_id is required' });
-    return;
-  }
-
-  let supabase: ReturnType<typeof createAdminSupabaseClient>;
   try {
-    supabase = createAdminSupabaseClient();
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
-    return;
-  }
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
 
-  let stagingRows: StagingRow[] = [];
-  try {
-    stagingRows = await fetchStagingRows(supabase, jobId);
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
-    return;
-  }
+    const jobId =
+      (req.body && typeof req.body.job_id === 'string' && req.body.job_id) ||
+      (req.body && typeof req.body.jobId === 'string' && req.body.jobId) ||
+      (typeof req.query.job_id === 'string' ? req.query.job_id : null) ||
+      (typeof req.query.jobId === 'string' ? req.query.jobId : null);
 
-  const rowsReadyForInsert: Array<{
-    rowId: string;
-    payload: PatientsImportNormalizedPayload;
-    errorMessage: string | null;
-  }> = [];
+    if (!jobId) {
+      res.status(400).json({ error: 'job_id is required' });
+      return;
+    }
 
-  for (const row of stagingRows) {
-    if (row.status === 'pending') {
-      const { normalized, issues } = validatePatientsRow({
-        rawRow: row.raw_row,
-        orgId: row.org_id,
-        rowIndex: row.row_index,
-      });
+    let supabase: ReturnType<typeof createAdminSupabaseClient>;
+    try {
+      supabase = createAdminSupabaseClient();
+    } catch (err) {
+      console.error('Supabase admin client creation failed:', err);
+      res.status(500).json({ error: (err as Error).message });
+      return;
+    }
 
-      let duplicateId: string | null = null;
-      if (normalized?.national_id) {
-        try {
-          duplicateId = await detectDuplicatePatientId({
-            supabase,
-            orgId: row.org_id,
-            nationalId: normalized.national_id,
-          });
-          if (duplicateId) {
-            issues.push({
-              row_index: row.row_index,
-              field: 'national_id',
-              severity: 'error',
-              message: 'Duplicate national_id exists for this org.',
-              duplicate_of_patient_id: duplicateId,
-            });
-          }
-        } catch (err) {
-          res.status(500).json({ error: (err as Error).message });
-          return;
-        }
-      }
+    let stagingRows: StagingRow[] = [];
+    try {
+      stagingRows = await fetchStagingRows(supabase, jobId);
+    } catch (err) {
+      console.error('Failed to fetch staging rows:', err);
+      res.status(500).json({ error: (err as Error).message });
+      return;
+    }
 
-      const hasError = issues.some((i) => i.severity === 'error');
-      const nextStatus = hasError ? 'error' : 'validated';
-      const errorMessage = aggregateIssues(issues);
+    const rowsReadyForInsert: Array<{
+      rowId: string;
+      payload: PatientsImportNormalizedPayload;
+      errorMessage: string | null;
+    }> = [];
 
-      try {
-        await updateStagingRow(supabase, row.id, {
-          status: nextStatus as StagingRow['status'],
-          normalized_payload: hasError ? null : normalized,
-          error_message: errorMessage,
-          duplicate_of_patient_id: duplicateId,
-          validated_at: nowIso(),
+    for (const row of stagingRows) {
+      if (row.status === 'pending') {
+        const { normalized, issues } = validatePatientsRow({
+          rawRow: row.raw_row,
+          orgId: row.org_id,
+          rowIndex: row.row_index,
         });
-      } catch (err) {
-        res.status(500).json({ error: (err as Error).message });
-        return;
-      }
 
-      if (!hasError && normalized) {
-        rowsReadyForInsert.push({
-          rowId: row.id,
-          payload: normalized,
-          errorMessage,
-        });
-      }
-    } else if (row.status === 'validated' && row.normalized_payload) {
-      // Re-check duplicates for already-validated rows before inserting.
-      const issues: PatientsImportIssue[] = [];
-      let duplicateId: string | null = null;
-
-      if (row.normalized_payload.national_id) {
-        try {
-          duplicateId = await detectDuplicatePatientId({
-            supabase,
-            orgId: row.org_id,
-            nationalId: row.normalized_payload.national_id,
-          });
-          if (duplicateId) {
-            issues.push({
-              row_index: row.row_index,
-              field: 'national_id',
-              severity: 'error',
-              message: 'Duplicate national_id exists for this org.',
-              duplicate_of_patient_id: duplicateId,
+        let duplicateId: string | null = null;
+        if (normalized?.national_id) {
+          try {
+            duplicateId = await detectDuplicatePatientId({
+              supabase,
+              orgId: row.org_id,
+              nationalId: normalized.national_id,
             });
+            if (duplicateId) {
+              issues.push({
+                row_index: row.row_index,
+                field: 'national_id',
+                severity: 'error',
+                message: 'Duplicate national_id exists for this org.',
+                duplicate_of_patient_id: duplicateId,
+              });
+            }
+          } catch (err) {
+            console.error('Duplicate check failed:', err);
+            res.status(500).json({ error: (err as Error).message });
+            return;
           }
-        } catch (err) {
-          res.status(500).json({ error: (err as Error).message });
-          return;
         }
-      }
 
-      if (duplicateId) {
+        const hasError = issues.some((i) => i.severity === 'error');
+        const nextStatus = hasError ? 'error' : 'validated';
         const errorMessage = aggregateIssues(issues);
+
         try {
           await updateStagingRow(supabase, row.id, {
-            status: 'error',
-            normalized_payload: null,
+            status: nextStatus as StagingRow['status'],
+            normalized_payload: hasError ? null : normalized,
             error_message: errorMessage,
             duplicate_of_patient_id: duplicateId,
+            validated_at: nowIso(),
           });
         } catch (err) {
+          console.error('Update staging row failed:', err);
           res.status(500).json({ error: (err as Error).message });
+          return;
         }
-      } else {
-        rowsReadyForInsert.push({
-          rowId: row.id,
-          payload: row.normalized_payload,
-          errorMessage: row.error_message,
+
+        if (!hasError && normalized) {
+          rowsReadyForInsert.push({
+            rowId: row.id,
+            payload: normalized,
+            errorMessage,
+          });
+        }
+      } else if (row.status === 'validated' && row.normalized_payload) {
+        // Re-check duplicates for already-validated rows before inserting.
+        const issues: PatientsImportIssue[] = [];
+        let duplicateId: string | null = null;
+
+        if (row.normalized_payload.national_id) {
+          try {
+            duplicateId = await detectDuplicatePatientId({
+              supabase,
+              orgId: row.org_id,
+              nationalId: row.normalized_payload.national_id,
+            });
+            if (duplicateId) {
+              issues.push({
+                row_index: row.row_index,
+                field: 'national_id',
+                severity: 'error',
+                message: 'Duplicate national_id exists for this org.',
+                duplicate_of_patient_id: duplicateId,
+              });
+            }
+          } catch (err) {
+            console.error('Duplicate check (validated rows) failed:', err);
+            res.status(500).json({ error: (err as Error).message });
+            return;
+          }
+        }
+
+        if (duplicateId) {
+          const errorMessage = aggregateIssues(issues);
+          try {
+            await updateStagingRow(supabase, row.id, {
+              status: 'error',
+              normalized_payload: null,
+              error_message: errorMessage,
+              duplicate_of_patient_id: duplicateId,
+            });
+          } catch (err) {
+            console.error('Update staging row (duplicate validated) failed:', err);
+            res.status(500).json({ error: (err as Error).message });
+            return;
+          }
+        } else {
+          rowsReadyForInsert.push({
+            rowId: row.id,
+            payload: row.normalized_payload,
+            errorMessage: row.error_message,
+          });
+        }
+      }
+    }
+
+    for (const item of rowsReadyForInsert) {
+      try {
+        await insertPatient(supabase, item.payload);
+        await updateStagingRow(supabase, item.rowId, {
+          status: 'imported',
+          imported_at: nowIso(),
+          error_message: item.errorMessage ?? null,
+        });
+      } catch (err) {
+        const message = (err as Error).message;
+        console.error('Insert patient failed:', err);
+        await updateStagingRow(supabase, item.rowId, {
+          status: 'error',
+          error_message: item.errorMessage
+            ? `${item.errorMessage}; Insert failed: ${message}`
+            : `Insert failed: ${message}`,
         });
       }
     }
-  }
 
-  for (const item of rowsReadyForInsert) {
     try {
-      await insertPatient(supabase, item.payload);
-      await updateStagingRow(supabase, item.rowId, {
-        status: 'imported',
-        imported_at: nowIso(),
-        error_message: item.errorMessage ?? null,
+      const [totalRows, importedRows, errorRows] = await Promise.all([
+        countByStatus(supabase, jobId),
+        countByStatus(supabase, jobId, 'imported'),
+        countByStatus(supabase, jobId, 'error'),
+      ]);
+
+      let nextStatus: 'completed' | 'failed' = 'completed';
+      let jobErrorMessage: string | null = null;
+
+      if (importedRows === 0 && errorRows > 0) {
+        nextStatus = 'failed';
+        jobErrorMessage = 'All rows failed to import.';
+      } else if (errorRows > 0) {
+        nextStatus = 'completed';
+        jobErrorMessage = 'Some rows failed to import.';
+      }
+
+      await supabase
+        .from('import_jobs')
+        .update({
+          status: nextStatus,
+          finished_at: nowIso(),
+          error_count: errorRows,
+          row_count: totalRows,
+          error_message: jobErrorMessage,
+        })
+        .eq('id', jobId);
+
+      res.status(200).json({
+        job_id: jobId,
+        total_rows: totalRows,
+        imported_rows: importedRows,
+        error_rows: errorRows,
       });
     } catch (err) {
-      const message = (err as Error).message;
-      await updateStagingRow(supabase, item.rowId, {
-        status: 'error',
-        error_message: item.errorMessage
-          ? `${item.errorMessage}; Insert failed: ${message}`
-          : `Insert failed: ${message}`,
-      });
+      console.error('Final job status update failed:', err);
+      res.status(500).json({ error: (err as Error).message });
     }
-  }
-
-  try {
-    const [totalRows, importedRows, errorRows] = await Promise.all([
-      countByStatus(supabase, jobId),
-      countByStatus(supabase, jobId, 'imported'),
-      countByStatus(supabase, jobId, 'error'),
-    ]);
-
-    // Job-level status semantics (aligned with import_jobs_status_check):
-    // - completed: at least one row imported (even if some errored)
-    // - failed: no rows imported and at least one error
-    let nextStatus: 'completed' | 'failed' = 'completed';
-    let jobErrorMessage: string | null = null;
-
-    if (importedRows === 0 && errorRows > 0) {
-      nextStatus = 'failed';
-      jobErrorMessage = 'All rows failed to import.';
-    } else if (errorRows > 0) {
-      nextStatus = 'completed';
-      jobErrorMessage = 'Some rows failed to import.';
-    }
-
-    await supabase
-      .from('import_jobs')
-      .update({
-        status: nextStatus,
-        finished_at: nowIso(),
-        error_count: errorRows,
-        row_count: totalRows,
-        error_message: jobErrorMessage,
-      })
-      .eq('id', jobId);
-
-    res.status(200).json({
-      job_id: jobId,
-      total_rows: totalRows,
-      imported_rows: importedRows,
-      error_rows: errorRows,
-    });
   } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
+    // Safety net: any uncaught error
+    console.error('Unhandled error in patients-import-processor:', err);
+    res.status(500).json({ error: 'Unhandled server error.' });
   }
 }
