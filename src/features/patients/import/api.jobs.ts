@@ -5,6 +5,7 @@ import { supabaseClient } from '../../../utils/supabaseClient';
 import type {
   PatientsImportRow,
   PatientsImportStatusSummary,
+  LegacyDevicesImportStatusSummary,
 } from './types';
 
 const MAX_BATCH_SIZE = 200;
@@ -110,11 +111,12 @@ export async function insertPatientsImportRows(
 }
 
 async function countRows(
+  table: string,
   jobId: string,
   filters: Record<string, any>,
 ): Promise<number> {
   let query = supabaseClient
-    .from('patients_import_rows')
+    .from(table)
     .select('id', { count: 'exact', head: true })
     .eq('job_id', jobId);
 
@@ -136,21 +138,120 @@ async function countRows(
 export async function getPatientsImportJobSummary(
   jobId: string,
 ): Promise<PatientsImportStatusSummary> {
+  const table = 'patients_import_rows';
+
   const [totalRows, importedRows, errorRows, validatedRows, warningRows] =
     await Promise.all([
-      countRows(jobId, {}),
-      countRows(jobId, { status: 'imported' }),
-      countRows(jobId, { status: 'error' }),
-      countRows(jobId, { status: 'validated' }),
+      countRows(table, jobId, {}),
+      countRows(table, jobId, { status: 'imported' }),
+      countRows(table, jobId, { status: 'error' }),
+      countRows(table, jobId, { status: 'validated' }),
       (async () => {
         const { count, error } = await supabaseClient
-          .from('patients_import_rows')
+          .from(table)
           .select('id', { count: 'exact', head: true })
           .eq('job_id', jobId)
           .eq('status', 'validated')
           .not('error_message', 'is', null);
         if (error) {
           throw new Error('Failed to count warning rows: ' + error.message);
+        }
+        return count ?? 0;
+      })(),
+    ]);
+
+  return {
+    jobId,
+    totalRows,
+    importedRows,
+    errorRows,
+    validatedRows,
+    warningRows,
+  };
+}
+
+// --- Legacy patient devices import job helpers ---
+
+export async function createLegacyDevicesImportJob(
+  fileName: string,
+  totalRows: number,
+): Promise<{ jobId: string; orgId: string }> {
+  const { orgId, userId } = await getOrgContext();
+
+  const { data, error } = await supabaseClient
+    .from('import_jobs')
+    .insert({
+      org_id: orgId,
+      target_entity: 'legacy_patient_devices',
+      status: 'processing',
+      source_filename: fileName || null,
+      row_count: totalRows,
+      created_by: userId,
+    })
+    .select('id, org_id')
+    .single();
+
+  if (error) {
+    throw new Error(
+      'Failed to create legacy devices import job: ' + error.message,
+    );
+  }
+
+  return { jobId: (data as any).id as string, orgId: (data as any).org_id };
+}
+
+export async function insertLegacyDevicesImportRows(
+  jobId: string,
+  orgId: string,
+  rows: Array<{ rowIndex: number; rawRow: Record<string, string> }>,
+): Promise<void> {
+  for (let i = 0; i < rows.length; i += MAX_BATCH_SIZE) {
+    const batch = rows.slice(i, i + MAX_BATCH_SIZE);
+    const payload = batch.map((row) => ({
+      org_id: orgId,
+      job_id: jobId,
+      row_index: row.rowIndex,
+      raw_row: row.rawRow,
+      status: 'pending' as const,
+      normalized_payload: null,
+      error_message: null,
+    }));
+
+    const { error } = await supabaseClient
+      .from('patients_legacy_devices_import_rows')
+      .insert(payload);
+
+    if (error) {
+      throw new Error(
+        `Failed to insert legacy device rows (batch starting at ${i + 1}): ` +
+          error.message,
+      );
+    }
+  }
+}
+
+export async function getLegacyDevicesImportJobSummary(
+  jobId: string,
+): Promise<LegacyDevicesImportStatusSummary> {
+  const table = 'patients_legacy_devices_import_rows';
+
+  const [totalRows, importedRows, errorRows, validatedRows, warningRows] =
+    await Promise.all([
+      countRows(table, jobId, {}),
+      countRows(table, jobId, { status: 'imported' }),
+      countRows(table, jobId, { status: 'error' }),
+      countRows(table, jobId, { status: 'validated' }),
+      (async () => {
+        const { count, error } = await supabaseClient
+          .from(table)
+          .select('id', { count: 'exact', head: true })
+          .eq('job_id', jobId)
+          .eq('status', 'validated')
+          .not('error_message', 'is', null);
+        if (error) {
+          throw new Error(
+            'Failed to count legacy devices warning rows: ' + error.message,
+          );
         }
         return count ?? 0;
       })(),
