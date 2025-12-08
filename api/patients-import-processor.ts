@@ -1,5 +1,6 @@
 // api/patients-import-processor.ts
-// Vercel serverless processor: validate staging rows, detect duplicates, insert patients, and update import_jobs.
+// Vercel serverless processor: validate staging rows, detect duplicates,
+// insert patients, and update import_jobs.
 
 import { createClient } from '@supabase/supabase-js';
 import { validatePatientsRow } from '../src/features/patients/import/validator';
@@ -21,7 +22,7 @@ type ApiResponse = {
   };
 };
 
-// Minimal process declaration so we don't need @types/node just for env access.
+// Minimal process declaration so we don't need @types/node sadece env için.
 // Runtime'da gerçek process Node tarafından sağlanıyor.
 declare const process: {
   env: {
@@ -68,11 +69,13 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-async function detectDuplicatePatientId(params: {
-  supabase: ReturnType<typeof createAdminSupabaseClient>;
-  orgId: string;
-  nationalId: string | null;
-}: Promise<string | null> {
+async function detectDuplicatePatientId(
+  params: {
+    supabase: ReturnType<typeof createAdminSupabaseClient>;
+    orgId: string;
+    nationalId: string | null;
+  },
+): Promise<string | null> {
   const { supabase, orgId, nationalId } = params;
   if (!nationalId) return null;
 
