@@ -22,12 +22,12 @@ type ApiResponse = {
   };
 };
 
-// Minimal process declaration so we don't need @types/node sadece env için.
-// Runtime'da gerçek process Node tarafından sağlanıyor.
+// Minimal process declaration so we don't need @types/node; only env is used.
 declare const process: {
   env: {
     SUPABASE_URL?: string;
     SUPABASE_SERVICE_ROLE_KEY?: string;
+    SUPABASE_SERVICE_ROLE?: string;
     [key: string]: string | undefined;
   };
 };
@@ -46,13 +46,17 @@ type StagingRow = {
 
 function createAdminSupabaseClient() {
   const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // Support both env names, prefer *_KEY if set.
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE;
 
   if (!supabaseUrl) {
     throw new Error('Missing SUPABASE_URL environment variable.');
   }
   if (!serviceRoleKey) {
-    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable.');
+    throw new Error(
+      'Missing SUPABASE_SERVICE_ROLE or SUPABASE_SERVICE_ROLE_KEY environment variable.',
+    );
   }
 
   return createClient(supabaseUrl, serviceRoleKey, {
@@ -69,13 +73,11 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-async function detectDuplicatePatientId(
-  params: {
-    supabase: ReturnType<typeof createAdminSupabaseClient>;
-    orgId: string;
-    nationalId: string | null;
-  },
-): Promise<string | null> {
+async function detectDuplicatePatientId(params: {
+  supabase: ReturnType<typeof createAdminSupabaseClient>;
+  orgId: string;
+  nationalId: string | null;
+}): Promise<string | null> {
   const { supabase, orgId, nationalId } = params;
   if (!nationalId) return null;
 
@@ -188,7 +190,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return;
   }
 
-  let supabase;
+  let supabase: ReturnType<typeof createAdminSupabaseClient>;
   try {
     supabase = createAdminSupabaseClient();
   } catch (err) {
@@ -300,7 +302,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             normalized_payload: null,
             error_message: errorMessage,
             duplicate_of_patient_id: duplicateId,
-            // validated_at was already set previously; keep it as-is.
           });
         } catch (err) {
           res.status(500).json({ error: (err as Error).message });
@@ -344,7 +345,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // Job-level status semantics (aligned with import_jobs_status_check):
     // - completed: at least one row imported (even if some errored)
     // - failed: no rows imported and at least one error
-    // - pending/processing: handled at job creation / UI level
     let nextStatus: 'completed' | 'failed' = 'completed';
     let jobErrorMessage: string | null = null;
 
@@ -352,7 +352,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       nextStatus = 'failed';
       jobErrorMessage = 'All rows failed to import.';
     } else if (errorRows > 0) {
-      // Completed with errors: some rows imported, some failed.
       nextStatus = 'completed';
       jobErrorMessage = 'Some rows failed to import.';
     }
