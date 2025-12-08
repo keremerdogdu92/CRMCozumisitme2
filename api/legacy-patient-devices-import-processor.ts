@@ -3,26 +3,32 @@
 // Phase 1: validates staging rows (patients_legacy_devices_import_rows),
 // links them to patients by patient_national_id, and updates row/job status.
 // It does NOT yet insert into devices / patient_devices – that will be Phase 2.
-//
-// Semantics (agreed):
-// - device_brand + device_model: required.
-// - ear_side: required (R / L / Tek / Çift, TR varyasyonlar kabul).
-// - serial_no: optional.
-// - sold_at: optional, dd.MM.yyyy veya yyyy-MM-dd (T00:00:00.000Z'e normalize edilir).
-// - device_price: optional, "bu satırdaki tüm cihaz(lar) + aksesuarların toplam satış fiyatı".
-// - Hasta tarafındaki satış tutarı ve diğer bilgiler her zaman patient tarafında
-//   override edici kabul edilir; burada sadece legacy cihazları bağlamak için kullanıyoruz.
 
 import { createClient } from '@supabase/supabase-js';
-import type {
-  LegacyDeviceImportIssue,
-  LegacyDeviceImportNormalizedPayload,
-} from '../src/features/patients/import/legacyDevicesValidator';
-import { validateLegacyDeviceRow } from '../src/features/patients/import/legacyDevicesValidator';
 
 // ------------------------
-// Local staging row type
+// Local types
 // ------------------------
+
+type LegacyDeviceImportIssue = {
+  row_index: number;
+  field: string;
+  severity: 'info' | 'warning' | 'error';
+  message: string;
+};
+
+type LegacyDeviceImportSide = 'R' | 'L' | 'Tek' | 'Çift';
+
+type LegacyDeviceImportNormalizedPayload = {
+  org_id: string;
+  patient_national_id: string;
+  device_brand: string;
+  device_model: string;
+  ear_side: LegacyDeviceImportSide;
+  serial_no: string | null;
+  sold_at: string | null;        // ISO string (T00:00:00.000Z) or null
+  device_price: number | null;   // total legacy price for this row (device(s) + accessories)
+};
 
 type LegacyDeviceStagingRow = {
   id: string;
@@ -98,6 +104,214 @@ function nowIso(): string {
 function aggregateIssues(issues: LegacyDeviceImportIssue[]): string | null {
   if (!issues.length) return null;
   return issues.map((i) => `${i.field}: ${i.message}`).join('; ');
+}
+
+// ------------------------
+// Normalization helpers
+// ------------------------
+
+function normalizeString(value: unknown): string | null {
+  if (value == null) return null;
+  const s = String(value).trim();
+  return s === '' ? null : s;
+}
+
+function normalizeNumber(value: unknown): number | null {
+  if (value == null) return null;
+  const s = String(value).replace(/\s/g, '').replace(',', '.');
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseDateLike(
+  raw: unknown,
+): { value: string | null; invalid: boolean } {
+  if (raw == null) return { value: null, invalid: false };
+  const trimmed = String(raw).trim();
+  if (!trimmed) return { value: null, invalid: false };
+
+  // yyyy-mm-dd
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (isoMatch) {
+    const [_, y, m, d] = isoMatch;
+    return { value: `${y}-${m}-${d}T00:00:00.000Z`, invalid: false };
+  }
+
+  // dd.mm.yyyy
+  const dotMatch = /^(\d{1,2})[.](\d{1,2})[.](\d{4})$/.exec(trimmed);
+  if (dotMatch) {
+    const day = dotMatch[1].padStart(2, '0');
+    const month = dotMatch[2].padStart(2, '0');
+    const year = dotMatch[3];
+    return { value: `${year}-${month}-${day}T00:00:00.000Z`, invalid: false };
+  }
+
+  return { value: null, invalid: true };
+}
+
+function normalizeEarSide(
+  value: unknown,
+): { value: LegacyDeviceImportSide | null; error?: string } {
+  if (value == null) {
+    return { value: null, error: 'ear_side is required.' };
+  }
+
+  const trimmed = String(value).trim().toLowerCase();
+
+  if (['r', 'sağ', 'sag', 'right'].includes(trimmed)) {
+    return { value: 'R' };
+  }
+  if (['l', 'sol', 'left'].includes(trimmed)) {
+    return { value: 'L' };
+  }
+  if (['tek', 'single'].includes(trimmed)) {
+    return { value: 'Tek' };
+  }
+  if (['çift', 'cift', 'pair', 'both'].includes(trimmed)) {
+    return { value: 'Çift' };
+  }
+
+  return {
+    value: null,
+    error: 'Invalid ear_side. Allowed: R, L, Tek, Çift.',
+  };
+}
+
+function normalizeDevicePrice(
+  value: unknown,
+): { value: number | null; error?: string } {
+  if (value == null) return { value: null };
+  const n = normalizeNumber(value);
+  if (n == null) {
+    return {
+      value: null,
+      error: 'device_price is invalid. Expected a numeric value.',
+    };
+  }
+  return { value: n };
+}
+
+// ------------------------
+// Row-level validation
+// ------------------------
+
+function validateLegacyDeviceRow(params: {
+  rawRow: Record<string, any>;
+  orgId: string;
+  rowIndex: number;
+}): {
+  normalized: LegacyDeviceImportNormalizedPayload | null;
+  issues: LegacyDeviceImportIssue[];
+} {
+  const { rawRow, orgId, rowIndex } = params;
+  const issues: LegacyDeviceImportIssue[] = [];
+
+  const patientNationalIdRaw =
+    normalizeString(rawRow.patient_national_id) ??
+    normalizeString(rawRow['patient_national_id']);
+  const deviceBrandRaw =
+    normalizeString(rawRow.device_brand) ??
+    normalizeString(rawRow['device_brand']);
+  const deviceModelRaw =
+    normalizeString(rawRow.device_model) ??
+    normalizeString(rawRow['device_model']);
+  const earSideRaw = rawRow.ear_side ?? rawRow['ear_side'];
+  const serialNoRaw =
+    normalizeString(rawRow.serial_no) ?? normalizeString(rawRow['serial_no']);
+  const soldAtRaw = rawRow.sold_at ?? rawRow['sold_at'];
+  const devicePriceRaw = rawRow.device_price ?? rawRow['device_price'];
+
+  // 1) patient_national_id (required, 11 digits)
+  if (!patientNationalIdRaw) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'patient_national_id',
+      severity: 'error',
+      message: 'patient_national_id is required.',
+    });
+  } else if (!/^\d{11}$/.test(patientNationalIdRaw)) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'patient_national_id',
+      severity: 'error',
+      message: 'patient_national_id must be 11 digits.',
+    });
+  }
+
+  // 2) brand (required)
+  if (!deviceBrandRaw) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'device_brand',
+      severity: 'error',
+      message: 'device_brand is required.',
+    });
+  }
+
+  // 3) model (required)
+  if (!deviceModelRaw) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'device_model',
+      severity: 'error',
+      message: 'device_model is required.',
+    });
+  }
+
+  // 4) ear_side (required)
+  const earSideResult = normalizeEarSide(earSideRaw);
+  if (earSideResult.error) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'ear_side',
+      severity: 'error',
+      message: earSideResult.error,
+    });
+  }
+
+  // 5) serial_no (optional)
+  const serialNo = serialNoRaw ?? null;
+
+  // 6) sold_at (optional, warning if invalid)
+  const soldAtResult = parseDateLike(soldAtRaw);
+  if (soldAtResult.invalid) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'sold_at',
+      severity: 'warning',
+      message: 'sold_at could not be parsed; skipped.',
+    });
+  }
+
+  // 7) device_price (optional, warning if invalid)
+  const devicePriceResult = normalizeDevicePrice(devicePriceRaw);
+  if (devicePriceResult.error) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'device_price',
+      severity: 'warning',
+      message: devicePriceResult.error,
+    });
+  }
+
+  const hasErrors = issues.some((i) => i.severity === 'error');
+  if (hasErrors) {
+    return { normalized: null, issues };
+  }
+
+  const normalized: LegacyDeviceImportNormalizedPayload = {
+    org_id: orgId,
+    patient_national_id: patientNationalIdRaw as string,
+    device_brand: deviceBrandRaw as string,
+    device_model: deviceModelRaw as string,
+    ear_side: earSideResult.value as LegacyDeviceImportSide,
+    serial_no: serialNo,
+    sold_at: soldAtResult.value,
+    device_price: devicePriceResult.value,
+  };
+
+  return { normalized, issues };
 }
 
 // ------------------------
@@ -389,8 +603,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         total_rows: totalRows,
         validated_rows: validatedRows,
         error_rows: errorRows,
-        // imported_rows intentionally 0 in Phase 1 – no devices created yet.
-        imported_rows: 0,
+        imported_rows: 0, // Phase 1 – no devices created yet.
       });
     } catch (err) {
       console.error('Final legacy device job status update failed:', err);
