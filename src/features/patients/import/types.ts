@@ -1,6 +1,8 @@
 // src/features/patients/import/types.ts
 // Shared type definitions for patients import jobs, staging rows, and validation payloads.
 
+import type { LegacyDeviceImportNormalizedPayload } from './legacyDevicesValidator';
+
 export type PatientsImportRow = {
   id: string;
   org_id: string;
@@ -52,4 +54,30 @@ export type PatientsImportNormalizedPayload = {
   invoice_issued: boolean;
   invoice_issued_at: string | null;
   created_at: string | null;
+};
+
+// --- Legacy patient devices import types ---
+// These are used for staging rows in patients_legacy_devices_import_rows.
+
+export type LegacyDevicesImportRow = {
+  id: string;
+  org_id: string;
+  job_id: string;
+  row_index: number;
+  raw_row: Record<string, any>;
+  normalized_payload: LegacyDeviceImportNormalizedPayload | null;
+  status: 'pending' | 'validated' | 'error' | 'imported';
+  error_message: string | null;
+  created_at: string;
+  validated_at: string | null;
+  imported_at: string | null;
+};
+
+export type LegacyDevicesImportStatusSummary = {
+  jobId: string;
+  totalRows: number;
+  importedRows: number;
+  errorRows: number;
+  validatedRows: number;
+  warningRows: number;
 };
