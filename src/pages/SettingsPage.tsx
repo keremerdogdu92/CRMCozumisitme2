@@ -1,11 +1,12 @@
 // src/pages/SettingsPage.tsx
-// Settings page that hosts data import tools for patients (v2) and inventory.
+// Settings page that hosts data import tools for patients (v2), legacy devices and inventory.
 
 import { useState } from 'react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { PageLayout } from '../components/layout/PageLayout';
 import { PatientsImportSection } from '../features/patients/ui';
 import { InventoryImportCard } from '../features/inventory/InventoryImportCard';
+import { LegacyDevicesImportSection } from '../features/patients/components/import/LegacyDevicesImportSection';
 
 export default function SettingsPage() {
   // Local toggle state for the inventory import card
@@ -34,6 +35,21 @@ export default function SettingsPage() {
             </div>
           </div>
           <PatientsImportSection />
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">
+                Legacy Patient Devices Import
+              </h3>
+              <p className="mt-1 text-xs text-slate-600">
+                Upload legacy patient-device CSV to stage eski hasta cihazları
+                and link them to existing patients.
+              </p>
+            </div>
+          </div>
+          <LegacyDevicesImportSection />
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
