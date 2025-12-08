@@ -3,13 +3,218 @@
 // insert patients, and update import_jobs.
 
 import { createClient } from '@supabase/supabase-js';
-import { validatePatientsRow } from '../src/features/patients/import/validator';
-import type {
-  PatientsImportIssue,
-  PatientsImportNormalizedPayload,
-} from '../src/features/patients/import/types';
 
-// Minimal request/response shapes so we don't depend on @vercel/node types.
+// ------------------------
+// Local types & validator
+// (frontend'deki dosyalara bağımlılığı kaldırıyoruz)
+// ------------------------
+
+type PatientsImportIssue = {
+  row_index: number;
+  field: string;
+  severity: 'info' | 'warning' | 'error';
+  message: string;
+  duplicate_of_patient_id?: string | null;
+};
+
+type PatientsImportNormalizedPayload = {
+  org_id: string;
+  full_name: string;
+  phone: string | null;
+  national_id: string | null;
+  payment_method: string | null;
+  sale_total: number | null;
+  card_fee_rate: number | null;
+  sgk_flag: boolean | null;
+  sgk_prescription_received: boolean | null;
+  sgk_recorded_to_system: boolean | null;
+  sale_date: string | null;
+};
+
+// Basit normalizasyon yardımcıları
+function normalizeString(value: unknown): string | null {
+  if (value == null) return null;
+  const s = String(value).trim();
+  return s === '' ? null : s;
+}
+
+function normalizeNumber(value: unknown): number | null {
+  if (value == null) return null;
+  const s = String(value).replace(/\s/g, '').replace(',', '.');
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeBoolean(value: unknown): boolean | null {
+  if (value == null) return null;
+  const s = String(value).trim().toLowerCase();
+  if (['1', 'true', 'evet', 'yes'].includes(s)) return true;
+  if (['0', 'false', 'hayır', 'hayir', 'no'].includes(s)) return false;
+  return null;
+}
+
+function normalizeDate(value: unknown): string | null {
+  if (value == null) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+
+  //  dd.mm.yyyy  veya  yyyy-mm-dd gibi basic formatları deneyelim
+  const dotMatch = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+  if (dotMatch) {
+    const [_, d, m, y] = dotMatch;
+    const iso = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    const dObj = new Date(iso);
+    if (!Number.isNaN(dObj.getTime())) return dObj.toISOString();
+  }
+
+  const dObj = new Date(s);
+  if (!Number.isNaN(dObj.getTime())) return dObj.toISOString();
+
+  return null;
+}
+
+// Çok sert olmayan bir telefon normalizasyonu
+function normalizePhone(value: unknown): string | null {
+  if (value == null) return null;
+  let s = String(value).replace(/[^\d+]/g, '');
+  if (!s) return null;
+
+  // Türkiye varsayımı: başta 0 ile geliyorsa kırpıp +90 ekleyelim
+  if (s.startsWith('0') && !s.startsWith('+')) {
+    s = '+90' + s.slice(1);
+  }
+  if (!s.startsWith('+') && s.length === 10) {
+    s = '+90' + s;
+  }
+
+  return s;
+}
+
+function validatePatientsRow(params: {
+  rawRow: Record<string, any>;
+  orgId: string;
+  rowIndex: number;
+}): {
+  normalized: PatientsImportNormalizedPayload | null;
+  issues: PatientsImportIssue[];
+} {
+  const { rawRow, orgId, rowIndex } = params;
+  const issues: PatientsImportIssue[] = [];
+
+  const fullName =
+    normalizeString(rawRow.full_name) ??
+    normalizeString(rawRow.ad_soyad) ??
+    normalizeString(rawRow['Ad Soyad']);
+
+  const phone =
+    normalizePhone(rawRow.phone) ?? normalizePhone(rawRow['Telefon']);
+
+  const nationalId =
+    normalizeString(rawRow.national_id) ??
+    normalizeString(rawRow.tc_kimlik_no) ??
+    normalizeString(rawRow['T.C. Kimlik No']);
+
+  const paymentMethod =
+    normalizeString(rawRow.payment_method) ??
+    normalizeString(rawRow['Ödeme Şekli']);
+
+  const saleTotal =
+    normalizeNumber(rawRow.sale_total) ??
+    normalizeNumber(rawRow.card_sale_total) ??
+    normalizeNumber(rawRow['Toplam Satış Tutarı']);
+
+  const cardFeeRate =
+    normalizeNumber(rawRow.card_fee_rate) ??
+    normalizeNumber(rawRow['Kart Komisyon Oranı']);
+
+  const sgkFlag =
+    normalizeBoolean(rawRow.sgk_flag) ??
+    normalizeBoolean(rawRow['SGK Hastası']);
+
+  const sgkPrescriptionReceived =
+    normalizeBoolean(rawRow.sgk_prescription_received) ??
+    normalizeBoolean(rawRow['Reçete Alındı']);
+
+  const sgkRecordedToSystem =
+    normalizeBoolean(rawRow.sgk_recorded_to_system) ??
+    normalizeBoolean(rawRow['Sisteme İşlendi']);
+
+  const saleDate =
+    normalizeDate(rawRow.sale_date) ??
+    normalizeDate(rawRow['Satış Tarihi']);
+
+  // Zorunlu alan kontrolleri
+  if (!fullName) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'full_name',
+      severity: 'error',
+      message: 'Ad Soyad zorunludur.',
+    });
+  }
+
+  if (!phone && !nationalId) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'identity',
+      severity: 'error',
+      message: 'Telefon veya T.C. Kimlik No alanlarından en az biri zorunludur.',
+    });
+  }
+
+  if (!paymentMethod) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'payment_method',
+      severity: 'error',
+      message: 'Ödeme Şekli zorunludur.',
+    });
+  }
+
+  if (saleTotal == null) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'sale_total',
+      severity: 'error',
+      message: 'Toplam satış tutarı zorunludur.',
+    });
+  }
+
+  // TCKN basic check
+  if (nationalId && !/^\d{11}$/.test(nationalId)) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'national_id',
+      severity: 'error',
+      message: 'T.C. Kimlik No 11 haneli sayı olmalıdır.',
+    });
+  }
+
+  const normalized: PatientsImportNormalizedPayload = {
+    org_id: orgId,
+    full_name: fullName ?? '',
+    phone: phone ?? null,
+    national_id: nationalId ?? null,
+    payment_method: paymentMethod ?? null,
+    sale_total: saleTotal,
+    card_fee_rate: cardFeeRate,
+    sgk_flag: sgkFlag,
+    sgk_prescription_received: sgkPrescriptionReceived,
+    sgk_recorded_to_system: sgkRecordedToSystem,
+    sale_date: saleDate,
+  };
+
+  return {
+    normalized,
+    issues,
+  };
+}
+
+// ------------------------
+// API request/response typings
+// ------------------------
+
 type ApiRequest = {
   method?: string;
   body?: any;
@@ -22,16 +227,15 @@ type ApiResponse = {
   };
 };
 
-// Minimal process declaration so we don't need @types/node (only for env).
-// At runtime the real process object is provided by Node.
+// Minimal process declaration (sadece env için)
 declare const process: {
   env: {
     SUPABASE_URL?: string;
     VITE_SUPABASE_URL?: string;
     SUPABASE_ANON_KEY?: string;
     VITE_SUPABASE_ANON_KEY?: string;
-    SUPABASE_SERVICE_ROLE_KEY?: string; // new name we used
-    SUPABASE_SERVICE_ROLE?: string;     // name you already have in Vercel
+    SUPABASE_SERVICE_ROLE_KEY?: string;
+    SUPABASE_SERVICE_ROLE?: string;
     [key: string]: string | undefined;
   };
 };
@@ -49,11 +253,9 @@ type StagingRow = {
 };
 
 function createAdminSupabaseClient() {
-  // Allow both SUPABASE_URL and legacy VITE_SUPABASE_URL
   const supabaseUrl =
     process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 
-  // Allow both SUPABASE_SERVICE_ROLE_KEY and SUPABASE_SERVICE_ROLE
   const serviceRoleKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE;
 
@@ -282,7 +484,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           });
         }
       } else if (row.status === 'validated' && row.normalized_payload) {
-        // Re-check duplicates for already-validated rows before inserting.
         const issues: PatientsImportIssue[] = [];
         let duplicateId: string | null = null;
 
@@ -319,7 +520,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               duplicate_of_patient_id: duplicateId,
             });
           } catch (err) {
-            console.error('Update staging row (duplicate validated) failed:', err);
+            console.error(
+              'Update staging row (duplicate validated) failed:',
+              err,
+            );
             res.status(500).json({ error: (err as Error).message });
             return;
           }
@@ -393,7 +597,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       res.status(500).json({ error: (err as Error).message });
     }
   } catch (err) {
-    // Safety net: any uncaught error
     console.error('Unhandled error in patients-import-processor:', err);
     res.status(500).json({ error: 'Unhandled server error.' });
   }
