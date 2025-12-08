@@ -1,6 +1,6 @@
 -- db/schema/inventory/import_jobs.sql
 -- Purpose: Supabase table definition for `import_jobs`.
--- Tracks bulk import operations (inventory, patients, trials) with status and error metadata.
+-- Tracks bulk import operations (inventory, patients, trials, legacy patient devices) with status and error metadata.
 -- Includes: CREATE TABLE, constraints, enum-like checks and RLS.
 -- Source of truth: Supabase table editor / migrations.
 
@@ -26,11 +26,26 @@ CREATE TABLE public.import_jobs (
     FOREIGN KEY (org_id) REFERENCES public.orgs (id) ON DELETE CASCADE,
 
   CONSTRAINT import_jobs_status_check CHECK (
-    status = ANY (ARRAY['pending'::text,'processing'::text,'completed'::text,'failed'::text])
+    status = ANY (
+      ARRAY[
+        'pending'::text,
+        'processing'::text,
+        'completed'::text,
+        'failed'::text
+      ]
+    )
   ),
 
+  -- [UPDATED] target_entity: inventory / patients / trials / legacy_patient_devices
   CONSTRAINT import_jobs_target_entity_check CHECK (
-    target_entity = ANY (ARRAY['inventory'::text,'patients'::text,'trials'::text])
+    target_entity = ANY (
+      ARRAY[
+        'inventory'::text,
+        'patients'::text,
+        'trials'::text,
+        'legacy_patient_devices'::text
+      ]
+    )
   )
 ) TABLESPACE pg_default;
 
