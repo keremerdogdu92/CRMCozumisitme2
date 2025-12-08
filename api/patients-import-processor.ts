@@ -17,18 +17,34 @@ type PatientsImportIssue = {
   duplicate_of_patient_id?: string | null;
 };
 
+/**
+ * Normalized payload shape is aligned with the `patients` table schema.
+ * IMPORTANT: There is **no** `sale_date` or `sale_total` field here.
+ * Date and amount fields are mapped to:
+ * - sale_total_amount
+ * - card_fee_rate
+ * - card_fee_amount
+ * - invoice_issued
+ * - invoice_issued_at
+ * - created_at
+ */
 type PatientsImportNormalizedPayload = {
   org_id: string;
   full_name: string;
   phone: string | null;
   national_id: string | null;
+  kin_phone: string | null;
+  address: string | null;
+  sgk_flag: boolean;
+  sgk_prescription_received: boolean;
+  sgk_recorded_to_system: boolean;
   payment_method: string | null;
-  sale_total: number | null;
+  sale_total_amount: number | null;
   card_fee_rate: number | null;
-  sgk_flag: boolean | null;
-  sgk_prescription_received: boolean | null;
-  sgk_recorded_to_system: boolean | null;
-  sale_date: string | null;
+  card_fee_amount: number | null;
+  invoice_issued: boolean;
+  invoice_issued_at: string | null;
+  created_at: string | null;
 };
 
 // Basit normalizasyon yardımcıları
@@ -144,6 +160,13 @@ function validatePatientsRow(params: {
     normalizeDate(rawRow.sale_date) ??
     normalizeDate(rawRow['Satış Tarihi']);
 
+  const kinPhone =
+    normalizePhone(rawRow.kin_phone) ?? normalizePhone(rawRow['Yakın Telefon']);
+
+  const address =
+    normalizeString(rawRow.address) ??
+    normalizeString(rawRow['Adres']);
+
   // Zorunlu alan kontrolleri
   if (!fullName) {
     issues.push({
@@ -191,22 +214,41 @@ function validatePatientsRow(params: {
     });
   }
 
+  const hasError = issues.some((i) => i.severity === 'error');
+
+  // DB kolonlarına birebir uyan payload
+  const sale_total_amount = saleTotal;
+  const feeRate = cardFeeRate;
+  const card_fee_amount =
+    sale_total_amount != null && feeRate != null
+      ? Number(((sale_total_amount * feeRate) / 100).toFixed(2))
+      : null;
+
+  const invoice_issued_at = saleDate;
+  const created_at = saleDate;
+  const invoice_issued = !!invoice_issued_at;
+
   const normalized: PatientsImportNormalizedPayload = {
     org_id: orgId,
     full_name: fullName ?? '',
     phone: phone ?? null,
     national_id: nationalId ?? null,
+    kin_phone: kinPhone ?? null,
+    address: address ?? null,
+    sgk_flag: sgkFlag ?? false,
+    sgk_prescription_received: sgkPrescriptionReceived ?? false,
+    sgk_recorded_to_system: sgkRecordedToSystem ?? false,
     payment_method: paymentMethod ?? null,
-    sale_total: saleTotal,
-    card_fee_rate: cardFeeRate,
-    sgk_flag: sgkFlag,
-    sgk_prescription_received: sgkPrescriptionReceived,
-    sgk_recorded_to_system: sgkRecordedToSystem,
-    sale_date: saleDate,
+    sale_total_amount,
+    card_fee_rate: feeRate,
+    card_fee_amount,
+    invoice_issued,
+    invoice_issued_at,
+    created_at,
   };
 
   return {
-    normalized,
+    normalized: hasError ? null : normalized,
     issues,
   };
 }
@@ -350,6 +392,7 @@ async function insertPatient(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
   payload: PatientsImportNormalizedPayload,
 ): Promise<string> {
+  // Payload fields match `patients` table columns one-to-one.
   const { data, error } = await supabase
     .from('patients')
     .insert(payload)
