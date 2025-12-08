@@ -95,7 +95,8 @@ export function PatientsImportSection() {
             CSV&apos;den Hasta İçe Aktar (v2, staged)
           </h3>
           <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
-            Rows are staged into <code className="font-mono">patients_import_rows</code> and
+            Rows are staged into{' '}
+            <code className="font-mono">patients_import_rows</code> and
             processed via the import job pipeline.
           </p>
         </div>
@@ -137,26 +138,45 @@ export function PatientsImportSection() {
             <li>
               <span className="font-semibold">Identity:</span>{' '}
               <code className="rounded bg-slate-100 px-1 py-0.5">phone</code>,{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">national_id</code>
+              <code className="rounded bg-slate-100 px-1 py-0.5">
+                national_id
+              </code>
             </li>
           </ul>
           <ul className="space-y-1">
             <li>
               <span className="font-semibold">Payment:</span>{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">payment_method</code>,{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">sale_total</code>{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">
+                payment_method
+              </code>
+              ,{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">
+                sale_total
+              </code>{' '}
               (or legacy{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">card_sale_total</code>
+              <code className="rounded bg-slate-100 px-1 py-0.5">
+                card_sale_total
+              </code>
               ),{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">card_fee_rate</code>
+              <code className="rounded bg-slate-100 px-1 py-0.5">
+                card_fee_rate
+              </code>
             </li>
             <li>
               <span className="font-semibold">Optional:</span>{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">sgk_flag</code>,{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">sgk_prescription_received</code>
+              <code className="rounded bg-slate-100 px-1 py-0.5">sgk_flag</code>
               ,{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">sgk_recorded_to_system</code>,{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5">sale_date</code>
+              <code className="rounded bg-slate-100 px-1 py-0.5">
+                sgk_prescription_received
+              </code>
+              ,{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">
+                sgk_recorded_to_system
+              </code>
+              ,{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5">
+                sale_date
+              </code>
             </li>
           </ul>
         </div>
