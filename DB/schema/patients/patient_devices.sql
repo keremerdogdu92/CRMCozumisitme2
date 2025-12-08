@@ -1,123 +1,80 @@
 -- db/schema/patients/patient_devices.sql
--- Purpose: Stores installed hearing devices per patient (legacy + new).
--- Legacy imports from patients_legacy_devices_import_rows are written here.
+-- Purpose: Definition and RLS policies for patient_devices table.
+-- Links patients to their devices (current + legacy) at org scope.
+-- Source of truth: Supabase table definition & policies.
+
+------------------------------------------------------------
+-- TABLE: public.patient_devices
+------------------------------------------------------------
 
 CREATE TABLE public.patient_devices (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL,
   patient_id uuid NOT NULL,
-  brand text NOT NULL,
-  model text NOT NULL,
-  ear_side text NOT NULL, -- 'R','L','Tek','Çift'
-  serial_no text NULL,
-  sold_at date NULL,
-  -- Optional historical price; not used for new sales calculation.
-  legacy_price_total numeric NULL,
+  device_id uuid NOT NULL,
+  side text NULL,
+  price numeric(12, 2) NULL,
+  assigned_at timestamp with time zone NULL DEFAULT now(),
+  unassigned_at timestamp with time zone NULL,
+  archive_code text NOT NULL,
 
-  is_legacy boolean NOT NULL DEFAULT true,
-  legacy_import_job_id uuid NULL,
-  legacy_row_id uuid NULL,
+  CONSTRAINT patient_devices_pkey
+    PRIMARY KEY (id),
 
-  created_at timestamptz NOT NULL DEFAULT now(),
-
-  CONSTRAINT patient_devices_pkey PRIMARY KEY (id),
+  CONSTRAINT patient_devices_device_id_fkey
+    FOREIGN KEY (device_id)
+    REFERENCES public.devices (id) ON DELETE RESTRICT,
 
   CONSTRAINT patient_devices_org_id_fkey
-    FOREIGN KEY (org_id) REFERENCES public.orgs (id) ON DELETE CASCADE,
+    FOREIGN KEY (org_id)
+    REFERENCES public.orgs (id) ON DELETE CASCADE,
 
   CONSTRAINT patient_devices_patient_id_fkey
-    FOREIGN KEY (patient_id) REFERENCES public.patients (id) ON DELETE CASCADE,
+    FOREIGN KEY (patient_id)
+    REFERENCES public.patients (id) ON DELETE CASCADE,
 
-  CONSTRAINT patient_devices_import_job_fkey
-    FOREIGN KEY (legacy_import_job_id) REFERENCES public.import_jobs (id) ON DELETE SET NULL,
+  CONSTRAINT patient_devices_side_check
+    CHECK (side = ANY (ARRAY['left'::text, 'right'::text]))
+) TABLESPACE pg_default;
 
-  CONSTRAINT patient_devices_legacy_row_fkey
-    FOREIGN KEY (legacy_row_id) REFERENCES public.patients_legacy_devices_import_rows (id) ON DELETE SET NULL,
+------------------------------------------------------------
+-- TRIGGERS
+------------------------------------------------------------
 
-  CONSTRAINT patient_devices_ear_side_check CHECK (
-    ear_side = ANY (ARRAY['R','L','Tek','Çift'])
-  )
-);
+-- Archive code generator (existing function in DB)
+CREATE TRIGGER trg_patient_devices_archive
+BEFORE INSERT ON public.patient_devices
+FOR EACH ROW
+EXECUTE FUNCTION public.trg_patient_devices_set_archive();
 
--- =======================================
--- RLS
--- =======================================
+------------------------------------------------------------
+-- ROW LEVEL SECURITY (RLS)
+------------------------------------------------------------
 
 ALTER TABLE public.patient_devices ENABLE ROW LEVEL SECURITY;
 
--- service_role full access
-CREATE POLICY patient_devices_service_full_access
+-- SELECT: allow service_role or same-org users
+CREATE POLICY patient_devices_select
+ON public.patient_devices
+AS PERMISSIVE
+FOR SELECT
+TO public
+USING (
+  (auth.role() = 'service_role'::text)
+  OR (org_id::text = (auth.jwt() ->> 'org_id'::text))
+);
+
+-- WRITE (INSERT / UPDATE / DELETE): allow service_role or same-org users
+CREATE POLICY patient_devices_write
 ON public.patient_devices
 AS PERMISSIVE
 FOR ALL
 TO public
-USING (auth.role() = 'service_role'::text)
-WITH CHECK (auth.role() = 'service_role'::text);
-
--- org-level SELECT
-CREATE POLICY patient_devices_org_select
-ON public.patient_devices
-AS PERMISSIVE
-FOR SELECT
-TO authenticated
 USING (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.org_id = patient_devices.org_id
-  )
-);
-
--- org-level INSERT
-CREATE POLICY patient_devices_org_insert
-ON public.patient_devices
-AS PERMISSIVE
-FOR INSERT
-TO authenticated
-WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.org_id = patient_devices.org_id
-  )
-);
-
--- org-level UPDATE
-CREATE POLICY patient_devices_org_update
-ON public.patient_devices
-AS PERMISSIVE
-FOR UPDATE
-TO authenticated
-USING (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.org_id = patient_devices.org_id
-  )
+  (auth.role() = 'service_role'::text)
+  OR (org_id::text = (auth.jwt() ->> 'org_id'::text))
 )
 WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.org_id = patient_devices.org_id
-  )
-);
-
--- org-level DELETE (ileride ihtiyaç olursa)
-CREATE POLICY patient_devices_org_delete
-ON public.patient_devices
-AS PERMISSIVE
-FOR DELETE
-TO authenticated
-USING (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.org_id = patient_devices.org_id
-  )
+  (auth.role() = 'service_role'::text)
+  OR (org_id::text = (auth.jwt() ->> 'org_id'::text))
 );
