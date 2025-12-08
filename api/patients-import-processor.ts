@@ -1,12 +1,35 @@
 // api/patients-import-processor.ts
 // Vercel serverless processor: validate staging rows, detect duplicates, insert patients, and update import_jobs.
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+
 import { createClient } from '@supabase/supabase-js';
 import { validatePatientsRow } from '../src/features/patients/import/validator';
 import type {
   PatientsImportIssue,
   PatientsImportNormalizedPayload,
 } from '../src/features/patients/import/types';
+
+// Minimal request/response shapes so we don't depend on @vercel/node types.
+type ApiRequest = {
+  method?: string;
+  body?: any;
+  query: Record<string, string | string[] | undefined>;
+};
+
+type ApiResponse = {
+  status: (code: number) => {
+    json: (body: any) => void;
+  };
+};
+
+// Minimal process declaration so we don't need @types/node just for env access.
+// Runtime'da gerçek process Node tarafından sağlanıyor.
+declare const process: {
+  env: {
+    SUPABASE_URL?: string;
+    SUPABASE_SERVICE_ROLE_KEY?: string;
+    [key: string]: string | undefined;
+  };
+};
 
 type StagingRow = {
   id: string;
@@ -49,7 +72,7 @@ async function detectDuplicatePatientId(params: {
   supabase: ReturnType<typeof createAdminSupabaseClient>;
   orgId: string;
   nationalId: string | null;
-}): Promise<string | null> {
+}: Promise<string | null> {
   const { supabase, orgId, nationalId } = params;
   if (!nationalId) return null;
 
@@ -145,10 +168,7 @@ async function countByStatus(
   return count ?? 0;
 }
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse,
-) {
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
