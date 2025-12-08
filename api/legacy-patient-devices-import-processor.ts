@@ -2,7 +2,9 @@
 // Summary: Serverless processor for LEGACY patient-device CSV imports.
 // Phase 1: validates staging rows (patients_legacy_devices_import_rows),
 // links them to patients by patient_national_id, and updates row/job status.
-// It does NOT yet insert into devices / patient_devices – that will be Phase 2.
+// Phase 2: for validated rows, creates/reuses devices in `public.devices` and
+// inserts patient-device relations in `public.patient_devices`, then marks
+// staging rows as imported and updates job summary.
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -26,8 +28,8 @@ type LegacyDeviceImportNormalizedPayload = {
   device_model: string;
   ear_side: LegacyDeviceImportSide;
   serial_no: string | null;
-  sold_at: string | null;        // ISO string (T00:00:00.000Z) or null
-  device_price: number | null;   // total legacy price for this row (device(s) + accessories)
+  sold_at: string | null; // ISO string (T00:00:00.000Z) or null
+  device_price: number | null; // total legacy price for this row (device(s) + accessories)
 };
 
 type LegacyDeviceStagingRow = {
@@ -315,7 +317,7 @@ function validateLegacyDeviceRow(params: {
 }
 
 // ------------------------
-// Supabase helpers
+// Supabase helpers (staging)
 // ------------------------
 
 async function fetchLegacyStagingRows(
@@ -334,6 +336,30 @@ async function fetchLegacyStagingRows(
   if (error) {
     throw new Error(
       'Failed to load legacy device staging rows: ' + error.message,
+    );
+  }
+
+  return (data ?? []) as LegacyDeviceStagingRow[];
+}
+
+async function fetchLegacyValidatedRowsForImport(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  jobId: string,
+): Promise<LegacyDeviceStagingRow[]> {
+  const { data, error } = await supabase
+    .from('patients_legacy_devices_import_rows')
+    .select(
+      'id, org_id, job_id, row_index, raw_row, normalized_payload, status, error_message, duplicate_of_device_id, created_at, validated_at, imported_at',
+    )
+    .eq('job_id', jobId)
+    .eq('status', 'validated')
+    .is('imported_at', null)
+    .order('row_index', { ascending: true });
+
+  if (error) {
+    throw new Error(
+      'Failed to load validated legacy device rows for import: ' +
+        error.message,
     );
   }
 
@@ -383,8 +409,7 @@ async function countLegacyRowsByStatus(
 }
 
 /**
- * Check if a patient exists for given national_id + org_id.
- * This is a VALIDATION step only; we don't write patient_id into payload yet.
+ * Validation helper: check if a patient exists for given national_id + org_id.
  */
 async function ensurePatientExists(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
@@ -407,6 +432,144 @@ async function ensurePatientExists(
   if (rows.length === 0) return 'missing';
   if (rows.length > 1) return 'multiple';
   return 'ok';
+}
+
+/**
+ * Import helper: fetch the single patient id (assumes Phase 1 already validated uniqueness).
+ */
+async function fetchSinglePatientId(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  orgId: string,
+  nationalId: string,
+): Promise<{ status: 'ok'; id: string } | { status: 'missing' | 'multiple' }> {
+  const { data, error } = await supabase
+    .from('patients')
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('national_id', nationalId);
+
+  if (error) {
+    throw new Error(
+      `Failed to fetch patient id for national_id=${nationalId}: ${error.message}`,
+    );
+  }
+
+  const rows = (data ?? []) as { id: string }[];
+  if (rows.length === 0) return { status: 'missing' };
+  if (rows.length > 1) return { status: 'multiple' };
+  return { status: 'ok', id: rows[0].id };
+}
+
+// ------------------------
+// Supabase helpers (devices & patient_devices)
+// ------------------------
+
+async function findDeviceIdBySerial(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  orgId: string,
+  serial: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('devices')
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('serial', serial)
+    .limit(1);
+
+  if (error) {
+    throw new Error(
+      `Failed to lookup device by serial=${serial}: ${error.message}`,
+    );
+  }
+
+  const rows = (data ?? []) as { id: string }[];
+  if (!rows.length) return null;
+  return rows[0].id;
+}
+
+async function insertDeviceRowFromLegacy(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  payload: LegacyDeviceImportNormalizedPayload,
+  serialOverride: string | null,
+): Promise<string> {
+  const { data, error } = await supabase
+    .from('devices')
+    .insert({
+      org_id: payload.org_id,
+      brand: payload.device_brand,
+      model: payload.device_model,
+      barcode: null,
+      serial: serialOverride,
+      status: 'sold', // legacy import are already sold/assigned devices
+      hold_patient_id: null,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    throw new Error(
+      `Failed to insert device for legacy row (patient_national_id=${payload.patient_national_id}): ${error.message}`,
+    );
+  }
+
+  return (data as { id: string }).id;
+}
+
+async function upsertDeviceFromLegacyRow(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  payload: LegacyDeviceImportNormalizedPayload,
+  options: { reuseBySerial: boolean; serialOverride: string | null },
+): Promise<string> {
+  const serial = options.serialOverride;
+
+  // If we have a serial and reuse is allowed, attempt to find existing device.
+  if (options.reuseBySerial && serial) {
+    const existingId = await findDeviceIdBySerial(
+      supabase,
+      payload.org_id,
+      serial,
+    );
+    if (existingId) {
+      return existingId;
+    }
+  }
+
+  // Otherwise create a new device row.
+  return insertDeviceRowFromLegacy(supabase, payload, serial);
+}
+
+async function insertPatientDevicesRows(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  rows: {
+    org_id: string;
+    patient_id: string;
+    device_id: string;
+    side: string | null;
+    assigned_at: string;
+    price: number | null;
+  }[],
+): Promise<void> {
+  if (!rows.length) return;
+
+  const { error } = await supabase.from('patient_devices').insert(
+    rows.map((r) => ({
+      org_id: r.org_id,
+      patient_id: r.patient_id,
+      device_id: r.device_id,
+      side: r.side,
+      price: r.price, // Phase 2: we intentionally keep this NULL (per-row pricing later if needed).
+      assigned_at: r.assigned_at,
+      unassigned_at: null,
+      // archive_code is handled by trigger trg_patient_devices_archive
+    })),
+  );
+
+  if (error) {
+    throw new Error(
+      'Failed to insert patient_devices rows for legacy import: ' +
+        error.message,
+    );
+  }
 }
 
 // ------------------------
@@ -449,7 +612,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
+    // ------------------------
     // Phase 1: validation + patient existence check.
+    // ------------------------
     for (const row of stagingRows) {
       if (row.status === 'pending') {
         const { normalized, issues } = validateLegacyDeviceRow({
@@ -568,23 +733,194 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    // Job summary (Phase 1: validation-only)
+    // ------------------------
+    // Phase 2: import validated rows into devices + patient_devices.
+    // ------------------------
+
+    let importedRowsCount = 0;
+    let importErrorRowsCount = 0;
+
+    let importCandidates: LegacyDeviceStagingRow[] = [];
     try {
-      const [totalRows, validatedRows, errorRows] = await Promise.all([
-        countLegacyRowsByStatus(supabase, jobId),
-        countLegacyRowsByStatus(supabase, jobId, 'validated'),
-        countLegacyRowsByStatus(supabase, jobId, 'error'),
-      ]);
+      importCandidates = await fetchLegacyValidatedRowsForImport(
+        supabase,
+        jobId,
+      );
+    } catch (err) {
+      console.error('Failed to fetch validated rows for import:', err);
+      res.status(500).json({ error: (err as Error).message });
+      return;
+    }
+
+    for (const row of importCandidates) {
+      const normalized = row.normalized_payload;
+      if (!normalized) {
+        // Defensive: should not happen for status=validated, but mark as error if it does.
+        importErrorRowsCount += 1;
+        try {
+          await updateLegacyStagingRow(supabase, row.id, {
+            status: 'error',
+            error_message:
+              'Validated row missing normalized_payload; cannot import.',
+            normalized_payload: null,
+          });
+        } catch (err) {
+          console.error(
+            'Failed to mark malformed validated row as error:',
+            err,
+          );
+          res.status(500).json({ error: (err as Error).message });
+          return;
+        }
+        continue;
+      }
+
+      try {
+        // 1) Resolve patient id (single row expected).
+        const patientLookup = await fetchSinglePatientId(
+          supabase,
+          normalized.org_id,
+          normalized.patient_national_id,
+        );
+
+        if (patientLookup.status !== 'ok') {
+          importErrorRowsCount += 1;
+          const msg =
+            patientLookup.status === 'missing'
+              ? 'No patient found for this national_id in this organization at import time.'
+              : 'Multiple patients found for this national_id in this organization at import time.';
+          await updateLegacyStagingRow(supabase, row.id, {
+            status: 'error',
+            error_message: msg,
+            normalized_payload: null,
+          });
+          continue;
+        }
+
+        const patientId = patientLookup.id;
+
+        // 2) Decide device(s) and side(s) for this row.
+        const sides: (string | null)[] =
+          normalized.ear_side === 'Çift'
+            ? ['left', 'right']
+            : normalized.ear_side === 'R'
+            ? ['right']
+            : normalized.ear_side === 'L'
+            ? ['left']
+            : [null]; // 'Tek' → side is unknown / not tracked
+
+        const deviceIds: string[] = [];
+
+        if (normalized.ear_side === 'Çift') {
+          // Pair case: two devices and two patient_devices.
+          // First device: reuse by serial if available.
+          const firstDeviceId = await upsertDeviceFromLegacyRow(supabase, normalized, {
+            reuseBySerial: true,
+            serialOverride: normalized.serial_no,
+          });
+          deviceIds.push(firstDeviceId);
+
+          // Second device: always create a new one.
+          // To avoid unique(serial) conflicts, second device uses NULL serial
+          // when the legacy row only had a single serial.
+          const secondDeviceId = await upsertDeviceFromLegacyRow(
+            supabase,
+            normalized,
+            {
+              reuseBySerial: false,
+              serialOverride: normalized.serial_no ? null : null,
+            },
+          );
+          deviceIds.push(secondDeviceId);
+        } else {
+          // Single device case (R, L, Tek)
+          const deviceId = await upsertDeviceFromLegacyRow(supabase, normalized, {
+            reuseBySerial: true,
+            serialOverride: normalized.serial_no,
+          });
+          deviceIds.push(deviceId);
+        }
+
+        if (deviceIds.length !== sides.length) {
+          throw new Error(
+            `Internal error: deviceIds length (${deviceIds.length}) does not match sides length (${sides.length}) for row_index=${row.row_index}.`,
+          );
+        }
+
+        // 3) Build patient_devices rows.
+        const assignedAt = normalized.sold_at ?? nowIso();
+        const patientDeviceRows = sides.map((side, index) => ({
+          org_id: normalized.org_id,
+          patient_id: patientId,
+          device_id: deviceIds[index],
+          side,
+          price: null, // Phase 2: we are not splitting legacy total price per device.
+          assigned_at: assignedAt,
+        }));
+
+        await insertPatientDevicesRows(supabase, patientDeviceRows);
+
+        // 4) Mark staging row as imported.
+        await updateLegacyStagingRow(supabase, row.id, {
+          status: 'imported',
+          imported_at: nowIso(),
+          // keep normalized_payload for traceability; do not clear it.
+        });
+
+        importedRowsCount += 1;
+      } catch (err) {
+        console.error(
+          `Import failed for legacy device row id=${row.id}, row_index=${row.row_index}:`,
+          err,
+        );
+        importErrorRowsCount += 1;
+
+        try {
+          await updateLegacyStagingRow(supabase, row.id, {
+            status: 'error',
+            error_message:
+              (row.error_message ? row.error_message + '; ' : '') +
+              'Import failed for this row. See server logs for details.',
+            normalized_payload: null,
+          });
+        } catch (updateErr) {
+          console.error(
+            'Failed to update staging row to error after import failure:',
+            updateErr,
+          );
+          res.status(500).json({ error: (updateErr as Error).message });
+          return;
+        }
+      }
+    }
+
+    // ------------------------
+    // Job summary (after validation + import).
+    // ------------------------
+    try {
+      const [totalRows, validatedRows, errorRows, importedRowsInDb] =
+        await Promise.all([
+          countLegacyRowsByStatus(supabase, jobId),
+          countLegacyRowsByStatus(supabase, jobId, 'validated'),
+          countLegacyRowsByStatus(supabase, jobId, 'error'),
+          countLegacyRowsByStatus(supabase, jobId, 'imported'),
+        ]);
+
+      // Prefer DB-derived imported count, but keep the in-process counter for response clarity.
+      const importedRowsFinal = importedRowsInDb;
 
       let nextStatus: 'completed' | 'failed' = 'completed';
       let jobErrorMessage: string | null = null;
 
-      if (validatedRows === 0 && errorRows > 0) {
+      if (importedRowsFinal === 0 && errorRows > 0) {
         nextStatus = 'failed';
-        jobErrorMessage = 'All legacy device rows failed validation.';
-      } else if (errorRows > 0) {
+        jobErrorMessage =
+          'All legacy device rows failed validation or import. No devices were imported.';
+      } else if (errorRows > 0 || validatedRows > 0) {
+        // Some rows failed or are still stuck in validated state.
         nextStatus = 'completed';
-        jobErrorMessage = 'Some legacy device rows failed validation.';
+        jobErrorMessage =
+          'Legacy devices import finished with partial errors. Some rows failed validation or import.';
       }
 
       await supabase
@@ -594,6 +930,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           finished_at: nowIso(),
           error_count: errorRows,
           row_count: totalRows,
+          imported_rows: importedRowsFinal,
           error_message: jobErrorMessage,
         })
         .eq('id', jobId);
@@ -603,7 +940,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         total_rows: totalRows,
         validated_rows: validatedRows,
         error_rows: errorRows,
-        imported_rows: 0, // Phase 1 – no devices created yet.
+        imported_rows: importedRowsFinal,
       });
     } catch (err) {
       console.error('Final legacy device job status update failed:', err);
