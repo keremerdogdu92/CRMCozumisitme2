@@ -56,7 +56,7 @@ export function InventoryImportCard({ open, onToggle }: Props) {
   return (
     <InlineCreateCard
       title="Excel / CSV'den Stok İçe Aktar"
-      description="Marka, model ve fiyat bilgilerini içeren CSV dosyasını yükleyerek toplu stok ekleyin."
+      description="Marka, model, tip ve seri numarasını içeren CSV dosyasını yükleyerek toplu stok ekleyin."
       open={open}
       onToggle={onToggle}
       errorMessage={errorMessage}
@@ -77,15 +77,15 @@ export function InventoryImportCard({ open, onToggle }: Props) {
               Beklenen başlıklar:{' '}
               <span className="font-mono">
                 brand (veya device_brand), model (veya device_model),
-                item_type, barcode, serial_no, ear_side, status,
+                item_type, serial_no, barcode, status,
                 purchase_price, list_price (veya device_price),
                 purchase_date, notes
               </span>
-              . Ayraç olarak virgül (,) veya noktalı virgül (;) kullanılabilir.
-              Marka ve model zorunludur; diğer alanlar opsiyoneldir. Geçersiz
-              değerler için satır import edilir ancak{' '}
-              <span className="font-mono">inventory_import_rows</span>{' '}
-              tablosunda uyarı olarak işaretlenir.
+              . Marka, model, item_type ve serial_no zorunludur. Diğer alanlar
+              opsiyoneldir; geçersiz değerler için satır yine import edilir
+              ancak{' '}
+              <span className="font-mono">inventory_import_rows</span> tablosunda
+              uyarı olarak işaretlenir.
             </p>
           </div>
 
