@@ -183,10 +183,10 @@ export function PatientsTable({
                 </div>
                 <div>
                   <span className="block text-[10px] uppercase text-slate-400">
-                    Fiyat
+                    Toplam Satış
                   </span>
                   <span className="font-semibold">
-                    {formatPrice(p.device_total_price)}
+                    {formatPrice(p.sale_total_amount)}
                   </span>
                 </div>
                 <div>
@@ -262,7 +262,7 @@ export function PatientsTable({
                 Kulak
               </th>
               <th className="px-4 py-2 text-right font-medium text-slate-600">
-                Fiyat
+                Toplam Satış
               </th>
               <th className="px-4 py-2 text-center font-medium text-slate-600">
                 Memnuniyet (1–10)
@@ -324,9 +324,9 @@ export function PatientsTable({
                     {deviceEarLabel}
                   </td>
 
-                  {/* Fiyat */}
+                  {/* Toplam Satış */}
                   <td className="px-4 py-2 text-right text-slate-700">
-                    {formatPrice(p.device_total_price)}
+                    {formatPrice(p.sale_total_amount)}
                   </td>
 
                   {/* Memnuniyet */}
