@@ -1,9 +1,14 @@
 // src/features/inventory/InventoryImportCard.tsx
 // Inline card to import inventory items from a CSV file.
+//
+// Kullanım:
+// - SettingsPage içinden <InventoryImportCard /> olarak çağrılır.
+// - CSV'yi yükler, import_jobs + inventory_import_rows + inventory_items
+//   pipeline'ını tetikler.
 
 import { FormEvent, useState, ChangeEvent } from 'react';
 import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
-import { useInventoryCsvImportMutation } from './api';
+import { useInventoryCsvImportMutation } from './api.import';
 import type { InventoryImportSummary } from './types';
 
 type Props = {
@@ -51,7 +56,9 @@ export function InventoryImportCard({ open, onToggle }: Props) {
 
   const errorMessage =
     localError ??
-    (importMutation.isError ? (importMutation.error as Error).message : undefined);
+    (importMutation.isError
+      ? (importMutation.error as Error).message
+      : undefined);
 
   return (
     <InlineCreateCard
@@ -76,16 +83,14 @@ export function InventoryImportCard({ open, onToggle }: Props) {
             <p className="mt-1 text-[11px] text-slate-500">
               Beklenen başlıklar:{' '}
               <span className="font-mono">
-                brand (veya device_brand), model (veya device_model),
-                item_type, serial_no, barcode, status,
-                purchase_price, list_price (veya device_price),
-                purchase_date, notes
+                brand (veya device_brand), model (veya device_model), item_type,
+                serial_no, barcode, status, purchase_price, list_price (veya
+                device_price), purchase_date, notes
               </span>
               . Marka, model, item_type ve serial_no zorunludur. Diğer alanlar
               opsiyoneldir; geçersiz değerler için satır yine import edilir
-              ancak{' '}
-              <span className="font-mono">inventory_import_rows</span> tablosunda
-              uyarı olarak işaretlenir.
+              ancak <span className="font-mono">inventory_import_rows</span>{' '}
+              tablosunda uyarı olarak işaretlenir.
             </p>
           </div>
 
@@ -101,7 +106,8 @@ export function InventoryImportCard({ open, onToggle }: Props) {
                 Bloklayan hatalı satır: <strong>{summary.errorCount}</strong>
               </p>
               <p className="mt-1 text-[10px] text-slate-500">
-                Import job ID: <span className="font-mono">{summary.jobId}</span> — detaylı
+                Import job ID:{' '}
+                <span className="font-mono">{summary.jobId}</span> — detaylı
                 hata ve uyarılar için{' '}
                 <span className="font-mono">inventory_import_rows</span> ve{' '}
                 <span className="font-mono">import_jobs</span> tablolarına
