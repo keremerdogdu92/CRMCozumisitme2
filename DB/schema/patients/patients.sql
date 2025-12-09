@@ -92,12 +92,12 @@ WHERE national_id IS NOT NULL
   AND deleted_at IS NULL;
 
 -- ============================================================
--- RLS POLICIES FOR public.patients (soft delete aware)
+-- RLS POLICIES FOR public.patients (soft-delete aware)
 -- ============================================================
 
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
 
--- INSERT: org_id must match JWT user_metadata.org_id
+-- 1) Authenticated INSERT: org_id must match JWT user_metadata.org_id.
 CREATE POLICY "patients_org_insert"
 ON public.patients
 AS PERMISSIVE
@@ -107,7 +107,8 @@ WITH CHECK (
   (org_id)::text = ((auth.jwt() -> 'user_metadata'::text) ->> 'org_id'::text)
 );
 
--- SELECT (authenticated): org_id from JWT user_metadata.org_id, only active rows
+-- 2) Authenticated SELECT: org_id from JWT user_metadata.org_id
+--    and only active (not soft-deleted) patients.
 CREATE POLICY "patients_org_select"
 ON public.patients
 AS PERMISSIVE
@@ -118,7 +119,8 @@ USING (
   AND deleted_at IS NULL
 );
 
--- SELECT (authenticated): org_id from profiles.org_id, only active rows
+-- 3) Authenticated SELECT: org_id resolved via profiles.org_id
+--    and only active (not soft-deleted) patients are visible.
 CREATE POLICY "patients_profile_select"
 ON public.patients
 AS PERMISSIVE
@@ -134,9 +136,10 @@ USING (
   AND deleted_at IS NULL
 );
 
--- UPDATE (authenticated): simplified, soft-delete aware
--- Any authenticated user can update active patients (deleted_at IS NULL).
--- This allows setting deleted_at / deleted_by / delete_reason for soft delete.
+-- 4) Authenticated UPDATE for soft delete:
+--    - any authenticated user may UPDATE any active row (deleted_at IS NULL),
+--      org_id is NOT checked burada (sadece soft delete için).
+--    - this matches the script you just ran in Supabase SQL Editor.
 CREATE POLICY "patients_update_any_org_soft_delete"
 ON public.patients
 AS PERMISSIVE
@@ -149,7 +152,9 @@ WITH CHECK (
   true
 );
 
--- SELECT (public): service_role sees everything; others by jwt org_id, active only
+-- 5) Public SELECT: service_role bypass OR JWT root claim org_id match.
+--    - service_role: can see ALL rows (including soft-deleted).
+--    - other JWTs with org_id: only active (deleted_at IS NULL) patients.
 CREATE POLICY "patients_select"
 ON public.patients
 AS PERMISSIVE
@@ -163,7 +168,8 @@ USING (
   )
 );
 
--- ALL (INSERT/UPDATE/DELETE) for service_role only (backend / cron / purge)
+-- 6) Public ALL (INSERT/UPDATE/DELETE): service_role only.
+--    - admin / cron / purge işlemleri için backend override.
 CREATE POLICY "patients_write"
 ON public.patients
 AS PERMISSIVE
