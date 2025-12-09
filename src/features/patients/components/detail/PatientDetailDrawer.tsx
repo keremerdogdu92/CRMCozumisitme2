@@ -21,6 +21,7 @@ import {
   MEETINGS_BY_PATIENT_QUERY_KEY,
   fetchMeetingsByPatientId,
 } from '../../../meetings/api';
+import { supabaseClient } from '../../../../utils/supabaseClient';
 
 type PatientDetailTabId =
   | 'info'
@@ -111,6 +112,68 @@ export function PatientDetailDrawer({
     },
   });
 
+  // Soft delete (hasta silme) mutasyonu.
+  const deletePatientMutation = useMutation({
+    // Arg: patientId
+    mutationFn: async (patientId: string) => {
+      const { data: userData, error: userError } =
+        await supabaseClient.auth.getUser();
+
+      if (userError) {
+        console.error(
+          'STEP_DELETE_USER: Failed to get current user for patient delete',
+          userError,
+        );
+        throw new Error(
+          'Kullanıcı bilgisi alınırken hata oluştu. Lütfen tekrar deneyin.',
+        );
+      }
+
+      const user = userData.user;
+      if (!user) {
+        throw new Error(
+          'Oturum bulunamadı. Tekrar giriş yapıp silme işlemini deneyin.',
+        );
+      }
+
+      const nowIso = new Date().toISOString();
+
+      const { error } = await supabaseClient
+        .from('patients')
+        .update({
+          deleted_at: nowIso,
+          deleted_by: user.id,
+          delete_reason: 'manual_soft_delete',
+        })
+        .eq('id', patientId);
+
+      if (error) {
+        console.error(
+          'STEP_DELETE_PATIENT: Failed to soft-delete patient',
+          error,
+        );
+        throw new Error(
+          'Hasta silinirken bir hata oluştu. Lütfen tekrar deneyin.',
+        );
+      }
+    },
+    onSuccess: () => {
+      // Listeyi tazele, detay drawer'ı kapat.
+      void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
+      onClose();
+    },
+    onError: (err) => {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Hasta silinirken beklenmeyen bir hata oluştu.';
+      // Basit ama görünür olsun diye alert kullanıyoruz.
+      // İleride toast sistemi geldikten sonra buraya taşınabilir.
+      // eslint-disable-next-line no-alert
+      alert(message);
+    },
+  });
+
   useEffect(() => {
     setSgkFlag(!!patient.sgk_flag);
     setSgkPrescriptionReceived(!!patient.sgk_prescription_received);
@@ -136,9 +199,7 @@ export function PatientDetailDrawer({
   const handleSave = () => {
     onSave({
       sgkFlag,
-      sgkPrescriptionReceived: sgkFlag
-        ? sgkPrescriptionReceived
-        : false,
+      sgkPrescriptionReceived: sgkFlag ? sgkPrescriptionReceived : false,
       sgkRecordedToSystem: sgkFlag ? sgkRecordedToSystem : false,
       sgkPrescriptionNo,
     });
@@ -148,6 +209,11 @@ export function PatientDetailDrawer({
     // Optimistic update; onError revert to last known backend state.
     setInvoiceIssued(nextValue);
     invoiceMutation.mutate(nextValue);
+  };
+
+  const handleSoftDeletePatient = (row: PatientRow) => {
+    if (deletePatientMutation.isLoading) return;
+    deletePatientMutation.mutate(row.id);
   };
 
   const tabs: { id: PatientDetailTabId; label: string }[] = [
@@ -228,7 +294,12 @@ export function PatientDetailDrawer({
 
       {/* Tab contents */}
       <div className="mt-4 space-y-4 text-sm">
-        {activeTab === 'info' && <PatientDetailInfoTab patient={patient} />}
+        {activeTab === 'info' && (
+          <PatientDetailInfoTab
+            patient={patient}
+            onDeletePatient={handleSoftDeletePatient}
+          />
+        )}
 
         {activeTab === 'sgkInvoice' && (
           <PatientDetailSgkInvoiceTab
@@ -359,7 +430,10 @@ export function PatientDetailDrawer({
         )}
 
         {activeTab === 'accessories' && (
-          <PatientDetailAccessoriesTab patientId={patient.id} open={open} />
+          <PatientDetailAccessoriesTab
+            patientId={patient.id}
+            open={open}
+          />
         )}
 
         {activeTab === 'audiogram' && (
