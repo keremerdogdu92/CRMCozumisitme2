@@ -23,6 +23,7 @@ CREATE TABLE public.inventory_import_rows (
   raw_status text NULL,
   raw_purchase_price text NULL,
   raw_list_price text NULL,
+  raw_purchase_date text NULL,
   raw_notes text NULL,
   valid boolean NULL DEFAULT false,
   validation_error text NULL,
