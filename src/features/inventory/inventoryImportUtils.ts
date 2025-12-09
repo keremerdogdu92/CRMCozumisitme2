@@ -30,8 +30,13 @@ export type ImportRowPayload = {
   raw_status: string | null;
   raw_purchase_price: string | null;
   raw_list_price: string | null;
+  raw_purchase_date: string | null;
   raw_notes: string | null;
   valid: boolean;
+  /**
+   * If valid = false  → blocking error message (row skipped).
+   * If valid = true   → optional warning message(s) (row imported, ama uyarı var).
+   */
   validation_error: string | null;
 };
 
@@ -49,6 +54,10 @@ export type InventoryImportBuildResult = {
  * Supported (case-insensitive):
  * - "hearing_aid", "cihaz"   → "hearing_aid"
  * - "charger", "aksesuar", "sarg", "şarj" → "charger"
+ *
+ * IMPORTANT:
+ * - Bu fonksiyon hata fırlatabilir; çağıran yer try/catch ile sarmalayıp
+ *   warning olarak ele alır ve varsayılan "hearing_aid"e düşer.
  */
 function normalizeItemType(raw: string): InventoryItemType {
   const v = raw.trim().toLowerCase();
@@ -67,6 +76,10 @@ function normalizeItemType(raw: string): InventoryItemType {
  * - empty / "stok" / "stock" / "in_stock"        → "in_stock"
  * - "sold" / "satildi" / "satıldı"               → "sold"
  * - "repair" / "tamirde"                         → "repair"
+ *
+ * IMPORTANT:
+ * - Bu fonksiyon hata fırlatabilir; çağıran yer try/catch ile sarmalayıp
+ *   warning olarak ele alır ve varsayılan "in_stock"a düşer.
  */
 function normalizeStatus(raw: string): InventoryStatus {
   const v = raw.trim().toLowerCase();
@@ -83,6 +96,10 @@ function normalizeStatus(raw: string): InventoryStatus {
  * Notlar:
  * - 'ÇİFT' / 'cift' / 'both' → 'bilateral'
  * - 'TEK' → null (hangi kulak olduğu belli değil; sonradan düzeltilebilir)
+ *
+ * IMPORTANT:
+ * - Bu fonksiyon hata fırlatabilir; çağıran yer try/catch ile sarmalayıp
+ *   warning olarak ele alır ve ear_side = null yapar.
  */
 function normalizeEarSide(raw: string): InventoryItemRow['ear_side'] {
   const v = raw.trim().toLowerCase().replace(/\s+/g, '');
@@ -102,6 +119,52 @@ function normalizeEarSide(raw: string): InventoryItemRow['ear_side'] {
 }
 
 /**
+ * purchase_date için basit format doğrulaması.
+ *
+ * Desteklenen formatlar:
+ * - dd.MM.yyyy (ör: 9.12.2024, 09.12.2024)
+ * - yyyy-MM-dd (ör: 2024-12-09)
+ *
+ * Dönüş:
+ * - true  → format makul (tarih gerçek bir gün/ay kombinasyonu)
+ * - false → format geçersiz (warning yazılmalı, tarih yok sayılmalı)
+ */
+function isParsablePurchaseDate(raw: string): boolean {
+  const v = raw.trim();
+  if (!v) return true;
+
+  let day: number;
+  let month: number;
+  let year: number;
+
+  let m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (m) {
+    day = Number(m[1]);
+    month = Number(m[2]);
+    year = Number(m[3]);
+  } else {
+    m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return false;
+    year = Number(m[1]);
+    month = Number(m[2]);
+    day = Number(m[3]);
+  }
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+
+  const dt = new Date(year, month - 1, day);
+  if (
+    dt.getFullYear() !== year ||
+    dt.getMonth() !== month - 1 ||
+    dt.getDate() !== day
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Build payloads and counters for inventory import, given CSV objects.
  * No Supabase calls here; this stays pure so it can be reused/tested.
  *
@@ -110,16 +173,24 @@ function normalizeEarSide(raw: string): InventoryItemRow['ear_side'] {
  * - model / device_model          → model (zorunlu)
  * - item_type                     → "hearing_aid" | "charger" (opsiyonel, boş ise hearing_aid)
  * - barcode                       → barkod (opsiyonel)
- * - serial_no                     → seri numarası (opsiyonel)
- * - ear_side                      → right/left/bilateral/tek/çift (opsiyonel)
- * - status                        → in_stock/sold/repair (opsiyonel, boş ise in_stock)
- * - purchase_price                → alış fiyatı (opsiyonel)
- * - list_price / device_price     → liste fiyatı (opsiyonel ama tavsiye edilir)
+ * - serial_no                     → seri numarası (opsiyonel; boşsa warning)
+ * - ear_side                      → right/left/bilateral/tek/çift (opsiyonel; hatalıysa warning, null)
+ * - status                        → in_stock/sold/repair (opsiyonel, boş ise in_stock; hatalıysa warning)
+ * - purchase_price                → alış fiyatı (opsiyonel; parse edilemezse warning, null)
+ * - list_price / device_price     → liste fiyatı (opsiyonel; parse edilemezse warning, null)
+ * - purchase_date                 → dd.MM.yyyy veya yyyy-MM-dd (opsiyonel; hatalıysa warning)
  * - notes                         → serbest metin (opsiyonel)
  * - patient_national_id           → legacy hasta TC (opsiyonel; notlara
  *                                   "legacy_patient_national_id=..." olarak eklenir)
  *
- * NOT: sold_at şu an bilinçli olarak import edilmiyor ve doğrulanmıyor.
+ * Kurallar:
+ * - Blocking error (valid = false, row import edilmez):
+ *   * brand (veya device_brand) eksik
+ *   * model (veya device_model) eksik
+ *
+ * - Diğer tüm parsing sorunları:
+ *   * Satır valid kalır (valid = true),
+ *   * Uyarı metni validation_error içine yazılır.
  */
 export function buildInventoryImportPayload(args: {
   orgId: string;
@@ -154,18 +225,24 @@ export function buildInventoryImportPayload(args: {
       (row['list_price'] ?? '').trim() ||
       (row['device_price'] ?? '').trim();
 
+    const rawPurchaseDate = (row['purchase_date'] ?? '').trim();
+
     const rawNotes = (row['notes'] ?? '').trim();
     const rawPatientNationalId = (row['patient_national_id'] ?? '').trim();
 
     let valid = true;
-    let validationError: string | null = null;
+    let blockingError: string | null = null;
+    const warnings: string[] = [];
 
+    // 1) Marka / model zorunlu
     if (!rawBrand) {
       valid = false;
-      validationError = 'Marka (brand / device_brand) alanı boş olamaz.';
+      blockingError =
+        'Marka (brand / device_brand) alanı boş olamaz.';
     } else if (!rawModel) {
       valid = false;
-      validationError = 'Model (model / device_model) alanı boş olamaz.';
+      blockingError =
+        'Model (model / device_model) alanı boş olamaz.';
     }
 
     let itemType: InventoryItemType = 'hearing_aid';
@@ -174,55 +251,85 @@ export function buildInventoryImportPayload(args: {
     let purchasePrice: number | null = null;
     let listPrice: number | null = null;
 
+    // 2) item_type → sadece warning, default hearing_aid
     if (valid) {
       try {
         itemType = normalizeItemType(rawItemType);
       } catch (e) {
-        valid = false;
-        validationError = (e as Error).message;
+        itemType = 'hearing_aid';
+        warnings.push((e as Error).message);
       }
     }
 
-    // Status: sadece CSV'deki status alanına göre belirleniyor.
+    // 3) status → sadece warning, default in_stock
     if (valid) {
       if (rawStatus) {
         try {
           status = normalizeStatus(rawStatus);
         } catch (e) {
-          valid = false;
-          validationError = (e as Error).message;
+          status = 'in_stock';
+          warnings.push((e as Error).message);
         }
       } else {
         status = 'in_stock';
       }
     }
 
+    // 4) ear_side → hatalıysa warning, ear_side = null
     if (valid && rawEarSide) {
       try {
         earSideDb = normalizeEarSide(rawEarSide);
       } catch (e) {
-        valid = false;
-        validationError = (e as Error).message;
+        earSideDb = null;
+        warnings.push((e as Error).message);
       }
     }
 
+    // 5) purchase_price → parse edilemezse warning, null
     if (valid && rawPurchasePrice) {
       try {
         purchasePrice = parsePriceOrNull(rawPurchasePrice);
       } catch (e) {
-        valid = false;
-        validationError = (e as Error).message;
+        purchasePrice = null;
+        warnings.push(
+          `purchase_price parse edilemedi, null olarak ayarlandı: ${(e as Error).message}`,
+        );
       }
     }
 
+    // 6) list_price → parse edilemezse warning, null
     if (valid && rawListPrice) {
       try {
         listPrice = parsePriceOrNull(rawListPrice);
       } catch (e) {
-        valid = false;
-        validationError = (e as Error).message;
+        listPrice = null;
+        warnings.push(
+          `list_price / device_price parse edilemedi, null olarak ayarlandı: ${(e as Error).message}`,
+        );
       }
     }
+
+    // 7) purchase_date → yalnızca format kontrolü, hatalıysa warning
+    if (valid && rawPurchaseDate) {
+      if (!isParsablePurchaseDate(rawPurchaseDate)) {
+        warnings.push(
+          'purchase_date formatı geçersiz, tarih yok sayıldı (beklenen: dd.MM.yyyy veya yyyy-MM-dd).',
+        );
+      }
+    }
+
+    // 8) serial_no boşsa warning
+    if (valid && !rawSerialNo) {
+      warnings.push('serial_no alanı boş (seri numarası girilmedi).');
+    }
+
+    // Staging row yaz
+    const validation_error =
+      !valid
+        ? blockingError
+        : warnings.length > 0
+          ? warnings.join(' | ')
+          : null;
 
     importRowsPayload.push({
       job_id: jobId,
@@ -236,20 +343,22 @@ export function buildInventoryImportPayload(args: {
       raw_status: rawStatus || null,
       raw_purchase_price: rawPurchasePrice || null,
       raw_list_price: rawListPrice || null,
+      raw_purchase_date: rawPurchaseDate || null,
       raw_notes:
         rawNotes ||
         (rawPatientNationalId
           ? `legacy_patient_national_id=${rawPatientNationalId}`
           : null),
       valid,
-      validation_error: validationError,
+      validation_error,
     });
 
     if (valid) {
       importedCount += 1;
 
       // Ear side is not strictly required for import; set when present.
-      const ear_side = itemType === 'charger' ? null : earSideDb;
+      const ear_side =
+        itemType === 'charger' ? null : earSideDb;
 
       inventoryItemsPayload.push({
         org_id: orgId,
