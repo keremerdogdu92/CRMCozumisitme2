@@ -1,17 +1,19 @@
 // src/features/patients/import/api.jobs.ts
-// Client-side helpers to create patients import jobs and push CSV rows into staging.
+// Summary: Client-side helpers to create import jobs, push CSV rows into staging,
+// summarize statuses, and (v1) fetch error rows for both patients and legacy devices.
 
 import { supabaseClient } from '../../../utils/supabaseClient';
 import type {
   PatientsImportRow,
   PatientsImportStatusSummary,
   LegacyDevicesImportStatusSummary,
+  LegacyDevicesImportRow,
 } from './types';
 
 const MAX_BATCH_SIZE = 200;
 
 async function getOrgContext(): Promise<{ orgId: string; userId: string }> {
-  // 1) Aktif kullanıcının UID'sini al
+  // 1) Get current user
   const { data: userData, error: userError } =
     await supabaseClient.auth.getUser();
   if (userError) {
@@ -22,8 +24,7 @@ async function getOrgContext(): Promise<{ orgId: string; userId: string }> {
     throw new Error('User is not authenticated.');
   }
 
-  // 2) profiles tablosundan org_id çek
-  // .single() yerine explicit dizi kontrolü yapıyoruz ki hata mesajı net olsun.
+  // 2) Fetch profile row to resolve org_id
   const { data: profiles, error: profileError } = await supabaseClient
     .from('profiles')
     .select('id, org_id')
@@ -52,6 +53,10 @@ async function getOrgContext(): Promise<{ orgId: string; userId: string }> {
 
   return { orgId: profile.org_id as string, userId: user.id };
 }
+
+// -----------------------------
+// Patients import job helpers
+// -----------------------------
 
 export async function createPatientsImportJob(
   fileName: string,
@@ -170,7 +175,9 @@ export async function getPatientsImportJobSummary(
   };
 }
 
-// --- Legacy patient devices import job helpers ---
+// -----------------------------
+// Legacy patient devices import
+// -----------------------------
 
 export async function createLegacyDevicesImportJob(
   fileName: string,
@@ -265,4 +272,50 @@ export async function getLegacyDevicesImportJobSummary(
     validatedRows,
     warningRows,
   };
+}
+
+// -----------------------------
+// v1 Import Fix Center helpers
+// -----------------------------
+
+export async function fetchPatientsImportErrorRows(
+  jobId: string,
+): Promise<PatientsImportRow[]> {
+  const { data, error } = await supabaseClient
+    .from('patients_import_rows')
+    .select(
+      'id, org_id, job_id, row_index, raw_row, normalized_payload, status, error_message, duplicate_of_patient_id, created_at, validated_at, imported_at',
+    )
+    .eq('job_id', jobId)
+    .eq('status', 'error')
+    .order('row_index', { ascending: true });
+
+  if (error) {
+    throw new Error(
+      'Failed to fetch patient import error rows: ' + error.message,
+    );
+  }
+
+  return (data ?? []) as PatientsImportRow[];
+}
+
+export async function fetchLegacyDevicesImportErrorRows(
+  jobId: string,
+): Promise<LegacyDevicesImportRow[]> {
+  const { data, error } = await supabaseClient
+    .from('patients_legacy_devices_import_rows')
+    .select(
+      'id, org_id, job_id, row_index, raw_row, normalized_payload, status, error_message, created_at, validated_at, imported_at',
+    )
+    .eq('job_id', jobId)
+    .eq('status', 'error')
+    .order('row_index', { ascending: true });
+
+  if (error) {
+    throw new Error(
+      'Failed to fetch legacy device import error rows: ' + error.message,
+    );
+  }
+
+  return (data ?? []) as LegacyDevicesImportRow[];
 }
