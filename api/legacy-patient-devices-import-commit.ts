@@ -1,7 +1,15 @@
 // api/legacy-patient-devices-import-commit.ts
 // Summary: Phase 2 processor for LEGACY patient-device CSV imports.
-// Takes validated rows from patients_legacy_devices_import_rows
-// and creates patient_devices records linked to real patients.
+// Takes validated rows from patients_legacy_devices_import_rows and creates
+// inventory_items rows linked to real patients (via sold_patient_id).
+//
+// Amaç:
+// - Eski hastaların cihazlarını, bugün stok modülünden satılmış gibi
+//   `inventory_items` tablosuna yazmak.
+// - Böylece:
+//   * patient_list_with_device view’i cihaz özetlerini görebilsin,
+//   * PatientDetailDevicesTab kulak bazlı cihaz listesini `usePatientDevices`
+//     üzerinden normal şekilde gösterebilsin.
 //
 // Usage (POST):
 //   /api/legacy-patient-devices-import-commit
@@ -151,34 +159,139 @@ async function findPatientIdByNationalId(
   return rows[0].id;
 }
 
-async function insertPatientDevice(
-  supabase: ReturnType<typeof createAdminSupabaseClient>,
-  params: {
-    orgId: string;
-    patientId: string;
-    payload: LegacyDeviceImportNormalizedPayload;
-    jobId: string;
-    stagingRowId: string;
-  },
-): Promise<void> {
-  const { orgId, patientId, payload, jobId, stagingRowId } = params;
+/**
+ * Legacy CSV'deki ear_side değerini inventory_items.ear_side alanına map eder.
+ *
+ * - 'R'    → 'right'
+ * - 'L'    → 'left'
+ * - 'Çift' → 'bilateral'
+ * - 'Tek'  → null (tek cihaz ama kulak belirtilmemiş; UI'da tarafsız görünür)
+ */
+function mapEarSideToInventory(
+  legacySide: LegacyDeviceImportSide,
+): 'right' | 'left' | 'bilateral' | null {
+  switch (legacySide) {
+    case 'R':
+      return 'right';
+    case 'L':
+      return 'left';
+    case 'Çift':
+      return 'bilateral';
+    case 'Tek':
+    default:
+      return null;
+  }
+}
 
-  const { error } = await supabase.from('patient_devices').insert({
+/**
+ * Legacy cihaz kaydı için inventory_items tarafında satır oluşturur veya
+ * varsa mevcut satırı hastaya bağlar.
+ *
+ * Strateji:
+ * 1) serial_no doluysa:
+ *    - Aynı org_id + serial_no ile inventory_items satırı arar.
+ *    - Bulursa:
+ *      * Eğer zaten başka bir hastaya satılmışsa hata üretir.
+ *      * Değilse: sold_patient_id, sold_at, ear_side, status='sold' set eder.
+ * 2) Serial boş veya matching satır yoksa:
+ *    - Yeni inventory_items satırı oluşturur:
+ *      * org_id, brand, model, item_type='hearing_aid'
+ *      * barcode=null, serial_no=payload.serial_no
+ *      * status='sold'
+ *      * ear_side = mapEarSideToInventory(payload.ear_side)
+ *      * purchase_price = null
+ *      * list_price = payload.device_price (tarihsel satış fiyatı; tavsiye fiyatı yerine kullanılır)
+ *      * sold_patient_id = patientId
+ *      * sold_at = payload.sold_at (veya null)
+ */
+async function upsertInventoryItemForLegacyDevice(params: {
+  supabase: ReturnType<typeof createAdminSupabaseClient>;
+  orgId: string;
+  patientId: string;
+  payload: LegacyDeviceImportNormalizedPayload;
+}): Promise<void> {
+  const { supabase, orgId, patientId, payload } = params;
+
+  const earSide = mapEarSideToInventory(payload.ear_side);
+
+  const soldAtIso = payload.sold_at ?? null;
+
+  const serial = payload.serial_no?.trim() || null;
+
+  if (serial) {
+    // 1) Mevcut stok kaydı var mı diye bak (aynı org + serial).
+    const { data: existing, error: existingError } = await supabase
+      .from('inventory_items')
+      .select('id, sold_patient_id')
+      .eq('org_id', orgId)
+      .eq('serial_no', serial)
+      .maybeSingle();
+
+    if (existingError) {
+      throw new Error(
+        `Failed to lookup inventory item by serial_no=${serial}: ${existingError.message}`,
+      );
+    }
+
+    if (existing) {
+      // Eğer zaten başka bir hastaya satılmışsa, bu satırı atlıyoruz.
+      if (
+        existing.sold_patient_id &&
+        existing.sold_patient_id !== patientId
+      ) {
+        throw new Error(
+          `Inventory item with serial=${serial} is already sold to another patient.`,
+        );
+      }
+
+      const { error: updateError } = await supabase
+        .from('inventory_items')
+        .update({
+          sold_patient_id: patientId,
+          sold_at: soldAtIso,
+          ear_side: earSide,
+          status: 'sold',
+          brand: payload.device_brand,
+          model: payload.device_model,
+          item_type: 'hearing_aid',
+        })
+        .eq('id', existing.id);
+
+      if (updateError) {
+        throw new Error(
+          'Failed to update existing inventory_item for legacy device: ' +
+            updateError.message,
+        );
+      }
+
+      return;
+    }
+  }
+
+  // 2) Mevcut stok kaydı yoksa yeni bir inventory_items satırı oluştur.
+  const { error: insertError } = await supabase.from('inventory_items').insert({
     org_id: orgId,
-    patient_id: patientId,
     brand: payload.device_brand,
     model: payload.device_model,
-    ear_side: payload.ear_side,
-    serial_no: payload.serial_no,
-    sold_at: payload.sold_at ? payload.sold_at.substring(0, 10) : null, // date only
-    legacy_price_total: payload.device_price,
-    is_legacy: true,
-    legacy_import_job_id: jobId,
-    legacy_row_id: stagingRowId,
+    item_type: 'hearing_aid', // legacy cihazlar işitme cihazı kabul edilir
+    barcode: null,
+    serial_no: serial,
+    ear_side: earSide,
+    status: 'sold',
+    purchase_price: null,
+    // Tarihsel cihazlar için tavsiye liste fiyatı elimizde yok; eldeki device_price
+    // alanını list_price olarak kullanıyoruz ki patient_list_with_device
+    // tarafında "Tavsiye Satış Toplamı" tamamen boş kalmasın.
+    list_price: payload.device_price,
+    sold_patient_id: patientId,
+    sold_at: soldAtIso,
   });
 
-  if (error) {
-    throw new Error('Failed to insert patient_device: ' + error.message);
+  if (insertError) {
+    throw new Error(
+      'Failed to insert inventory_item for legacy device: ' +
+        insertError.message,
+    );
   }
 }
 
@@ -248,7 +361,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     let importedCount = 0;
     const errors: { row_index: number; message: string }[] = [];
 
-    // 3) Her satır için hasta bul ve cihaz kaydet
+    // 3) Her satır için hasta bul ve inventory_items üzerinde cihaz kaydet / bağla
     for (const row of rows) {
       try {
         let payload = row.normalized_payload;
@@ -281,13 +394,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           continue;
         }
 
-        // Tek satır = tek cihaz kaydı. (Çift/Tek bilgisi ear_side alanında duruyor.)
-        await insertPatientDevice(supabase, {
+        await upsertInventoryItemForLegacyDevice({
+          supabase,
           orgId: row.org_id,
           patientId,
           payload,
-          jobId,
-          stagingRowId: row.id,
         });
 
         await markRowImported(supabase, row.id);
@@ -311,7 +422,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const { error: jobUpdateError } = await supabase
       .from('import_jobs')
       .update({
-        status: errors.length > 0 ? 'completed' : 'completed', // kısmi hata durumunu mesajla belirtiyoruz
+        status: 'completed',
         finished_at: nowIso(),
         error_count: errors.length,
         error_message:
