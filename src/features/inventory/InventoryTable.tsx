@@ -1,7 +1,11 @@
 // src/features/inventory/InventoryTable.tsx
 // Table view for inventory items with basic filters.
 
-import type { InventoryItemRow, InventoryStatus, InventoryItemType } from './types';
+import type {
+  InventoryItemRow,
+  InventoryStatus,
+  InventoryItemType,
+} from './types';
 
 type Props = {
   items: InventoryItemRow[];
@@ -44,8 +48,10 @@ export function InventoryTable({
   const term = search.trim().toLowerCase();
 
   const filtered = items.filter((item) => {
-    const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-    const matchesType = typeFilter === 'all' || item.item_type === typeFilter;
+    const matchesStatus =
+      statusFilter === 'all' || item.status === statusFilter;
+    const matchesType =
+      typeFilter === 'all' || item.item_type === typeFilter;
 
     const matchesSearch =
       !term ||
@@ -74,7 +80,9 @@ export function InventoryTable({
           <select
             value={statusFilter}
             onChange={(e) =>
-              onStatusFilterChange(e.target.value as InventoryStatus | 'all')
+              onStatusFilterChange(
+                e.target.value as InventoryStatus | 'all',
+              )
             }
             className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           >
@@ -87,12 +95,16 @@ export function InventoryTable({
           <span className="ml-3 text-slate-500">Tür:</span>
           <select
             value={typeFilter}
-            onChange={(e) => onTypeFilterChange(e.target.value as any)}
+            onChange={(e) =>
+              onTypeFilterChange(e.target.value as any)
+            }
             className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           >
             <option value="all">Hepsi</option>
             <option value="hearing_aid">İşitme cihazı</option>
-            <option value="charger">Şarj cihazı / aksesuar</option>
+            <option value="charger">
+              Şarj cihazı / aksesuar
+            </option>
           </select>
         </div>
 
@@ -109,22 +121,42 @@ export function InventoryTable({
         <table className="min-w-full text-xs md:text-sm">
           <thead className="bg-slate-50">
             <tr>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Eklenme</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Satış</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Hasta</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Marka</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Model</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Tür</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Kulak</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Barkod</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Seri No</th>
+              <th className="px-3 py-2 text-left font-medium text-slate-600">
+                Eklenme
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-slate-600">
+                Satış
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-slate-600">
+                Hasta
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-slate-600">
+                Marka
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-slate-600">
+                Model
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-slate-600">
+                Tür
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-slate-600">
+                Kulak
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-slate-600">
+                Barkod
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-slate-600">
+                Seri No
+              </th>
               <th className="px-3 py-2 text-right font-medium text-slate-600">
                 Geliş Fiyatı
               </th>
               <th className="px-3 py-2 text-right font-medium text-slate-600">
-                Liste Fiyatı
+                Satış Fiyatı (Cihaz)
               </th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Durum</th>
+              <th className="px-3 py-2 text-left font-medium text-slate-600">
+                Durum
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -144,7 +176,10 @@ export function InventoryTable({
               }
 
               return (
-                <tr key={item.id} className="border-t border-slate-100">
+                <tr
+                  key={item.id}
+                  className="border-t border-slate-100"
+                >
                   <td className="whitespace-nowrap px-3 py-2 text-slate-700">
                     {formatDate(item.created_at)}
                   </td>
@@ -152,23 +187,35 @@ export function InventoryTable({
                     {isSold ? formatDate(item.sold_at) : '-'}
                   </td>
                   <td className="px-3 py-2 text-slate-700">
-                    {isSold ? item.sold_patient_name ?? '-' : '-'}
+                    {isSold
+                      ? item.sold_patient_name ?? '-'
+                      : '-'}
                   </td>
-                  <td className="px-3 py-2 text-slate-800">{item.brand}</td>
-                  <td className="px-3 py-2 text-slate-800">{item.model}</td>
+                  <td className="px-3 py-2 text-slate-800">
+                    {item.brand}
+                  </td>
+                  <td className="px-3 py-2 text-slate-800">
+                    {item.model}
+                  </td>
                   <td className="px-3 py-2 text-slate-700">
                     {item.item_type === 'hearing_aid'
                       ? 'İşitme cihazı'
                       : 'Şarj cihazı / aksesuar'}
                   </td>
-                  <td className="px-3 py-2 text-slate-700">{earLabel}</td>
-                  <td className="px-3 py-2 text-slate-700">{item.barcode ?? '-'}</td>
-                  <td className="px-3 py-2 text-slate-700">{item.serial_no ?? '-'}</td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {earLabel}
+                  </td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {item.barcode ?? '-'}
+                  </td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {item.serial_no ?? '-'}
+                  </td>
                   <td className="px-3 py-2 text-right text-slate-700">
                     {formatMoney(item.purchase_price)}
                   </td>
                   <td className="px-3 py-2 text-right text-slate-700">
-                    {formatMoney(item.list_price)}
+                    {formatMoney(item.device_price)}
                   </td>
                   <td className="px-3 py-2 text-slate-700">
                     {item.status === 'in_stock'
@@ -185,9 +232,10 @@ export function InventoryTable({
       </div>
 
       <p className="text-[11px] text-slate-500">
-        Not: Satış ve tamir akışları ileride hastalar ekranı ile entegre olduğunda
-        &quot;Satıldı&quot; ve &quot;Tamirde&quot; durumları ve kulak yönü otomatik
-        güncellenecek. Şimdilik stok takibi için manuel giriş yapabilirsiniz.
+        Not: Cihaz satış fiyatı (cihaz başına) device_price alanından
+        gelmektedir; bu değer, hasta toplam satış tutarının cihaz sayısına
+        paylaştırılmasıyla hesaplanmıştır. Katalog liste fiyatları
+        (list_price) ayrı tabloda saklanır ve burada gösterilmez.
       </p>
     </div>
   );
