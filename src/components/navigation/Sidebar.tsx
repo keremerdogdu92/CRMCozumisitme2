@@ -48,7 +48,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     path: '/settings',
-    label: 'Settings',
+    label: 'Ayarlar',
     icon: <Settings className="h-5 w-5" />,
   },
 ];
@@ -115,7 +115,7 @@ export function SidebarMobile({ open, onClose }: SidebarMobileProps) {
       />
 
       <aside className="relative z-50 flex w-64 flex-col border-r border-slate-200 bg-white shadow-lg">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+        <div className="flex items-center justify_between border-b border-slate-200 px-4 py-3">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-500 text-sm font-semibold text-white">
               Ç
