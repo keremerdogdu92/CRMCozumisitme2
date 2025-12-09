@@ -26,8 +26,17 @@ export type InventoryItemRow = {
   serial_no: string | null;
   ear_side: EarSide | null;
   status: InventoryStatus;
+
+  /**
+   * purchase_price: geliş fiyatı (firma alış fiyatın).
+   * list_price: katalogda tutulan tavsiye edilen liste fiyatı.
+   * device_price: bu satıra karşılık gelen gerçek satış tutarı (cihaz başı),
+   *               legacy hastalardan paylaştırma script'i ile dolduruldu.
+   */
   purchase_price: number | null;
   list_price: number | null;
+  device_price: number | null;
+
   sold_patient_id: string | null;
   sold_at: string | null;
   /** Resolved from patients.full_name via sold_patient_id; null if not sold or not found. */
@@ -41,6 +50,9 @@ export type InventoryItemRow = {
 /**
  * Form values for creating a new inventory item.
  * Strings because they come from input fields.
+ *
+ * Not: Yeni stok kaydında device_price girilmiyor; cihaz satıldığında
+ * ayrı bir süreçle doldurulacak.
  */
 export type NewInventoryItemForm = {
   brand: string;
