@@ -212,7 +212,8 @@ export function PatientDetailDrawer({
   };
 
   const handleSoftDeletePatient = (row: PatientRow) => {
-    if (deletePatientMutation.isLoading) return;
+    // React Query v5: pending state => isPending
+    if (deletePatientMutation.isPending) return;
     deletePatientMutation.mutate(row.id);
   };
 
