@@ -8,7 +8,7 @@
 --   - security_invoker = on → view runs with caller's permissions,
 --     so RLS on patients / inventory_items / references is enforced.
 
-CREATE VIEW public.patient_list_with_device
+CREATE OR REPLACE VIEW public.patient_list_with_device
 WITH (security_invoker = on) AS
 WITH device_agg AS (
   SELECT
@@ -75,7 +75,9 @@ FROM
     ON r.id = p.reference_id
   LEFT JOIN device_agg AS da
     ON da.patient_id = p.id
-   AND da.org_id = p.org_id;
+   AND da.org_id = p.org_id
+WHERE
+  p.deleted_at IS NULL;
 
 -- NOTE:
 -- - RLS is enforced on the underlying tables (patients, inventory_items, references),
