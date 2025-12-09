@@ -9,6 +9,9 @@
 --   - Access is org-scoped via import_jobs + profiles.
 --   - Housekeeping: old rows can be purged via
 --       SELECT public.purge_old_inventory_import_rows();
+--   - İş kuralları:
+--       * brand / model / item_type / serial_no uygulama seviyesinde zorunlu.
+--       * Bu alanlar eksikse valid = false ve satır import edilmez.
 
 CREATE TABLE public.inventory_import_rows (
   id bigserial NOT NULL,
@@ -19,7 +22,6 @@ CREATE TABLE public.inventory_import_rows (
   raw_item_type text NULL,
   raw_barcode text NULL,
   raw_serial_no text NULL,
-  raw_ear_side text NULL,
   raw_status text NULL,
   raw_purchase_price text NULL,
   raw_list_price text NULL,
