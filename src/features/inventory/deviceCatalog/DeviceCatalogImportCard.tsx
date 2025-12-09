@@ -1,4 +1,4 @@
-// src/features/deviceCatalog/DeviceCatalogImportCard.tsx
+// src/features/inventory/deviceCatalog/DeviceCatalogImportCard.tsx
 // Summary: Inline card component to import device catalog prices from CSV.
 // Usage:
 // - Place inside an admin-only page (e.g. ProfitCalculatorPage top section).
@@ -6,7 +6,7 @@
 // - Shows summary: total rows, successes, created/updated models, errors.
 
 import { FormEvent, useState, ChangeEvent } from 'react';
-import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
+import { InlineCreateCard } from '../../../components/layout/InlineCreateCard';
 import {
   useDeviceCatalogImportMutation,
   type DeviceCatalogImportSummary,
