@@ -632,7 +632,11 @@ export async function softDeletePatient(params: {
   if (error) {
     console.error(
       'Failed to soft delete patient (STEP_SOFT_DELETE):',
-      error,
+      {
+        id,
+        payload,
+        error,
+      },
     );
     throw new Error('STEP_SOFT_DELETE: ' + error.message);
   }
