@@ -76,10 +76,22 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <InventoryImportCard
-            open={inventoryImportOpen}
-            onToggle={() => setInventoryImportOpen((prev) => !prev)}
-          />
+          {inventoryImportOpen ? (
+            <InventoryImportCard
+              open={inventoryImportOpen}
+              onToggle={() => setInventoryImportOpen(false)}
+            />
+          ) : (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setInventoryImportOpen(true)}
+                className="inline-flex items-center justify-center rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+              >
+                Formu Aç
+              </button>
+            </div>
+          )}
         </section>
 
         {/* Device catalog prices import (profit calculator / trial tarafı için) */}
@@ -97,10 +109,22 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <DeviceCatalogImportCard
-            open={deviceCatalogImportOpen}
-            onToggle={() => setDeviceCatalogImportOpen((prev) => !prev)}
-          />
+          {deviceCatalogImportOpen ? (
+            <DeviceCatalogImportCard
+              open={deviceCatalogImportOpen}
+              onToggle={() => setDeviceCatalogImportOpen(false)}
+            />
+          ) : (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setDeviceCatalogImportOpen(true)}
+                className="inline-flex items-center justify-center rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+              >
+                Formu Aç
+              </button>
+            </div>
+          )}
         </section>
       </div>
     </PageLayout>
