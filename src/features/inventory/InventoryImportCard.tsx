@@ -74,12 +74,18 @@ export function InventoryImportCard({ open, onToggle }: Props) {
               className="block w-full text-xs text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-primary-600 file:px-3 file:py-2 file:text-xs file:font-medium file:text-white hover:file:bg-primary-700"
             />
             <p className="mt-1 text-[11px] text-slate-500">
-              Beklenen başlıklar:{" "}
+              Beklenen başlıklar:{' '}
               <span className="font-mono">
-                brand, model, item_type, barcode, serial_no, ear_side, status,
-                purchase_price, list_price, notes
+                brand (veya device_brand), model (veya device_model),
+                item_type, barcode, serial_no, ear_side, status,
+                purchase_price, list_price (veya device_price),
+                purchase_date, notes
               </span>
               . Ayraç olarak virgül (,) veya noktalı virgül (;) kullanılabilir.
+              Marka ve model zorunludur; diğer alanlar opsiyoneldir. Geçersiz
+              değerler için satır import edilir ancak{' '}
+              <span className="font-mono">inventory_import_rows</span>{' '}
+              tablosunda uyarı olarak işaretlenir.
             </p>
           </div>
 
@@ -92,12 +98,14 @@ export function InventoryImportCard({ open, onToggle }: Props) {
                 Başarıyla eklenen: <strong>{summary.importedCount}</strong>
               </p>
               <p>
-                Hatalı satır: <strong>{summary.errorCount}</strong>
+                Bloklayan hatalı satır: <strong>{summary.errorCount}</strong>
               </p>
               <p className="mt-1 text-[10px] text-slate-500">
                 Import job ID: <span className="font-mono">{summary.jobId}</span> — detaylı
-                hata için <span className="font-mono">inventory_import_rows</span> ve{" "}
-                <span className="font-mono">import_jobs</span> tablolarına bakabilirsiniz.
+                hata ve uyarılar için{' '}
+                <span className="font-mono">inventory_import_rows</span> ve{' '}
+                <span className="font-mono">import_jobs</span> tablolarına
+                bakabilirsiniz.
               </p>
             </div>
           )}
