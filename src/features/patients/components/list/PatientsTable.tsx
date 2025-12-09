@@ -7,6 +7,12 @@ import { ResponsiveTableShell } from '../../../../components/layout/ResponsiveTa
 type PatientsTableProps = {
   patients: PatientRow[];
   onSelectPatient: (patient: PatientRow) => void;
+  /**
+   * Optional soft-delete handler.
+   * If provided, a "Sil" button is rendered and this callback is invoked
+   * only after user confirmation.
+   */
+  onDeletePatient?: (patient: PatientRow) => void;
 };
 
 function formatDate(value: string | null): string {
@@ -72,7 +78,22 @@ function getDeviceEarLabel(p: PatientRow): string {
 export function PatientsTable({
   patients,
   onSelectPatient,
+  onDeletePatient,
 }: PatientsTableProps) {
+  const handleDeleteClick = (patient: PatientRow) => {
+    if (!onDeletePatient) return;
+
+    const confirmed = window.confirm(
+      `Bu hastayı silmek istediğinizden emin misiniz?\n\n` +
+        `Silme işlemi, hastayı listeden kaldırır ve soft delete olarak işaretler. ` +
+        `Gerekirse daha sonra geri alınabilir.`,
+    );
+
+    if (!confirmed) return;
+
+    onDeletePatient(patient);
+  };
+
   if (patients.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-500 sm:text-sm">
@@ -125,6 +146,15 @@ export function PatientsTable({
                   >
                     Detay
                   </button>
+                  {onDeletePatient && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteClick(p)}
+                      className="inline-flex items-center rounded-md border border-red-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50"
+                    >
+                      Sil
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -354,15 +384,26 @@ export function PatientsTable({
                     </div>
                   </td>
 
-                  {/* İşlemler – Detay çekmecesi */}
+                  {/* İşlemler – Detay + opsiyonel Sil */}
                   <td className="px-4 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => onSelectPatient(p)}
-                      className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      Detay
-                    </button>
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onSelectPatient(p)}
+                        className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        Detay
+                      </button>
+                      {onDeletePatient && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteClick(p)}
+                          className="inline-flex items-center rounded-md border border-red-200 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                        >
+                          Sil
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
