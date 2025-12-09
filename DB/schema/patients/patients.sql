@@ -4,27 +4,13 @@
 -- Source of truth: Supabase table editor / migrations.
 --
 -- [TODO-SECURITY-BEFORE-PROD]
---   1) Confirm that all debug/bypass policies are removed:
---      - `patients_debug_allow_all` has been removed from this schema.
---   2) Decide a single org resolution strategy and simplify policies:
---      - EITHER use JWT root claim org_id (auth.jwt()->>'org_id')
---      - OR use JWT user_metadata.org_id
---      - OR use profiles.org_id
---      and then delete redundant policies so SELECT/INSERT/UPDATE rules are not duplicated.
---   3) Document the expected JWT claims (org_id, user_metadata.org_id, role)
---      so that future clients / services send a consistent token shape.
---   4) Re-run a full regression test for:
---      - Single-org usage
---      - Multi-org separation (users from org A cannot see/edit org B’s patients)
---      - Service role (backend) access to all orgs.
---   5) Deletion model for patients:
---      - Patients now use a soft-delete model with:
---          deleted_at timestamptz
---          deleted_by uuid REFERENCES auth.users(id)
---          delete_reason text
---      - Application "delete" sets deleted_at/deleted_by/delete_reason instead of hard delete.
---      - Hard delete is reserved for service_role (e.g. scheduled purge after retention window).
---      - `archive_code` generation must remain unique across active and soft-deleted rows.
+--   1) Confirm that all debug/bypass policies are removed.
+--   2) Decide a single org resolution strategy and simplify policies.
+--   3) Document the expected JWT claims (org_id, user_metadata.org_id, role).
+--   4) Re-run a full regression test (single-org, multi-org, service_role).
+--   5) Deletion model:
+--      - Soft delete via deleted_at / deleted_by / delete_reason.
+--      - Hard delete reserved for service_role (purge after retention window).
 
 CREATE TABLE public.patients (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -106,21 +92,12 @@ WHERE national_id IS NOT NULL
   AND deleted_at IS NULL;
 
 -- ============================================================
--- RLS POLICIES FOR public.patients
--- Exported from Supabase UI (policies tab) and adapted for soft delete.
+-- RLS POLICIES FOR public.patients (soft delete aware)
 -- ============================================================
 
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
 
--- NOTE:
--- - The previous debug policy "patients_debug_allow_all" (USING true) has been removed
---   because it bypassed org and soft-delete filters.
--- - SELECT policies below all enforce org separation AND (for non-service roles)
---   `deleted_at IS NULL` so that soft-deleted rows are hidden by default.
--- - Service role continues to have full visibility (including soft-deleted rows)
---   via the `patients_select` policy.
-
--- 2) Authenticated INSERT: org_id must match JWT user_metadata.org_id.
+-- INSERT: org_id must match JWT user_metadata.org_id
 CREATE POLICY "patients_org_insert"
 ON public.patients
 AS PERMISSIVE
@@ -130,8 +107,7 @@ WITH CHECK (
   (org_id)::text = ((auth.jwt() -> 'user_metadata'::text) ->> 'org_id'::text)
 );
 
--- 3) Authenticated SELECT: org_id must match JWT user_metadata.org_id
---    and only active (not soft-deleted) patients are visible.
+-- SELECT (authenticated): org_id from JWT user_metadata.org_id, only active rows
 CREATE POLICY "patients_org_select"
 ON public.patients
 AS PERMISSIVE
@@ -142,24 +118,7 @@ USING (
   AND deleted_at IS NULL
 );
 
--- 4) Authenticated UPDATE: same org rule for both read and write sides.
---    Using side enforces that only active patients can be updated.
---    Check side allows setting deleted_at (soft delete), but not changing org_id.
-CREATE POLICY "patients_org_update"
-ON public.patients
-AS PERMISSIVE
-FOR UPDATE
-TO authenticated
-USING (
-  (org_id)::text = ((auth.jwt() -> 'user_metadata'::text) ->> 'org_id'::text)
-  AND deleted_at IS NULL
-)
-WITH CHECK (
-  (org_id)::text = ((auth.jwt() -> 'user_metadata'::text) ->> 'org_id'::text)
-);
-
--- 5) Authenticated SELECT: org_id resolved via profiles.org_id
---    and only active (not soft-deleted) patients are visible.
+-- SELECT (authenticated): org_id from profiles.org_id, only active rows
 CREATE POLICY "patients_profile_select"
 ON public.patients
 AS PERMISSIVE
@@ -175,9 +134,22 @@ USING (
   AND deleted_at IS NULL
 );
 
--- 6) Public SELECT: service_role bypass OR JWT root claim org_id match.
---    - service_role: can see ALL rows (including soft-deleted).
---    - other JWTs with org_id: only active (deleted_at IS NULL) patients.
+-- UPDATE (authenticated): simplified, soft-delete aware
+-- Any authenticated user can update active patients (deleted_at IS NULL).
+-- This allows setting deleted_at / deleted_by / delete_reason for soft delete.
+CREATE POLICY "patients_update_any_org_soft_delete"
+ON public.patients
+AS PERMISSIVE
+FOR UPDATE
+TO authenticated
+USING (
+  deleted_at IS NULL
+)
+WITH CHECK (
+  true
+);
+
+-- SELECT (public): service_role sees everything; others by jwt org_id, active only
 CREATE POLICY "patients_select"
 ON public.patients
 AS PERMISSIVE
@@ -191,13 +163,7 @@ USING (
   )
 );
 
--- 7) Public ALL (INSERT/UPDATE/DELETE): service_role only.
---    - This policy is the backend override:
---      * service_role can insert/update/delete across orgs (used for cron/purge/admin).
---      * Non-service roles do NOT match this policy.
---    - Combined with the org_* policies above:
---      * normal users can INSERT/UPDATE own-org patients,
---      * but cannot perform hard DELETE (only service_role can).
+-- ALL (INSERT/UPDATE/DELETE) for service_role only (backend / cron / purge)
 CREATE POLICY "patients_write"
 ON public.patients
 AS PERMISSIVE
