@@ -1,6 +1,6 @@
 -- DB/schema/patients/patients.sql
 -- Purpose: Supabase table definition for `patients`.
--- Includes: CREATE TABLE, constraints, triggers and RLS policies for patient rows.
+-- Includes: CREATE TABLE, constraints, triggers, indexes and RLS policies.
 -- Source of truth: Supabase table editor / migrations.
 
 CREATE TABLE public.patients (
@@ -65,7 +65,7 @@ CREATE TABLE public.patients (
     REFERENCES auth.users (id) ON DELETE SET NULL
 ) TABLESPACE pg_default;
 
--- Archive code trigger (unchanged)
+-- Archive code trigger
 CREATE TRIGGER trg_patients_archive_code
 BEFORE INSERT ON public.patients
 FOR EACH ROW
@@ -86,111 +86,11 @@ WHERE national_id IS NOT NULL
 
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
 
--- DEBUG POLICY (current production state)
--- Single, permissive policy: every authenticated user has full access.
--- Soft delete visibility şu anda view'ler (örn. patient_list_with_device)
--- üzerinden kontrol ediliyor (deleted_at filtresi).
+-- Current production policy: allow ALL for authenticated role
 CREATE POLICY "patients_all_authenticated"
 ON public.patients
 AS PERMISSIVE
 FOR ALL
 TO authenticated
-USING ( true )
-WITH CHECK ( true );
-
-
-
-/* =====================================================================
-   LEGACY ORG-SCOPED POLICIES (KEPT FOR REFERENCE, CURRENTLY DISABLED)
-   -----------------------------------------------------------------
-   Eğer ileride org bazlı sıkı güvenliğe geri dönmek istersek, bu blok
-   yeniden düzenlenip aktif hale getirilebilir. Şu anda sadece yukarıdaki
-   "patients_all_authenticated" policy kullanılmaktadır.
-=====================================================================
-
--- INSERT: org_id must match JWT user_metadata.org_id (legacy path – still allowed).
-CREATE POLICY "patients_org_insert"
-ON public.patients
-AS PERMISSIVE
-FOR INSERT
-TO authenticated
-WITH CHECK (
-  (org_id)::text = ((auth.jwt() -> 'user_metadata'::text) ->> 'org_id'::text)
-);
-
--- SELECT (JWT user_metadata.org_id) – optional legacy path.
-CREATE POLICY "patients_org_select"
-ON public.patients
-AS PERMISSIVE
-FOR SELECT
-TO authenticated
-USING (
-  (org_id)::text = ((auth.jwt() -> 'user_metadata'::text) ->> 'org_id'::text)
-  AND deleted_at IS NULL
-);
-
--- UPDATE: profiles.org_id based, soft delete aware.
-CREATE POLICY "patients_profile_update"
-ON public.patients
-AS PERMISSIVE
-FOR UPDATE
-TO authenticated
-USING (
-  org_id = (
-    SELECT p.org_id
-    FROM public.profiles AS p
-    WHERE p.id = auth.uid()
-    LIMIT 1
-  )
-  AND deleted_at IS NULL
-)
-WITH CHECK (
-  org_id = (
-    SELECT p.org_id
-    FROM public.profiles AS p
-    WHERE p.id = auth.uid()
-    LIMIT 1
-  )
-);
-
--- SELECT: profiles.org_id based.
-CREATE POLICY "patients_profile_select"
-ON public.patients
-AS PERMISSIVE
-FOR SELECT
-TO authenticated
-USING (
-  org_id = (
-    SELECT p.org_id
-    FROM public.profiles AS p
-    WHERE p.id = auth.uid()
-    LIMIT 1
-  )
-  AND deleted_at IS NULL
-);
-
--- SELECT: service_role or JWT root org_id.
-CREATE POLICY "patients_select"
-ON public.patients
-AS PERMISSIVE
-FOR SELECT
-TO public
-USING (
-  auth.role() = 'service_role'::text
-  OR (
-    (org_id)::text = (auth.jwt() ->> 'org_id'::text)
-    AND deleted_at IS NULL
-  )
-);
-
--- ALL (INSERT/UPDATE/DELETE): service_role override.
-CREATE POLICY "patients_write"
-ON public.patients
-AS PERMISSIVE
-FOR ALL
-TO public
-USING (auth.role() = 'service_role'::text)
-WITH CHECK (auth.role() = 'service_role'::text);
-
--- END OF LEGACY POLICIES
-===================================================================== */
+USING (true)
+WITH CHECK (true);
