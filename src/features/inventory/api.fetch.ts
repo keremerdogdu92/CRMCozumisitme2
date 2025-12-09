@@ -30,12 +30,13 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
       status,
       purchase_price,
       list_price,
+      device_price,
       sold_patient_id,
       sold_at,
       created_at,
       updated_at,
       deleted_at
-    `,
+    `
     )
     .order('created_at', { ascending: false });
 
@@ -44,34 +45,44 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
     throw error;
   }
 
-  const baseRows = (data ?? []).map((row: any): InventoryItemRow => ({
-    id: row.id as string,
-    org_id: row.org_id as string,
-    brand: row.brand as string,
-    model: row.model as string,
-    item_type: row.item_type as InventoryItemType,
-    barcode: (row.barcode as string | null) ?? null,
-    serial_no: (row.serial_no as string | null) ?? null,
-    ear_side: (row.ear_side as InventoryItemRow['ear_side']) ?? null,
-    status: row.status as InventoryStatus,
-    purchase_price:
-      row.purchase_price === null ? null : Number(row.purchase_price),
-    list_price: row.list_price === null ? null : Number(row.list_price),
-    sold_patient_id: (row.sold_patient_id as string | null) ?? null,
-    sold_at: (row.sold_at as string | null) ?? null,
-    created_at: row.created_at as string,
-    updated_at: row.updated_at as string,
-    deleted_at: (row.deleted_at as string | null) ?? null,
-    sold_patient_name: null,
-  }));
+  const baseRows = (data ?? []).map(
+    (row: any): InventoryItemRow => ({
+      id: row.id as string,
+      org_id: row.org_id as string,
+      brand: row.brand as string,
+      model: row.model as string,
+      item_type: row.item_type as InventoryItemType,
+      barcode: (row.barcode as string | null) ?? null,
+      serial_no: (row.serial_no as string | null) ?? null,
+      ear_side: (row.ear_side as InventoryItemRow['ear_side']) ?? null,
+      status: row.status as InventoryStatus,
 
-  // Resolve patient names for sold items (best-effort; UI should still work if this fails)
+      purchase_price:
+        row.purchase_price == null ? null : Number(row.purchase_price),
+
+      list_price:
+        row.list_price == null ? null : Number(row.list_price),
+
+      device_price:
+        row.device_price == null ? null : Number(row.device_price),
+
+      sold_patient_id: (row.sold_patient_id as string | null) ?? null,
+      sold_at: (row.sold_at as string | null) ?? null,
+      created_at: row.created_at as string,
+      updated_at: row.updated_at as string,
+      deleted_at: (row.deleted_at as string | null) ?? null,
+
+      sold_patient_name: null,
+    })
+  );
+
+  // Resolve patient names for sold items
   const soldIds = Array.from(
     new Set(
       baseRows
         .map((r) => r.sold_patient_id)
-        .filter((id): id is string => !!id),
-    ),
+        .filter((id): id is string => !!id)
+    )
   );
 
   if (soldIds.length > 0) {
@@ -81,24 +92,18 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
       .in('id', soldIds);
 
     if (patientsError) {
-      console.error(
-        'Supabase inventory patient lookup error:',
-        patientsError,
-      );
+      console.error('Supabase inventory patient lookup error:', patientsError);
       return baseRows;
     }
 
     const nameMap = new Map<string, string>();
     (patients ?? []).forEach((p: any) => {
-      if (p.id && p.full_name) {
-        nameMap.set(p.id as string, p.full_name as string);
-      }
+      if (p.id && p.full_name) nameMap.set(p.id, p.full_name);
     });
 
     baseRows.forEach((row) => {
       if (row.sold_patient_id) {
-        row.sold_patient_name =
-          nameMap.get(row.sold_patient_id) ?? null;
+        row.sold_patient_name = nameMap.get(row.sold_patient_id) ?? null;
       }
     });
   }
