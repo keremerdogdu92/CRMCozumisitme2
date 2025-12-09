@@ -86,6 +86,28 @@ WHERE national_id IS NOT NULL
 
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
 
+-- DEBUG POLICY (current production state)
+-- Single, permissive policy: every authenticated user has full access.
+-- Soft delete visibility şu anda view'ler (örn. patient_list_with_device)
+-- üzerinden kontrol ediliyor (deleted_at filtresi).
+CREATE POLICY "patients_all_authenticated"
+ON public.patients
+AS PERMISSIVE
+FOR ALL
+TO authenticated
+USING ( true )
+WITH CHECK ( true );
+
+
+
+/* =====================================================================
+   LEGACY ORG-SCOPED POLICIES (KEPT FOR REFERENCE, CURRENTLY DISABLED)
+   -----------------------------------------------------------------
+   Eğer ileride org bazlı sıkı güvenliğe geri dönmek istersek, bu blok
+   yeniden düzenlenip aktif hale getirilebilir. Şu anda sadece yukarıdaki
+   "patients_all_authenticated" policy kullanılmaktadır.
+=====================================================================
+
 -- INSERT: org_id must match JWT user_metadata.org_id (legacy path – still allowed).
 CREATE POLICY "patients_org_insert"
 ON public.patients
@@ -169,3 +191,6 @@ FOR ALL
 TO public
 USING (auth.role() = 'service_role'::text)
 WITH CHECK (auth.role() = 'service_role'::text);
+
+-- END OF LEGACY POLICIES
+===================================================================== */
