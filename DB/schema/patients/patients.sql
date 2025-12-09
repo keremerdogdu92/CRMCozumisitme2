@@ -1,16 +1,7 @@
--- db/schema/patients/patients.sql
+-- DB/schema/patients/patients.sql
 -- Purpose: Supabase table definition for `patients`.
 -- Includes: CREATE TABLE, constraints, triggers and RLS policies for patient rows.
 -- Source of truth: Supabase table editor / migrations.
---
--- [TODO-SECURITY-BEFORE-PROD]
---   1) Confirm that all debug/bypass policies are removed.
---   2) Decide a single org resolution strategy and simplify policies.
---   3) Document the expected JWT claims (org_id, user_metadata.org_id, role).
---   4) Re-run a full regression test (single-org, multi-org, service_role).
---   5) Deletion model:
---      - Soft delete via deleted_at / deleted_by / delete_reason.
---      - Hard delete reserved for service_role (purge after retention window).
 
 CREATE TABLE public.patients (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -25,8 +16,8 @@ CREATE TABLE public.patients (
   sgk_docs_received boolean NULL DEFAULT false,
   sgk_processed boolean NULL DEFAULT false,
   satisfaction_10 integer NULL,
-  created_at timestamp with time zone NULL DEFAULT now(),
-  last_visit_at timestamp with time zone NULL,
+  created_at timestamptz NULL DEFAULT now(),
+  last_visit_at timestamptz NULL,
   sgk_prescription_received boolean NOT NULL DEFAULT false,
   sgk_recorded_to_system boolean NOT NULL DEFAULT false,
   payment_method text NULL,
@@ -36,13 +27,13 @@ CREATE TABLE public.patients (
   reference_id uuid NULL,
   archive_code text NULL,
   invoice_issued boolean NOT NULL DEFAULT false,
-  invoice_issued_at timestamp with time zone NULL,
+  invoice_issued_at timestamptz NULL,
   sgk_profile text NULL,
   sgk_expected_reimbursement numeric(10, 2) NULL,
   sgk_expected_reimbursement_month date NULL,
 
   -- Soft delete columns
-  deleted_at timestamp with time zone NULL,
+  deleted_at timestamptz NULL,
   deleted_by uuid NULL,
   delete_reason text NULL,
 
@@ -84,20 +75,18 @@ EXECUTE FUNCTION set_patient_archive_code();
 -- INDEXES
 -- ============================================================
 
--- TC kimlik numarası için benzersizlik:
--- Sadece national_id dolu ve deleted_at IS NULL olan (aktif) hastalar arasında UNIQUE.
 CREATE UNIQUE INDEX IF NOT EXISTS patients_national_id_unique_not_deleted
 ON public.patients (org_id, national_id)
 WHERE national_id IS NOT NULL
   AND deleted_at IS NULL;
 
 -- ============================================================
--- RLS POLICIES FOR public.patients (soft-delete aware)
+-- RLS POLICIES FOR public.patients
 -- ============================================================
 
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
 
--- 1) Authenticated INSERT: org_id must match JWT user_metadata.org_id.
+-- INSERT: org_id must match JWT user_metadata.org_id (legacy path – still allowed).
 CREATE POLICY "patients_org_insert"
 ON public.patients
 AS PERMISSIVE
@@ -107,8 +96,7 @@ WITH CHECK (
   (org_id)::text = ((auth.jwt() -> 'user_metadata'::text) ->> 'org_id'::text)
 );
 
--- 2) Authenticated SELECT: org_id from JWT user_metadata.org_id
---    and only active (not soft-deleted) patients.
+-- SELECT (JWT user_metadata.org_id) – optional legacy path.
 CREATE POLICY "patients_org_select"
 ON public.patients
 AS PERMISSIVE
@@ -119,8 +107,31 @@ USING (
   AND deleted_at IS NULL
 );
 
--- 3) Authenticated SELECT: org_id resolved via profiles.org_id
---    and only active (not soft-deleted) patients are visible.
+-- UPDATE: profiles.org_id based, soft delete aware.
+CREATE POLICY "patients_profile_update"
+ON public.patients
+AS PERMISSIVE
+FOR UPDATE
+TO authenticated
+USING (
+  org_id = (
+    SELECT p.org_id
+    FROM public.profiles AS p
+    WHERE p.id = auth.uid()
+    LIMIT 1
+  )
+  AND deleted_at IS NULL
+)
+WITH CHECK (
+  org_id = (
+    SELECT p.org_id
+    FROM public.profiles AS p
+    WHERE p.id = auth.uid()
+    LIMIT 1
+  )
+);
+
+-- SELECT: profiles.org_id based.
 CREATE POLICY "patients_profile_select"
 ON public.patients
 AS PERMISSIVE
@@ -128,33 +139,15 @@ FOR SELECT
 TO authenticated
 USING (
   org_id = (
-    SELECT profiles.org_id
-    FROM public.profiles
-    WHERE profiles.id = auth.uid()
+    SELECT p.org_id
+    FROM public.profiles AS p
+    WHERE p.id = auth.uid()
     LIMIT 1
   )
   AND deleted_at IS NULL
 );
 
--- 4) Authenticated UPDATE for soft delete:
---    - any authenticated user may UPDATE any active row (deleted_at IS NULL),
---      org_id is NOT checked burada (sadece soft delete için).
---    - this matches the script you just ran in Supabase SQL Editor.
-CREATE POLICY "patients_update_any_org_soft_delete"
-ON public.patients
-AS PERMISSIVE
-FOR UPDATE
-TO authenticated
-USING (
-  deleted_at IS NULL
-)
-WITH CHECK (
-  true
-);
-
--- 5) Public SELECT: service_role bypass OR JWT root claim org_id match.
---    - service_role: can see ALL rows (including soft-deleted).
---    - other JWTs with org_id: only active (deleted_at IS NULL) patients.
+-- SELECT: service_role or JWT root org_id.
 CREATE POLICY "patients_select"
 ON public.patients
 AS PERMISSIVE
@@ -168,16 +161,11 @@ USING (
   )
 );
 
--- 6) Public ALL (INSERT/UPDATE/DELETE): service_role only.
---    - admin / cron / purge işlemleri için backend override.
+-- ALL (INSERT/UPDATE/DELETE): service_role override.
 CREATE POLICY "patients_write"
 ON public.patients
 AS PERMISSIVE
 FOR ALL
 TO public
-USING (
-  auth.role() = 'service_role'::text
-)
-WITH CHECK (
-  auth.role() = 'service_role'::text
-);
+USING (auth.role() = 'service_role'::text)
+WITH CHECK (auth.role() = 'service_role'::text);
