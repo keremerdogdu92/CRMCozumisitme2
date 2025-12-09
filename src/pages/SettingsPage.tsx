@@ -1,18 +1,18 @@
 // src/pages/SettingsPage.tsx
-// Settings page that hosts data import tools for patients (v2), legacy devices,
-// inventory and the unified Import Fix Center.
+// Settings page that hosts data import tools for patients (v2),
+// legacy devices, import fix center and inventory stock imports.
 
 import { useState } from 'react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { PageLayout } from '../components/layout/PageLayout';
 import { PatientsImportSection } from '../features/patients/ui';
-import { InventoryImportCard } from '../features/inventory/InventoryImportCard';
 import { LegacyDevicesImportSection } from '../features/patients/components/import/LegacyDevicesImportSection';
 import { ImportFixCenterSection } from '../features/patients/import/ImportFixCenterSection';
+import { InventoryImportCard } from '../features/inventory/InventoryImportCard';
 
 export default function SettingsPage() {
-  // Local toggle state for the inventory import card
-  const [inventoryImportOpen, setInventoryImportOpen] = useState(false);
+  // Inventory import kartını default açık yapıyoruz
+  const [inventoryImportOpen, setInventoryImportOpen] = useState(true);
 
   return (
     <PageLayout
@@ -56,25 +56,10 @@ export default function SettingsPage() {
           <LegacyDevicesImportSection />
         </section>
 
-        {/* Import Fix Center: unified error / fix panel for patients + legacy devices */}
-        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">
-                Import Fix Center (beta)
-              </h3>
-              <p className="mt-1 text-xs text-slate-700">
-                Review and fix errors for patients and legacy devices imports
-                from a single dashboard. Only simple, safe edits are supported;
-                complex SGK issues should be fixed in the original CSV or in the
-                patient detail screen.
-              </p>
-            </div>
-          </div>
-          <ImportFixCenterSection />
-        </section>
+        {/* Import Fix Center (patients + legacy devices jobs) */}
+        <ImportFixCenterSection />
 
-        {/* Inventory import */}
+        {/* Inventory stock import */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
@@ -86,6 +71,7 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
+
           <InventoryImportCard
             open={inventoryImportOpen}
             onToggle={() => setInventoryImportOpen((prev) => !prev)}
