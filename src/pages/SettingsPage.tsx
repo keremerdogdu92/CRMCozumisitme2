@@ -1,6 +1,6 @@
 // src/pages/SettingsPage.tsx
 // Settings page that hosts data import tools for patients (v2), legacy devices,
-// inventory and the Import Fix Center (Phase 1).
+// inventory and the unified Import Fix Center.
 
 import { useState } from 'react';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -11,6 +11,7 @@ import { LegacyDevicesImportSection } from '../features/patients/components/impo
 import { ImportFixCenterSection } from '../features/patients/import/ImportFixCenterSection';
 
 export default function SettingsPage() {
+  // Local toggle state for the inventory import card
   const [inventoryImportOpen, setInventoryImportOpen] = useState(false);
 
   return (
@@ -18,12 +19,13 @@ export default function SettingsPage() {
       header={
         <PageHeader
           title="Settings"
-          subtitle="Manage data import pipelines, fix import errors and other operational tools."
+          subtitle="Manage data import pipelines and other operational tools."
         />
       }
       maxWidth="xl"
     >
       <div className="space-y-4">
+        {/* Patients import (v2) */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
@@ -38,6 +40,7 @@ export default function SettingsPage() {
           <PatientsImportSection />
         </section>
 
+        {/* Legacy patient devices import */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
@@ -53,6 +56,25 @@ export default function SettingsPage() {
           <LegacyDevicesImportSection />
         </section>
 
+        {/* Import Fix Center: unified error / fix panel for patients + legacy devices */}
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">
+                Import Fix Center (beta)
+              </h3>
+              <p className="mt-1 text-xs text-slate-700">
+                Review and fix errors for patients and legacy devices imports
+                from a single dashboard. Only simple, safe edits are supported;
+                complex SGK issues should be fixed in the original CSV or in the
+                patient detail screen.
+              </p>
+            </div>
+          </div>
+          <ImportFixCenterSection />
+        </section>
+
+        {/* Inventory import */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
@@ -68,21 +90,6 @@ export default function SettingsPage() {
             open={inventoryImportOpen}
             onToggle={() => setInventoryImportOpen((prev) => !prev)}
           />
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">
-                Import Fix Center (Phase 1)
-              </h3>
-              <p className="mt-1 text-xs text-slate-600">
-                Review import jobs, see detailed error rows, and fix individual
-                patients or legacy devices directly from staging.
-              </p>
-            </div>
-          </div>
-          <ImportFixCenterSection />
         </section>
       </div>
     </PageLayout>
