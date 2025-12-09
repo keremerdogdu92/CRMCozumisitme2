@@ -77,7 +77,7 @@ export type PatientRow = {
 
   /**
    * Payment metadata on the patient row.
-   * - sale_total_amount: toplam gerçek satış (cihaz + aksesuar, tüm ödeme türleri için ortak).
+   * - sale_total_amount: toplam gerçek satış (cihaz + aksesuar, hizmetler dahil).
    * - card_fee_rate / card_fee_amount: yalnızca kredi kartı ile ödenen kısım için kullanılır.
    */
   payment_method: PatientPaymentMethod | null;
