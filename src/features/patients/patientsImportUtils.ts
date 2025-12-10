@@ -45,9 +45,9 @@ function parseBoolLike(raw: string | undefined): boolean | null {
  * Default payment method for legacy CSV imports where payment_method
  * is not provided in the file.
  *
- * For historical patients where the payment channel is unknown, we
- * map them into a dedicated 'legacy_unknown' bucket instead of
- * forcing them into 'Nakit' or another explicit method.
+ * Yeni kural:
+ * - CSV'de ödeme tipi boş veya tanımsız ise, bu satırlar "legacy_unknown"
+ *   bucket'ına gider. UI'de bunları "Ödeme" etiketiyle göstereceğiz.
  */
 const DEFAULT_IMPORT_PAYMENT_METHOD: PatientPaymentMethodFormValue =
   'legacy_unknown';
@@ -205,8 +205,9 @@ export function mapCsvRowToNewPatientForm(params: {
   const paymentMethodRaw = row['payment_method'];
   let paymentMethod = parsePaymentMethod(paymentMethodRaw);
 
-  // If CSV does not provide a payment method, fall back to a dedicated
-  // legacy bucket instead of forcing "Nakit".
+  // Eğer CSV ödeme tipi boş / tanımsız ise:
+  // - Burada "legacy_unknown" olarak işaretliyoruz.
+  // - Rapor ve UI'de bu satırlar "Ödeme" etiketiyle gösterilecek.
   if (!paymentMethod) {
     paymentMethod = DEFAULT_IMPORT_PAYMENT_METHOD;
   }
