@@ -42,6 +42,9 @@ CREATE TABLE public.patients (
     REFERENCES public.orgs (id) ON DELETE CASCADE,
   CONSTRAINT patients_reference_id_fkey FOREIGN KEY (reference_id)
     REFERENCES public."references" (id) ON DELETE SET NULL,
+
+  -- IMPORTANT:
+  -- Allow legacy_unknown as a valid payment_method for legacy imports.
   CONSTRAINT patients_payment_method_check CHECK (
     payment_method IS NULL
     OR payment_method = ANY (
@@ -50,10 +53,12 @@ CREATE TABLE public.patients (
         'Sivantos'::text,
         'Kredi_Kartı'::text,
         'Nakit'::text,
-        'Senet'::text
+        'Senet'::text,
+        'legacy_unknown'::text
       ]
     )
   ),
+
   CONSTRAINT patients_satisfaction_10_check CHECK (
     satisfaction_10 >= 1 AND satisfaction_10 <= 10
   ),
