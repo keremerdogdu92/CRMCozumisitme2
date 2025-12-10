@@ -43,6 +43,7 @@ CREATE TABLE public.inventory_items (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   deleted_at timestamp with time zone NULL,
+  device_price numeric(12, 2) NULL,
   CONSTRAINT inventory_items_pkey PRIMARY KEY (id),
   CONSTRAINT inventory_items_org_id_fkey FOREIGN KEY (org_id)
     REFERENCES public.orgs (id) ON DELETE CASCADE,
