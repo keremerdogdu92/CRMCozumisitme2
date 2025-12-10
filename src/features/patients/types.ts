@@ -6,7 +6,8 @@ export type PatientPaymentMethod =
   | 'Sivantos'
   | 'Kredi_Kartı'
   | 'Nakit'
-  | 'Senet';
+  | 'Senet'
+  | 'legacy_unknown';
 
 export type PatientPaymentMethodFormValue = '' | PatientPaymentMethod;
 
@@ -77,6 +78,8 @@ export type PatientRow = {
 
   /**
    * Payment metadata on the patient row.
+   * - payment_method: 'Nakit', 'Kredi_Kartı', 'Senet', 'Tim', 'Sivantos'
+   *   or 'legacy_unknown' for historical imports where method is unknown.
    * - sale_total_amount: toplam gerçek satış (cihaz + aksesuar, hizmetler dahil).
    * - card_fee_rate / card_fee_amount: yalnızca kredi kartı ile ödenen kısım için kullanılır.
    */
@@ -156,7 +159,8 @@ export type UpsertPatientInstallmentPlanInput = {
  * Backed by patient_sale_breakdown table.
  *
  * Each row represents one part of the sale:
- * - method: 'Kredi_Kartı', 'Nakit', 'Tim', 'Sivantos', 'Senet'...
+ * - method: 'Kredi_Kartı', 'Nakit', 'Tim', 'Sivantos', 'Senet'
+ *           or 'legacy_unknown' for historical/unknown cases.
  * - amount: TL amount for that method
  * - note: optional explanation (e.g. "Firma katkısı", "Kapora" vb.)
  */
