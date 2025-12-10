@@ -11,6 +11,13 @@
 //   * PatientDetailDevicesTab kulak bazlı cihaz listesini `usePatientDevices`
 //     üzerinden normal şekilde gösterebilsin.
 //
+// Ek tarih kuralı:
+// - Satış tarihi olarak öncelik sırası:
+//   1) patients.invoice_issued_at (hasta CSV’sinden gelen legacySaleDate),
+//   2) patients.created_at,
+//   3) cihaz CSV’sindeki sold_at,
+//   4) hiçbiri yoksa NULL.
+//
 // Usage (POST):
 //   /api/legacy-patient-devices-import-commit
 //   body: { job_id: "<import_jobs.id>" }
@@ -56,6 +63,12 @@ type ImportJobRow = {
   org_id: string;
   target_entity: string;
   status: string;
+};
+
+type PatientSaleDateInfo = {
+  id: string;
+  created_at: string | null;
+  invoice_issued_at: string | null;
 };
 
 declare const process: {
@@ -135,14 +148,14 @@ async function loadValidatedRows(
   return (data ?? []) as LegacyDeviceStagingRow[];
 }
 
-async function findPatientIdByNationalId(
+async function findPatientByNationalId(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
   orgId: string,
   nationalId: string,
-): Promise<string | null> {
+): Promise<PatientSaleDateInfo | null> {
   const { data, error } = await supabase
     .from('patients')
-    .select('id')
+    .select('id, created_at, invoice_issued_at')
     .eq('org_id', orgId)
     .eq('national_id', nationalId);
 
@@ -152,11 +165,30 @@ async function findPatientIdByNationalId(
     );
   }
 
-  const rows = (data ?? []) as { id: string }[];
+  const rows = (data ?? []) as PatientSaleDateInfo[];
   if (rows.length !== 1) {
     return null;
   }
-  return rows[0].id;
+  return rows[0];
+}
+
+/**
+ * Tarih seçim kuralı:
+ * 1) patients.invoice_issued_at
+ * 2) patients.created_at
+ * 3) payloadSoldAt (cihaz CSV'si)
+ * 4) hiçbiri yoksa null
+ */
+function chooseEffectiveSoldAt(
+  patient: PatientSaleDateInfo,
+  payloadSoldAt: string | null,
+): string | null {
+  return (
+    patient.invoice_issued_at ??
+    patient.created_at ??
+    payloadSoldAt ??
+    null
+  );
 }
 
 /**
@@ -200,22 +232,20 @@ function mapEarSideToInventory(
  *      * status='sold'
  *      * ear_side = mapEarSideToInventory(payload.ear_side)
  *      * purchase_price = null
- *      * list_price = payload.device_price (tarihsel satış fiyatı; tavsiye fiyatı yerine kullanılır)
+ *      * list_price = payload.device_price
  *      * sold_patient_id = patientId
- *      * sold_at = payload.sold_at (veya null)
+ *      * sold_at = effectiveSoldAtIso (hasta + cihaz tarih kuralı ile)
  */
 async function upsertInventoryItemForLegacyDevice(params: {
   supabase: ReturnType<typeof createAdminSupabaseClient>;
   orgId: string;
   patientId: string;
   payload: LegacyDeviceImportNormalizedPayload;
+  effectiveSoldAtIso: string | null;
 }): Promise<void> {
-  const { supabase, orgId, patientId, payload } = params;
+  const { supabase, orgId, patientId, payload, effectiveSoldAtIso } = params;
 
   const earSide = mapEarSideToInventory(payload.ear_side);
-
-  const soldAtIso = payload.sold_at ?? null;
-
   const serial = payload.serial_no?.trim() || null;
 
   if (serial) {
@@ -248,7 +278,7 @@ async function upsertInventoryItemForLegacyDevice(params: {
         .from('inventory_items')
         .update({
           sold_patient_id: patientId,
-          sold_at: soldAtIso,
+          sold_at: effectiveSoldAtIso,
           ear_side: earSide,
           status: 'sold',
           brand: payload.device_brand,
@@ -284,7 +314,7 @@ async function upsertInventoryItemForLegacyDevice(params: {
     // tarafında "Tavsiye Satış Toplamı" tamamen boş kalmasın.
     list_price: payload.device_price,
     sold_patient_id: patientId,
-    sold_at: soldAtIso,
+    sold_at: effectiveSoldAtIso,
   });
 
   if (insertError) {
@@ -379,13 +409,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           continue;
         }
 
-        const patientId = await findPatientIdByNationalId(
+        const patient = await findPatientByNationalId(
           supabase,
           row.org_id,
           payload.patient_national_id,
         );
 
-        if (!patientId) {
+        if (!patient) {
           errors.push({
             row_index: row.row_index,
             message:
@@ -394,11 +424,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           continue;
         }
 
+        const effectiveSoldAtIso = chooseEffectiveSoldAt(
+          patient,
+          payload.sold_at,
+        );
+
         await upsertInventoryItemForLegacyDevice({
           supabase,
           orgId: row.org_id,
-          patientId,
+          patientId: patient.id,
           payload,
+          effectiveSoldAtIso,
         });
 
         await markRowImported(supabase, row.id);
