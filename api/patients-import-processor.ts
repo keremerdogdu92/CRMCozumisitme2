@@ -107,6 +107,72 @@ function normalizePhone(value: unknown): string | null {
   return s;
 }
 
+/**
+ * Normalize payment_method to match patients.payment_method CHECK constraint.
+ *
+ * DB'de izin verilen değerler:
+ *   'Tim', 'Sivantos', 'Kredi_Kartı', 'Nakit', 'Senet' veya NULL
+ *
+ * Kurallar:
+ *   - CSV'de kolon hiç yoksa veya boşsa → NULL (hata yok).
+ *   - Tanıdık string'ler canonical değere map edilir.
+ *   - Saçma / tanınmayan string → NULL ama WARNING üretir.
+ */
+function normalizePaymentMethod(
+  raw: unknown,
+): { value: string | null; invalid: boolean } {
+  const allowed = ['Tim', 'Sivantos', 'Kredi_Kartı', 'Nakit', 'Senet'] as const;
+
+  const s = raw == null ? '' : String(raw).trim();
+  if (!s) {
+    // Kolon yok / boş → NULL, invalid=false
+    return { value: null, invalid: false };
+  }
+
+  const lower = s.toLowerCase().replace(/\s+/g, '_');
+
+  // Nakit
+  if (lower === 'nakit' || lower === 'cash' || lower === 'pesin' || lower === 'peşin') {
+    return { value: 'Nakit', invalid: false };
+  }
+
+  // Kredi kartı
+  if (
+    lower === 'kredi_kartı' ||
+    lower === 'kredi_karti' ||
+    lower === 'kredi_kartı.' ||
+    lower === 'kredi_karti.' ||
+    lower === 'kart' ||
+    lower === 'card' ||
+    lower === 'credit' ||
+    lower === 'credit_card'
+  ) {
+    return { value: 'Kredi_Kartı', invalid: false };
+  }
+
+  // Senet / taksit
+  if (
+    lower === 'senet' ||
+    lower === 'taksit' ||
+    lower === 'installment' ||
+    lower === 'installments'
+  ) {
+    return { value: 'Senet', invalid: false };
+  }
+
+  // Tim / Sivantos
+  if (lower === 'tim') return { value: 'Tim', invalid: false };
+  if (lower === 'sivantos') return { value: 'Sivantos', invalid: false };
+
+  // Kullanıcı zaten canonical yazdıysa (çok nadir)
+  if ((allowed as readonly string[]).includes(s)) {
+    return { value: s, invalid: false };
+  }
+
+  // Buraya geliyorsa: bir şey yazılmış ama tanınmıyor → NULL + warning
+  return { value: null, invalid: true };
+}
+
 function validatePatientsRow(params: {
   rawRow: Record<string, any>;
   orgId: string;
@@ -131,9 +197,11 @@ function validatePatientsRow(params: {
     normalizeString(rawRow.tc_kimlik_no) ??
     normalizeString(rawRow['T.C. Kimlik No']);
 
-  const paymentMethod =
-    normalizeString(rawRow.payment_method) ??
-    normalizeString(rawRow['Ödeme Şekli']);
+  // payment_method: opsiyonel, bilinmeyenler warning ile NULL'a iner.
+  const paymentMethodRaw =
+    rawRow.payment_method ?? rawRow['Ödeme Şekli'] ?? rawRow['odeme_sekli'];
+
+  const paymentMethodResult = normalizePaymentMethod(paymentMethodRaw);
 
   const saleTotal =
     normalizeNumber(rawRow.sale_total) ??
@@ -186,12 +254,15 @@ function validatePatientsRow(params: {
     });
   }
 
-  if (!paymentMethod) {
+  // payment_method ARTIK ZORUNLU DEĞİL.
+  // Sadece anlamsız değer geldiyse warning basıyoruz.
+  if (paymentMethodResult.invalid) {
     issues.push({
       row_index: rowIndex,
       field: 'payment_method',
-      severity: 'error',
-      message: 'Ödeme Şekli zorunludur.',
+      severity: 'warning',
+      message:
+        'Ödeme tipi tanınmadı; payment_method NULL olarak kaydedilecek (legacy/unknown).',
     });
   }
 
@@ -238,7 +309,7 @@ function validatePatientsRow(params: {
     sgk_flag: sgkFlag ?? false,
     sgk_prescription_received: sgkPrescriptionReceived ?? false,
     sgk_recorded_to_system: sgkRecordedToSystem ?? false,
-    payment_method: paymentMethod ?? null,
+    payment_method: paymentMethodResult.value, // NULL olabilir
     sale_total_amount,
     card_fee_rate: feeRate,
     card_fee_amount,
@@ -330,7 +401,7 @@ async function detectDuplicatePatientId(params: {
   supabase: ReturnType<typeof createAdminSupabaseClient>;
   orgId: string;
   nationalId: string | null;
-}): Promise<string | null> {
+}: Promise<string | null> {
   const { supabase, orgId, nationalId } = params;
   if (!nationalId) return null;
 
@@ -553,14 +624,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           }
         }
 
-        if (duplicateId) {
+        const hasError = issues.some((i) => i.severity === 'error');
+        if (hasError) {
           const errorMessage = aggregateIssues(issues);
           try {
             await updateStagingRow(supabase, row.id, {
               status: 'error',
               normalized_payload: null,
               error_message: errorMessage,
-              duplicate_of_patient_id: duplicateId,
             });
           } catch (err) {
             console.error(
