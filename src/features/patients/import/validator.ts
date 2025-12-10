@@ -1,42 +1,24 @@
-// src/features/patients/import/legacyDevicesValidator.ts
-// Pure validation + normalization helpers for LEGACY patient-device CSV imports.
-// This is separate from patients_import validator and only knows about:
-// patient_national_id, device_brand, device_model, ear_side, serial_no, sold_at, device_price.
+// src/features/patients/import/validator.ts
+// Pure validation and normalization helpers for patients import rows.
+// v2.1: supports legacy_unknown payment bucket and does not block import
+// when payment_method is missing or unknown.
 
 import { parseMoneyToNumber } from '../api/api.core';
-
-export type LegacyDeviceImportIssueSeverity = 'error' | 'warning';
-
-export type LegacyDeviceImportIssue = {
-  row_index: number;
-  field: string;
-  severity: LegacyDeviceImportIssueSeverity;
-  message: string;
-};
-
-export type LegacyDeviceImportSide = 'R' | 'L' | 'Tek' | 'Çift';
-
-export type LegacyDeviceImportNormalizedPayload = {
-  org_id: string;
-  patient_national_id: string;
-  device_brand: string;
-  device_model: string;
-  ear_side: LegacyDeviceImportSide;
-  serial_no: string | null;
-  sold_at: string | null;        // ISO string (T00:00:00.000Z) or null
-  device_price: number | null;   // total legacy price for this row (device(s) + accessories)
-};
+import type {
+  PatientsImportIssue,
+  PatientsImportNormalizedPayload,
+} from './types';
 
 /**
- * Normalize header keys to a canonical snake_case form.
- * Example: "Patient National ID" -> "patient_national_id"
+ * Normalize a CSV header key into snake_case.
+ * Example: "Full Name" -> "full_name"
  */
 export function normalizeHeaderKey(raw: string): string {
   return raw.trim().toLowerCase().replace(/\s+/g, '_');
 }
 
 /**
- * Parse boolean-like strings just in case we later add flags.
+ * Parse boolean-like strings (TR + EN).
  */
 export function parseBoolLike(
   raw: string | undefined,
@@ -44,14 +26,15 @@ export function parseBoolLike(
   if (!raw) return null;
   const v = raw.trim().toLowerCase();
   if (!v) return null;
+
   if (['1', 'true', 'evet', 'yes'].includes(v)) return true;
   if (['0', 'false', 'hayir', 'hayır', 'hayr', 'no'].includes(v)) return false;
+
   return 'invalid';
 }
 
 /**
- * Parse dates like "dd.mm.yyyy" or "yyyy-mm-dd".
- * We stick to the same rules used by patients import.
+ * Parse dates like "dd.mm.yyyy" or "yyyy-mm-dd" into ISO string with T00:00:00.000Z.
  */
 export function parseDateLike(
   raw: string | undefined,
@@ -63,7 +46,7 @@ export function parseDateLike(
   // yyyy-mm-dd
   const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
   if (isoMatch) {
-    const [_, y, m, d] = isoMatch;
+    const [, y, m, d] = isoMatch;
     return { value: `${y}-${m}-${d}T00:00:00.000Z`, invalid: false };
   }
 
@@ -80,173 +63,324 @@ export function parseDateLike(
 }
 
 /**
- * Normalize ear_side ("R", "L", "Tek", "Çift") into a canonical value.
- * Turkish inputs are accepted (Sağ / Sol / Çift / Tek).
+ * Normalize phone numbers:
+ * - Accepts + / 00 prefixed internationals as-is (digits cleaned).
+ * - For TR, accepts 10-digit local numbers and prefixes +90.
  */
-export function normalizeEarSide(
+export function normalizePhone(
   raw: string | undefined,
-): { value: LegacyDeviceImportSide | null; error?: string } {
+): { value: string | null; error?: string } {
   if (!raw) {
-    return { value: null, error: 'ear_side is required.' };
+    return { value: null, error: 'Phone is required.' };
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { value: null, error: 'Phone is required.' };
   }
 
-  const trimmed = raw.trim().toLowerCase();
-
-  if (['r', 'sağ', 'sag', 'right'].includes(trimmed)) {
-    return { value: 'R' };
-  }
-  if (['l', 'sol', 'left'].includes(trimmed)) {
-    return { value: 'L' };
-  }
-  if (['tek', 'single'].includes(trimmed)) {
-    return { value: 'Tek' };
-  }
-  if (['çift', 'cift', 'pair', 'both'].includes(trimmed)) {
-    return { value: 'Çift' };
+  // International: keep leading + or 00
+  if (trimmed.startsWith('+') || trimmed.startsWith('00')) {
+    const digits = trimmed.replace(/[^\d+]/g, '');
+    if (digits.length < 8) {
+      return { value: null, error: 'Invalid phone format.' };
+    }
+    return { value: digits };
   }
 
+  // TR local 10 digits → +90XXXXXXXXXX
+  if (/^\d{10}$/.test(trimmed)) {
+    return { value: `+90${trimmed}` };
+  }
+
+  // Other digit-only but not 10 digits → invalid
+  if (/^\d+$/.test(trimmed)) {
+    return { value: null, error: 'Invalid phone format.' };
+  }
+
+  return { value: null, error: 'Invalid phone format.' };
+}
+
+/**
+ * Normalize payment_method to match patients.payment_method CHECK constraint.
+ *
+ * Canonical values:
+ *   - 'Tim'
+ *   - 'Sivantos'
+ *   - 'Kredi_Kartı'
+ *   - 'Nakit'
+ *   - 'Senet'
+ *   - 'legacy_unknown' (for historical / unknown payment types)
+ *
+ * Import v2.1 rule:
+ *   - payment_method is NOT required for import.
+ *   - If CSV is empty or completely unknown, we bucket as 'legacy_unknown'.
+ *   - Unknown non-empty values produce a WARNING, not an error.
+ */
+function normalizePaymentMethod(
+  raw: string | undefined,
+): { value: string | null; warning?: string } {
+  const allowed = [
+    'Tim',
+    'Sivantos',
+    'Kredi_Kartı',
+    'Nakit',
+    'Senet',
+    'legacy_unknown',
+  ] as const;
+
+  // Empty / missing → legacy_unknown bucket (no error, no warning)
+  if (!raw || !raw.trim()) {
+    return { value: 'legacy_unknown' };
+  }
+
+  const trimmed = raw.trim();
+  const lower = trimmed.toLowerCase().replace(/\s+/g, '_');
+
+  // Map common human inputs to canonical DB values.
+  if (lower === 'nakit' || lower === 'cash') {
+    return { value: 'Nakit' };
+  }
+  if (
+    lower === 'kredi_kartı' ||
+    lower === 'kredi_karti' ||
+    lower === 'kredi_kartı.' ||
+    lower === 'kart' ||
+    lower === 'card' ||
+    lower === 'credit_card' ||
+    lower === 'creditcard'
+  ) {
+    return { value: 'Kredi_Kartı' };
+  }
+  if (lower === 'senet' || lower === 'taksit' || lower === 'installment') {
+    return { value: 'Senet' };
+  }
+  if (lower === 'tim') {
+    return { value: 'Tim' };
+  }
+  if (lower === 'sivantos') {
+    return { value: 'Sivantos' };
+  }
+  if (lower === 'legacy_unknown') {
+    return { value: 'legacy_unknown' };
+  }
+
+  // If user already gave canonical value (exact match), accept it.
+  if (allowed.includes(trimmed as (typeof allowed)[number])) {
+    return { value: trimmed as (typeof allowed)[number] };
+  }
+
+  // Fallback: bucket to legacy_unknown but emit a warning so we know there was
+  // a non-empty, unmapped payment text.
   return {
-    value: null,
-    error: 'Invalid ear_side. Allowed: R, L, Tek, Çift.',
+    value: 'legacy_unknown',
+    warning:
+      'Unknown payment_method value in CSV; imported as legacy_unknown (Ödeme).',
   };
 }
 
 /**
- * Normalize device_price (string) into a number (using shared money parser).
+ * Validate and normalize a single patients CSV row.
+ * Produces a PatientsImportNormalizedPayload or issues if invalid.
  */
-export function normalizeDevicePrice(
-  raw: string | undefined,
-): { value: number | null; error?: string } {
-  if (!raw) {
-    return { value: null };
-  }
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return { value: null };
-  }
-
-  try {
-    const parsed = parseMoneyToNumber(trimmed, 'LEGACY_DEVICE_PRICE');
-    return { value: parsed };
-  } catch (err) {
-    return {
-      value: null,
-      error:
-        (err as Error)?.message ||
-        'device_price is invalid. Expected a numeric value.',
-    };
-  }
-}
-
-/**
- * Validate and normalize a single legacy device CSV row.
- * This does NOT touch real devices; it only produces a normalized payload
- * for patients_legacy_devices_import_rows.normalized_payload.
- */
-export function validateLegacyDeviceRow(params: {
+export function validatePatientsRow(params: {
   rawRow: Record<string, string>;
   orgId: string;
   rowIndex?: number;
 }): {
-  normalized: LegacyDeviceImportNormalizedPayload | null;
-  issues: LegacyDeviceImportIssue[];
+  normalized: PatientsImportNormalizedPayload | null;
+  issues: PatientsImportIssue[];
 } {
   const { rawRow, orgId, rowIndex = 0 } = params;
-  const issues: LegacyDeviceImportIssue[] = [];
+  const issues: PatientsImportIssue[] = [];
 
-  // 1) Patient national id (required, 11 digits)
-  const patientNationalIdRaw = (rawRow['patient_national_id'] ?? '').trim();
-  let patientNationalId: string | null = patientNationalIdRaw || null;
-
-  if (!patientNationalIdRaw) {
+  // 1) Full name (required)
+  const fullName =
+    rawRow['full_name']?.trim() || rawRow['ad_soyad']?.trim() || '';
+  if (!fullName) {
     issues.push({
       row_index: rowIndex,
-      field: 'patient_national_id',
+      field: 'full_name',
       severity: 'error',
-      message: 'patient_national_id is required.',
-    });
-  } else if (!/^\d{11}$/.test(patientNationalIdRaw)) {
-    issues.push({
-      row_index: rowIndex,
-      field: 'patient_national_id',
-      severity: 'error',
-      message: 'patient_national_id must be 11 digits.',
+      message: 'Full name is required.',
     });
   }
 
-  // 2) Device brand (required)
-  const brandRaw = (rawRow['device_brand'] ?? '').trim();
-  if (!brandRaw) {
+  // 2) National ID: required, 11 digits
+  const nationalIdRaw = (rawRow['national_id'] ?? '').trim();
+  let nationalId: string | null = nationalIdRaw || null;
+
+  if (!nationalIdRaw) {
     issues.push({
       row_index: rowIndex,
-      field: 'device_brand',
+      field: 'national_id',
       severity: 'error',
-      message: 'device_brand is required.',
+      message: 'national_id is required.',
+    });
+  } else if (!/^\d{11}$/.test(nationalIdRaw)) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'national_id',
+      severity: 'error',
+      message: 'national_id must be 11 digits.',
     });
   }
 
-  // 3) Device model (required)
-  const modelRaw = (rawRow['device_model'] ?? '').trim();
-  if (!modelRaw) {
+  // 3) Phone: required + normalized
+  const phoneResult = normalizePhone(rawRow['phone']);
+  if (phoneResult.error) {
     issues.push({
       row_index: rowIndex,
-      field: 'device_model',
+      field: 'phone',
       severity: 'error',
-      message: 'device_model is required.',
+      message: phoneResult.error,
     });
   }
 
-  // 4) Ear side (required, mapped to canonical)
-  const earSideResult = normalizeEarSide(rawRow['ear_side']);
-  if (earSideResult.error) {
+  // 4) SGK flags
+  const sgkFlagParsed = parseBoolLike(rawRow['sgk_flag']);
+  const sgkPrescriptionParsed = parseBoolLike(
+    rawRow['sgk_prescription_received'],
+  );
+  const sgkRecordedParsed = parseBoolLike(rawRow['sgk_recorded_to_system']);
+
+  const sgkFlag =
+    sgkFlagParsed === true ? true : sgkFlagParsed === false ? false : false;
+  const sgkPrescription =
+    sgkPrescriptionParsed === true
+      ? true
+      : sgkPrescriptionParsed === false
+        ? false
+        : false;
+  const sgkRecorded =
+    sgkRecordedParsed === true
+      ? true
+      : sgkRecordedParsed === false
+        ? false
+        : false;
+
+  if (sgkFlagParsed === 'invalid') {
     issues.push({
       row_index: rowIndex,
-      field: 'ear_side',
+      field: 'sgk_flag',
       severity: 'error',
-      message: earSideResult.error,
+      message: 'Invalid boolean value for sgk_flag.',
+    });
+  }
+  if (sgkPrescriptionParsed === 'invalid') {
+    issues.push({
+      row_index: rowIndex,
+      field: 'sgk_prescription_received',
+      severity: 'error',
+      message: 'Invalid boolean value for sgk_prescription_received.',
+    });
+  }
+  if (sgkRecordedParsed === 'invalid') {
+    issues.push({
+      row_index: rowIndex,
+      field: 'sgk_recorded_to_system',
+      severity: 'error',
+      message: 'Invalid boolean value for sgk_recorded_to_system.',
     });
   }
 
-  // 5) Serial no (optional)
-  const serialRaw = (rawRow['serial_no'] ?? '').trim();
-  const serialNo = serialRaw || null;
-
-  // 6) Sold at (optional, warning if invalid)
-  const soldAtResult = parseDateLike(rawRow['sold_at']);
-  if (soldAtResult.invalid) {
+  // 5) payment_method: NOT required anymore.
+  //    Missing/empty → legacy_unknown; unknown non-empty → legacy_unknown + warning.
+  const paymentMethodResult = normalizePaymentMethod(rawRow['payment_method']);
+  if (paymentMethodResult.warning) {
     issues.push({
       row_index: rowIndex,
-      field: 'sold_at',
+      field: 'payment_method',
       severity: 'warning',
-      message: 'sold_at could not be parsed; skipped.',
+      message: paymentMethodResult.warning,
     });
   }
 
-  // 7) Device price (optional)
-  const devicePriceResult = normalizeDevicePrice(rawRow['device_price']);
-  if (devicePriceResult.error) {
+  // 6) sale_total: required; we also accept legacy "card_sale_total" header.
+  const saleTotalRaw =
+    (rawRow['sale_total'] ?? '').trim() ||
+    (rawRow['card_sale_total'] ?? '').trim();
+  let saleTotalAmount: number | null = null;
+
+  if (saleTotalRaw) {
+    try {
+      const parsedSale = parseMoneyToNumber(saleTotalRaw, 'SALE_TOTAL_AMOUNT');
+      saleTotalAmount = parsedSale;
+    } catch (err) {
+      issues.push({
+        row_index: rowIndex,
+        field: 'sale_total',
+        severity: 'error',
+        message:
+          (err as Error)?.message || 'sale_total is invalid. Expected number.',
+      });
+    }
+  } else {
     issues.push({
       row_index: rowIndex,
-      field: 'device_price',
-      severity: 'warning',
-      message: devicePriceResult.error,
+      field: 'sale_total',
+      severity: 'error',
+      message: 'sale_total is required.',
     });
   }
+
+  // 7) card_fee_rate (%); optional; if invalid → warning and ignored.
+  const cardFeeRateRaw = (rawRow['card_fee_rate'] ?? '').trim();
+  let cardFeeRate: number | null = null;
+  let cardFeeAmount: number | null = null;
+
+  if (cardFeeRateRaw) {
+    const fee = Number(cardFeeRateRaw.replace(',', '.'));
+    if (Number.isFinite(fee) && fee > 0) {
+      cardFeeRate = fee;
+      if (saleTotalAmount != null) {
+        cardFeeAmount = Number(((saleTotalAmount * fee) / 100).toFixed(2));
+      }
+    } else {
+      issues.push({
+        row_index: rowIndex,
+        field: 'card_fee_rate',
+        severity: 'warning',
+        message: 'card_fee_rate is invalid; ignored.',
+      });
+    }
+  }
+
+  // 8) Optional sale_date; if valid, used for invoice_issued_at + created_at.
+  const saleDateResult = parseDateLike(rawRow['sale_date']);
+  if (saleDateResult.invalid) {
+    issues.push({
+      row_index: rowIndex,
+      field: 'sale_date',
+      severity: 'warning',
+      message: 'sale_date could not be parsed; skipped.',
+    });
+  }
+
+  // NOTE: Duplicate patient check (by national_id) is handled server-side
+  // in the import processor using patients table; not here.
 
   const hasErrors = issues.some((i) => i.severity === 'error');
   if (hasErrors) {
     return { normalized: null, issues };
   }
 
-  const normalized: LegacyDeviceImportNormalizedPayload = {
+  const normalized: PatientsImportNormalizedPayload = {
     org_id: orgId,
-    patient_national_id: patientNationalId as string,
-    device_brand: brandRaw,
-    device_model: modelRaw,
-    ear_side: earSideResult.value as LegacyDeviceImportSide,
-    serial_no: serialNo,
-    sold_at: soldAtResult.value,
-    device_price: devicePriceResult.value,
+    full_name: fullName,
+    phone: phoneResult.value ?? '',
+    national_id: nationalId,
+    kin_phone: (rawRow['kin_phone'] ?? '').trim() || null,
+    address: (rawRow['address'] ?? '').trim() || null,
+    sgk_flag: sgkFlag,
+    sgk_prescription_received: sgkFlag ? sgkPrescription : false,
+    sgk_recorded_to_system: sgkFlag ? sgkRecorded : false,
+    payment_method: paymentMethodResult.value,
+    sale_total_amount: saleTotalAmount,
+    card_fee_rate: cardFeeRate,
+    card_fee_amount: cardFeeAmount,
+    invoice_issued: false,
+    invoice_issued_at: saleDateResult.value,
+    created_at: saleDateResult.value,
   };
 
   return { normalized, issues };
