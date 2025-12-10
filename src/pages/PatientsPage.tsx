@@ -1,5 +1,6 @@
 // src/pages/PatientsPage.tsx
 // Container page for Patients with responsive layout and filters.
+// NOTE: Hasta CSV import işlemleri yalnızca Settings sayfasından yönetilir.
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,14 +13,10 @@ import { createPatient } from '../features/patients/api/api.patients';
 import { savePatientSaleBreakdown } from '../features/patients/api/api.saleBreakdown';
 import { upsertPatientInstallmentPlan } from '../features/patients/api/api.payments';
 import { attachDevicesToPatientFromDrafts } from '../features/patients/api/api.devices';
-import type {
-  NewPatientForm,
-  PatientRow,
-} from '../features/patients/types';
+import type { NewPatientForm, PatientRow } from '../features/patients/types';
 import {
   NewPatientFormCard,
   PatientDetailDrawer,
-  PatientsImportSection,
   PatientsTable,
 } from '../features/patients/ui';
 
@@ -67,10 +64,7 @@ export default function PatientsPage() {
             items: values.saleBreakdownDraft,
           });
         } catch (err) {
-          console.error(
-            'NewPatient: sale breakdown save error:',
-            err,
-          );
+          console.error('NewPatient: sale breakdown save error:', err);
           // Hasta zaten oluştu; yine de kullanıcıya hata göstermek için
           // mutasyonu hatalı sayıyoruz.
           throw err;
@@ -85,10 +79,7 @@ export default function PatientsPage() {
             patientId: patient.id,
           });
         } catch (err) {
-          console.error(
-            'NewPatient: installment plan save error:',
-            err,
-          );
+          console.error('NewPatient: installment plan save error:', err);
           // Yine: hasta oluşturuldu ama plan kaydı başarısız; hata
           // kullanıcıya yansısın diye yeniden fırlatıyoruz.
           throw err;
@@ -103,10 +94,7 @@ export default function PatientsPage() {
             values.deviceDrafts,
           );
         } catch (err) {
-          console.error(
-            'NewPatient: attach devices error:',
-            err,
-          );
+          console.error('NewPatient: attach devices error:', err);
           // Hasta oluştu; ancak stok-hasta eşlemesi kritik olduğu için
           // bu hatayı da kullanıcıya gösteriyoruz.
           throw err;
@@ -215,9 +203,7 @@ export default function PatientsPage() {
             <select
               value={sgkFilter}
               onChange={(e) =>
-                setSgkFilter(
-                  e.target.value as 'all' | 'sgk' | 'non-sgk',
-                )
+                setSgkFilter(e.target.value as 'all' | 'sgk' | 'non-sgk')
               }
               className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
@@ -257,9 +243,6 @@ export default function PatientsPage() {
         isSubmitting={createMutation.isPending}
         errorMessage={createMutation.isError ? mutationError : undefined}
       />
-
-      {/* CSV import bölümü */}
-      <PatientsImportSection />
 
       {/* Hasta listesi */}
       <PatientsTable
