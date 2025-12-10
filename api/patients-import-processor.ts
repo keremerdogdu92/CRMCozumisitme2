@@ -107,72 +107,6 @@ function normalizePhone(value: unknown): string | null {
   return s;
 }
 
-/**
- * Normalize payment_method to match patients.payment_method CHECK constraint.
- *
- * DB'de izin verilen değerler:
- *   'Tim', 'Sivantos', 'Kredi_Kartı', 'Nakit', 'Senet' veya NULL
- *
- * Kurallar:
- *   - CSV'de kolon hiç yoksa veya boşsa → NULL (hata yok).
- *   - Tanıdık string'ler canonical değere map edilir.
- *   - Saçma / tanınmayan string → NULL ama WARNING üretir.
- */
-function normalizePaymentMethod(
-  raw: unknown,
-): { value: string | null; invalid: boolean } {
-  const allowed = ['Tim', 'Sivantos', 'Kredi_Kartı', 'Nakit', 'Senet'] as const;
-
-  const s = raw == null ? '' : String(raw).trim();
-  if (!s) {
-    // Kolon yok / boş → NULL, invalid=false
-    return { value: null, invalid: false };
-  }
-
-  const lower = s.toLowerCase().replace(/\s+/g, '_');
-
-  // Nakit
-  if (lower === 'nakit' || lower === 'cash' || lower === 'pesin' || lower === 'peşin') {
-    return { value: 'Nakit', invalid: false };
-  }
-
-  // Kredi kartı
-  if (
-    lower === 'kredi_kartı' ||
-    lower === 'kredi_karti' ||
-    lower === 'kredi_kartı.' ||
-    lower === 'kredi_karti.' ||
-    lower === 'kart' ||
-    lower === 'card' ||
-    lower === 'credit' ||
-    lower === 'credit_card'
-  ) {
-    return { value: 'Kredi_Kartı', invalid: false };
-  }
-
-  // Senet / taksit
-  if (
-    lower === 'senet' ||
-    lower === 'taksit' ||
-    lower === 'installment' ||
-    lower === 'installments'
-  ) {
-    return { value: 'Senet', invalid: false };
-  }
-
-  // Tim / Sivantos
-  if (lower === 'tim') return { value: 'Tim', invalid: false };
-  if (lower === 'sivantos') return { value: 'Sivantos', invalid: false };
-
-  // Kullanıcı zaten canonical yazdıysa (çok nadir)
-  if ((allowed as readonly string[]).includes(s)) {
-    return { value: s, invalid: false };
-  }
-
-  // Buraya geliyorsa: bir şey yazılmış ama tanınmıyor → NULL + warning
-  return { value: null, invalid: true };
-}
-
 function validatePatientsRow(params: {
   rawRow: Record<string, any>;
   orgId: string;
@@ -197,11 +131,9 @@ function validatePatientsRow(params: {
     normalizeString(rawRow.tc_kimlik_no) ??
     normalizeString(rawRow['T.C. Kimlik No']);
 
-  // payment_method: opsiyonel, bilinmeyenler warning ile NULL'a iner.
-  const paymentMethodRaw =
-    rawRow.payment_method ?? rawRow['Ödeme Şekli'] ?? rawRow['odeme_sekli'];
-
-  const paymentMethodResult = normalizePaymentMethod(paymentMethodRaw);
+  const paymentMethod =
+    normalizeString(rawRow.payment_method) ??
+    normalizeString(rawRow['Ödeme Şekli']);
 
   const saleTotal =
     normalizeNumber(rawRow.sale_total) ??
@@ -229,11 +161,11 @@ function validatePatientsRow(params: {
     normalizeDate(rawRow['Satış Tarihi']);
 
   const kinPhone =
-    normalizePhone(rawRow.kin_phone) ?? normalizePhone(rawRow['Yakın Telefon']);
+    normalizePhone(rawRow.kin_phone) ??
+    normalizePhone(rawRow['Yakın Telefon']);
 
   const address =
-    normalizeString(rawRow.address) ??
-    normalizeString(rawRow['Adres']);
+    normalizeString(rawRow.address) ?? normalizeString(rawRow['Adres']);
 
   // Zorunlu alan kontrolleri
   if (!fullName) {
@@ -250,22 +182,14 @@ function validatePatientsRow(params: {
       row_index: rowIndex,
       field: 'identity',
       severity: 'error',
-      message: 'Telefon veya T.C. Kimlik No alanlarından en az biri zorunludur.',
-    });
-  }
-
-  // payment_method ARTIK ZORUNLU DEĞİL.
-  // Sadece anlamsız değer geldiyse warning basıyoruz.
-  if (paymentMethodResult.invalid) {
-    issues.push({
-      row_index: rowIndex,
-      field: 'payment_method',
-      severity: 'warning',
       message:
-        'Ödeme tipi tanınmadı; payment_method NULL olarak kaydedilecek (legacy/unknown).',
+        'Telefon veya T.C. Kimlik No alanlarından en az biri zorunludur.',
     });
   }
 
+  // IMPORTANT:
+  // - payment_method ARTIK zorunlu değil. Boş bırakılırsa null olarak gider.
+  // - sale_total_amount hala zorunlu, çünkü eski satış tutarını saklamak istiyoruz.
   if (saleTotal == null) {
     issues.push({
       row_index: rowIndex,
@@ -309,7 +233,7 @@ function validatePatientsRow(params: {
     sgk_flag: sgkFlag ?? false,
     sgk_prescription_received: sgkPrescriptionReceived ?? false,
     sgk_recorded_to_system: sgkRecordedToSystem ?? false,
-    payment_method: paymentMethodResult.value, // NULL olabilir
+    payment_method: paymentMethod ?? null,
     sale_total_amount,
     card_fee_rate: feeRate,
     card_fee_amount,
@@ -401,7 +325,7 @@ async function detectDuplicatePatientId(params: {
   supabase: ReturnType<typeof createAdminSupabaseClient>;
   orgId: string;
   nationalId: string | null;
-}: Promise<string | null> {
+}): Promise<string | null> {
   const { supabase, orgId, nationalId } = params;
   if (!nationalId) return null;
 
@@ -463,10 +387,15 @@ async function insertPatient(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
   payload: PatientsImportNormalizedPayload,
 ): Promise<string> {
-  // Payload fields match `patients` table columns one-to-one.
+  // payment_method null ise, kolonun default çalışabilmesi için field'i tamamen kaldır.
+  const payloadForInsert: any = { ...payload };
+  if (payloadForInsert.payment_method == null) {
+    delete payloadForInsert.payment_method;
+  }
+
   const { data, error } = await supabase
     .from('patients')
-    .insert(payload)
+    .insert(payloadForInsert)
     .select('id')
     .single();
 
@@ -624,14 +553,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           }
         }
 
-        const hasError = issues.some((i) => i.severity === 'error');
-        if (hasError) {
+        if (duplicateId) {
           const errorMessage = aggregateIssues(issues);
           try {
             await updateStagingRow(supabase, row.id, {
               status: 'error',
               normalized_payload: null,
               error_message: errorMessage,
+              duplicate_of_patient_id: duplicateId,
             });
           } catch (err) {
             console.error(
@@ -712,6 +641,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
   } catch (err) {
     console.error('Unhandled error in patients-import-processor:', err);
-    res.status(500).json({ error: 'Unhandled server error.' });
+    // Burada artık hatanın gerçek message'ını geri dönüyoruz ki 500 aldığında
+    // ekranda "Unhandled server error" yerine gerçek sebebi görebil.
+    res.status(500).json({
+      error: (err as Error)?.message || 'Unhandled server error.',
+    });
   }
 }
