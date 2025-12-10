@@ -1,7 +1,5 @@
 // src/features/patients/import/validator.ts
 // Pure validation and normalization helpers for patients import rows.
-// v2.1: supports legacy_unknown payment bucket and does not block import
-// when payment_method is missing or unknown.
 
 import { parseMoneyToNumber } from '../api/api.core';
 import type {
@@ -10,8 +8,7 @@ import type {
 } from './types';
 
 /**
- * Normalize a CSV header key into snake_case.
- * Example: "Full Name" -> "full_name"
+ * Normalize header name to snake_case lowercase.
  */
 export function normalizeHeaderKey(raw: string): string {
   return raw.trim().toLowerCase().replace(/\s+/g, '_');
@@ -34,7 +31,8 @@ export function parseBoolLike(
 }
 
 /**
- * Parse dates like "dd.mm.yyyy" or "yyyy-mm-dd" into ISO string with T00:00:00.000Z.
+ * Parse dates like "dd.mm.yyyy" or "yyyy-mm-dd".
+ * Returns ISO date string with T00:00:00.000Z or null.
  */
 export function parseDateLike(
   raw: string | undefined,
@@ -63,9 +61,9 @@ export function parseDateLike(
 }
 
 /**
- * Normalize phone numbers:
- * - Accepts + / 00 prefixed internationals as-is (digits cleaned).
- * - For TR, accepts 10-digit local numbers and prefixes +90.
+ * Normalize phone number:
+ * - If starts with '+' or '00' → accept as international, strip non-digits except '+'.
+ * - Otherwise treat as TR and normalize to +90xxxxxxxxxx when 10 digits.
  */
 export function normalizePhone(
   raw: string | undefined,
@@ -73,12 +71,13 @@ export function normalizePhone(
   if (!raw) {
     return { value: null, error: 'Phone is required.' };
   }
+
   const trimmed = raw.trim();
   if (!trimmed) {
     return { value: null, error: 'Phone is required.' };
   }
 
-  // International: keep leading + or 00
+  // International: keep leading '+' or '00'
   if (trimmed.startsWith('+') || trimmed.startsWith('00')) {
     const digits = trimmed.replace(/[^\d+]/g, '');
     if (digits.length < 8) {
@@ -87,12 +86,12 @@ export function normalizePhone(
     return { value: digits };
   }
 
-  // TR local 10 digits → +90XXXXXXXXXX
+  // TR 10-digit local number → +90xxxxxxxxxx
   if (/^\d{10}$/.test(trimmed)) {
     return { value: `+90${trimmed}` };
   }
 
-  // Other digit-only but not 10 digits → invalid
+  // Any other all-digit format is invalid for now
   if (/^\d+$/.test(trimmed)) {
     return { value: null, error: 'Invalid phone format.' };
   }
@@ -103,22 +102,16 @@ export function normalizePhone(
 /**
  * Normalize payment_method to match patients.payment_method CHECK constraint.
  *
- * Canonical values:
- *   - 'Tim'
- *   - 'Sivantos'
- *   - 'Kredi_Kartı'
- *   - 'Nakit'
- *   - 'Senet'
- *   - 'legacy_unknown' (for historical / unknown payment types)
+ * Allowed canonical values:
+ *   'Tim', 'Sivantos', 'Kredi_Kartı', 'Nakit', 'Senet', 'legacy_unknown'
  *
- * Import v2.1 rule:
- *   - payment_method is NOT required for import.
- *   - If CSV is empty or completely unknown, we bucket as 'legacy_unknown'.
- *   - Unknown non-empty values produce a WARNING, not an error.
+ * Import v2 rule:
+ *   - If CSV is empty or unknown → default to 'legacy_unknown'
+ *   - Only truly invalid (garbage) values produce an error.
  */
 function normalizePaymentMethod(
   raw: string | undefined,
-): { value: string | null; warning?: string } {
+): { value: string | null; error?: string } {
   const allowed = [
     'Tim',
     'Sivantos',
@@ -128,7 +121,7 @@ function normalizePaymentMethod(
     'legacy_unknown',
   ] as const;
 
-  // Empty / missing → legacy_unknown bucket (no error, no warning)
+  // Empty / missing → silent default to legacy_unknown
   if (!raw || !raw.trim()) {
     return { value: 'legacy_unknown' };
   }
@@ -146,8 +139,8 @@ function normalizePaymentMethod(
     lower === 'kredi_kartı.' ||
     lower === 'kart' ||
     lower === 'card' ||
-    lower === 'credit_card' ||
-    lower === 'creditcard'
+    lower === 'credit' ||
+    lower === 'credit_card'
   ) {
     return { value: 'Kredi_Kartı' };
   }
@@ -169,19 +162,14 @@ function normalizePaymentMethod(
     return { value: trimmed as (typeof allowed)[number] };
   }
 
-  // Fallback: bucket to legacy_unknown but emit a warning so we know there was
-  // a non-empty, unmapped payment text.
+  // Garbage value → real error
   return {
-    value: 'legacy_unknown',
-    warning:
-      'Unknown payment_method value in CSV; imported as legacy_unknown (Ödeme).',
+    value: null,
+    error:
+      'Invalid payment_method. Allowed: Nakit, Kredi_Kartı, Senet, Tim, Sivantos veya boş (Ödeme).',
   };
 }
 
-/**
- * Validate and normalize a single patients CSV row.
- * Produces a PatientsImportNormalizedPayload or issues if invalid.
- */
 export function validatePatientsRow(params: {
   rawRow: Record<string, string>;
   orgId: string;
@@ -193,7 +181,7 @@ export function validatePatientsRow(params: {
   const { rawRow, orgId, rowIndex = 0 } = params;
   const issues: PatientsImportIssue[] = [];
 
-  // 1) Full name (required)
+  // Full name
   const fullName =
     rawRow['full_name']?.trim() || rawRow['ad_soyad']?.trim() || '';
   if (!fullName) {
@@ -205,7 +193,7 @@ export function validatePatientsRow(params: {
     });
   }
 
-  // 2) National ID: required, 11 digits
+  // National ID (11 digits)
   const nationalIdRaw = (rawRow['national_id'] ?? '').trim();
   let nationalId: string | null = nationalIdRaw || null;
 
@@ -225,7 +213,7 @@ export function validatePatientsRow(params: {
     });
   }
 
-  // 3) Phone: required + normalized
+  // Phone
   const phoneResult = normalizePhone(rawRow['phone']);
   if (phoneResult.error) {
     issues.push({
@@ -236,27 +224,18 @@ export function validatePatientsRow(params: {
     });
   }
 
-  // 4) SGK flags
+  // SGK flags
   const sgkFlagParsed = parseBoolLike(rawRow['sgk_flag']);
   const sgkPrescriptionParsed = parseBoolLike(
     rawRow['sgk_prescription_received'],
   );
   const sgkRecordedParsed = parseBoolLike(rawRow['sgk_recorded_to_system']);
 
-  const sgkFlag =
-    sgkFlagParsed === true ? true : sgkFlagParsed === false ? false : false;
+  const sgkFlag = sgkFlagParsed === true;
   const sgkPrescription =
-    sgkPrescriptionParsed === true
-      ? true
-      : sgkPrescriptionParsed === false
-        ? false
-        : false;
+    sgkPrescriptionParsed === true ? true : sgkPrescriptionParsed === false ? false : false;
   const sgkRecorded =
-    sgkRecordedParsed === true
-      ? true
-      : sgkRecordedParsed === false
-        ? false
-        : false;
+    sgkRecordedParsed === true ? true : sgkRecordedParsed === false ? false : false;
 
   if (sgkFlagParsed === 'invalid') {
     issues.push({
@@ -283,19 +262,18 @@ export function validatePatientsRow(params: {
     });
   }
 
-  // 5) payment_method: NOT required anymore.
-  //    Missing/empty → legacy_unknown; unknown non-empty → legacy_unknown + warning.
+  // Payment method: now defaults to legacy_unknown if empty.
   const paymentMethodResult = normalizePaymentMethod(rawRow['payment_method']);
-  if (paymentMethodResult.warning) {
+  if (paymentMethodResult.error) {
     issues.push({
       row_index: rowIndex,
       field: 'payment_method',
-      severity: 'warning',
-      message: paymentMethodResult.warning,
+      severity: 'error',
+      message: paymentMethodResult.error,
     });
   }
 
-  // 6) sale_total: required; we also accept legacy "card_sale_total" header.
+  // Sale total
   const saleTotalRaw =
     (rawRow['sale_total'] ?? '').trim() ||
     (rawRow['card_sale_total'] ?? '').trim();
@@ -303,7 +281,10 @@ export function validatePatientsRow(params: {
 
   if (saleTotalRaw) {
     try {
-      const parsedSale = parseMoneyToNumber(saleTotalRaw, 'SALE_TOTAL_AMOUNT');
+      const parsedSale = parseMoneyToNumber(
+        saleTotalRaw,
+        'SALE_TOTAL_AMOUNT',
+      );
       saleTotalAmount = parsedSale;
     } catch (err) {
       issues.push({
@@ -311,7 +292,7 @@ export function validatePatientsRow(params: {
         field: 'sale_total',
         severity: 'error',
         message:
-          (err as Error)?.message || 'sale_total is invalid. Expected number.',
+          (err as Error)?.message || 'sale_total is invalid.',
       });
     }
   } else {
@@ -323,7 +304,7 @@ export function validatePatientsRow(params: {
     });
   }
 
-  // 7) card_fee_rate (%); optional; if invalid → warning and ignored.
+  // Card fee
   const cardFeeRateRaw = (rawRow['card_fee_rate'] ?? '').trim();
   let cardFeeRate: number | null = null;
   let cardFeeAmount: number | null = null;
@@ -333,7 +314,9 @@ export function validatePatientsRow(params: {
     if (Number.isFinite(fee) && fee > 0) {
       cardFeeRate = fee;
       if (saleTotalAmount != null) {
-        cardFeeAmount = Number(((saleTotalAmount * fee) / 100).toFixed(2));
+        cardFeeAmount = Number(
+          ((saleTotalAmount * fee) / 100).toFixed(2),
+        );
       }
     } else {
       issues.push({
@@ -345,7 +328,7 @@ export function validatePatientsRow(params: {
     }
   }
 
-  // 8) Optional sale_date; if valid, used for invoice_issued_at + created_at.
+  // Sale date
   const saleDateResult = parseDateLike(rawRow['sale_date']);
   if (saleDateResult.invalid) {
     issues.push({
@@ -355,9 +338,6 @@ export function validatePatientsRow(params: {
       message: 'sale_date could not be parsed; skipped.',
     });
   }
-
-  // NOTE: Duplicate patient check (by national_id) is handled server-side
-  // in the import processor using patients table; not here.
 
   const hasErrors = issues.some((i) => i.severity === 'error');
   if (hasErrors) {
@@ -378,6 +358,7 @@ export function validatePatientsRow(params: {
     sale_total_amount: saleTotalAmount,
     card_fee_rate: cardFeeRate,
     card_fee_amount: cardFeeAmount,
+    // Fatura şu an CSV'den bağımsız: legacy importta invoice_issued=false bırakıyoruz.
     invoice_issued: false,
     invoice_issued_at: saleDateResult.value,
     created_at: saleDateResult.value,
