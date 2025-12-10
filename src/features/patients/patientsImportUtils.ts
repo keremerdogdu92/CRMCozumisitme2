@@ -45,10 +45,12 @@ function parseBoolLike(raw: string | undefined): boolean | null {
  * Default payment method for legacy CSV imports where payment_method
  * is not provided in the file.
  *
- * For your current legacy patients we treat all as "Nakit" unless the CSV
- * explicitly specifies another method.
+ * For historical patients where the payment channel is unknown, we
+ * map them into a dedicated 'legacy_unknown' bucket instead of
+ * forcing them into 'Nakit' or another explicit method.
  */
-const DEFAULT_IMPORT_PAYMENT_METHOD: PatientPaymentMethodFormValue = 'Nakit';
+const DEFAULT_IMPORT_PAYMENT_METHOD: PatientPaymentMethodFormValue =
+  'legacy_unknown';
 
 /**
  * Normalize a raw payment method string coming from CSV
@@ -203,8 +205,8 @@ export function mapCsvRowToNewPatientForm(params: {
   const paymentMethodRaw = row['payment_method'];
   let paymentMethod = parsePaymentMethod(paymentMethodRaw);
 
-  // If CSV does not provide a payment method, fall back to a sane default
-  // for legacy imports (e.g. all treated as "Nakit").
+  // If CSV does not provide a payment method, fall back to a dedicated
+  // legacy bucket instead of forcing "Nakit".
   if (!paymentMethod) {
     paymentMethod = DEFAULT_IMPORT_PAYMENT_METHOD;
   }
