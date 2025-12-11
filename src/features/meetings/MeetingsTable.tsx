@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { useMeetingsQuery } from './api';
 import type { MeetingRow, MeetingType } from './types';
+import { useCurrentProfile } from '../auth/useCurrentProfile';
 
 function formatDate(value: string | null): string {
   if (!value) return '-';
@@ -53,6 +54,9 @@ function FilterButton({ label, value, current, onChange }: FilterButtonProps) {
 
 export function MeetingsTable() {
   const { data, isLoading, isError, error } = useMeetingsQuery();
+  const { data: profile } = useCurrentProfile();
+  const isAdmin = profile?.role === 'admin';
+
   const [typeFilter, setTypeFilter] = useState<MeetingType | 'all'>('all');
 
   if (isLoading) {
@@ -82,12 +86,17 @@ export function MeetingsTable() {
     };
   });
 
+  // Extra güvenlik: non-admin için referans görüşmelerini client-side da gizle
+  const visibleRows: MeetingRow[] = isAdmin
+    ? rows
+    : rows.filter((m) => m.meeting_type !== 'reference');
+
   const filteredRows =
     typeFilter === 'all'
-      ? rows
-      : rows.filter((m) => m.meeting_type === typeFilter);
+      ? visibleRows
+      : visibleRows.filter((m) => m.meeting_type === typeFilter);
 
-  if (rows.length === 0) {
+  if (visibleRows.length === 0) {
     return (
       <p className="text-xs text-slate-500">
         Henüz kayıtlı görüşme yok. Yukarıdan yeni bir görüşme ekleyebilirsiniz.
@@ -100,8 +109,8 @@ export function MeetingsTable() {
       {/* Filter bar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] text-slate-500">
-          Toplam <span className="font-semibold">{rows.length}</span> görüşme
-          kaydı var.
+          Toplam <span className="font-semibold">{visibleRows.length}</span>{' '}
+          görüşme kaydı var.
         </p>
         <div className="flex flex-wrap gap-1.5">
           <FilterButton
@@ -122,12 +131,14 @@ export function MeetingsTable() {
             current={typeFilter}
             onChange={setTypeFilter}
           />
-          <FilterButton
-            label="Referanslar"
-            value="reference"
-            current={typeFilter}
-            onChange={setTypeFilter}
-          />
+          {isAdmin && (
+            <FilterButton
+              label="Referanslar"
+              value="reference"
+              current={typeFilter}
+              onChange={setTypeFilter}
+            />
+          )}
         </div>
       </div>
 
