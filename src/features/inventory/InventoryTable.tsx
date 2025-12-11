@@ -10,6 +10,7 @@ import type {
 import { useTablePreferences } from '../../components/table/useTablePreferences';
 import { TableColumnsControl } from '../../components/table/TableColumnsControl';
 import type { TableColumnDef } from '../../components/table/tableTypes';
+import { useCurrentProfile } from '../auth/useCurrentProfile';
 
 type Props = {
   items: InventoryItemRow[];
@@ -154,6 +155,8 @@ export function InventoryTable({
   onTypeFilterChange,
 }: Props) {
   const term = search.trim().toLowerCase();
+  const { data: profile } = useCurrentProfile();
+  const userId = profile?.id ?? null;
 
   const {
     state: prefsState,
@@ -164,6 +167,7 @@ export function InventoryTable({
   } = useTablePreferences<InventoryItemRow>(
     'inventory-table',
     INVENTORY_COLUMNS,
+    userId,
   );
 
   const filtered = useMemo(() => {
