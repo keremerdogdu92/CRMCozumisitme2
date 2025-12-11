@@ -14,6 +14,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { useCurrentProfile } from '../../features/auth/useCurrentProfile';
 
 interface NavItem {
   path: string;
@@ -53,10 +54,24 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-function SidebarNav({ onItemClick }: { onItemClick?: () => void }) {
+function SidebarNav({
+  onItemClick,
+  isAdmin,
+}: {
+  onItemClick?: () => void;
+  isAdmin: boolean;
+}) {
+  const itemsToRender = NAV_ITEMS.filter((item) => {
+    // Hide References for non-admin users
+    if (item.path === '/references' && !isAdmin) {
+      return false;
+    }
+    return true;
+  });
+
   return (
     <nav className="flex-1 space-y-1 p-4">
-      {NAV_ITEMS.map((item) => (
+      {itemsToRender.map((item) => (
         <NavLink
           key={item.path}
           to={item.path}
@@ -79,6 +94,9 @@ function SidebarNav({ onItemClick }: { onItemClick?: () => void }) {
 }
 
 export function Sidebar() {
+  const { data: profile } = useCurrentProfile();
+  const isAdmin = profile?.role === 'admin';
+
   return (
     <aside className="hidden w-64 flex-shrink-0 border-r border-slate-200 bg-white lg:flex">
       <div className="flex h-full flex-col">
@@ -92,7 +110,7 @@ export function Sidebar() {
           </div>
         </div>
 
-        <SidebarNav />
+        <SidebarNav isAdmin={isAdmin} />
       </div>
     </aside>
   );
@@ -104,6 +122,9 @@ type SidebarMobileProps = {
 };
 
 export function SidebarMobile({ open, onClose }: SidebarMobileProps) {
+  const { data: profile } = useCurrentProfile();
+  const isAdmin = profile?.role === 'admin';
+
   if (!open) return null;
 
   return (
@@ -136,7 +157,7 @@ export function SidebarMobile({ open, onClose }: SidebarMobileProps) {
           </button>
         </div>
 
-        <SidebarNav onItemClick={onClose} />
+        <SidebarNav onItemClick={onClose} isAdmin={isAdmin} />
       </aside>
     </div>
   );
