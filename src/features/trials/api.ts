@@ -35,7 +35,8 @@ export async function fetchTrials(): Promise<TrialRow[]> {
       first_meet_at,
       next_meet_at,
       created_at,
-      reference_id
+      reference_id,
+      note
     `,
     )
     .order('created_at', { ascending: false });
@@ -68,7 +69,8 @@ export async function fetchTrialsByReferenceId(
       first_meet_at,
       next_meet_at,
       created_at,
-      reference_id
+      reference_id,
+      note
     `,
     )
     .eq('reference_id', referenceId)
@@ -262,6 +264,7 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
         ? new Date(input.nextMeetAt).toISOString()
         : null,
       reference_id: input.referenceId ?? null,
+      note: input.note.trim() || null,
     })
     .select('id')
     .limit(1);
