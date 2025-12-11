@@ -62,8 +62,8 @@ function SidebarNav({
   isAdmin: boolean;
 }) {
   const itemsToRender = NAV_ITEMS.filter((item) => {
-    // Hide References for non-admin users
-    if (item.path === '/references' && !isAdmin) {
+    // Hide References and Profit Calculator for non-admin users
+    if (!isAdmin && (item.path === '/references' || item.path === '/profit-calculator')) {
       return false;
     }
     return true;
