@@ -206,6 +206,12 @@ export function TrialDetailDrawer({
                     : referenceLite?.full_name ?? '-'}
                 </span>
               </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-slate-500">Not</span>
+                <span className="whitespace-pre-line text-xs text-slate-900">
+                  {trial.note && trial.note.trim() ? trial.note : '-'}
+                </span>
+              </div>
             </div>
           </section>
         )}
