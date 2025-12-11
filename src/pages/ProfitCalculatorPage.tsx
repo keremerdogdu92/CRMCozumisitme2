@@ -1,11 +1,10 @@
 // src/pages/ProfitCalculatorPage.tsx
-// Summary: Page wrapper for the Profitability Calculator feature.
+// Summary: Page wrapper for the Profitability Calculator feature (admin-only).
 
-import React from "react";
-import { ProfitCalculatorForm } from "../features/profitCalculator/ProfitCalculatorForm";
-import { useCurrentProfile } from "../features/auth/useCurrentProfile";
+import { ProfitCalculatorForm } from '../features/profitCalculator/ProfitCalculatorForm';
+import { useCurrentProfile } from '../features/auth/useCurrentProfile';
 
-const ProfitCalculatorPage: React.FC = () => {
+export default function ProfitCalculatorPage() {
   const { data: profile, isLoading } = useCurrentProfile();
 
   if (isLoading) {
@@ -17,11 +16,11 @@ const ProfitCalculatorPage: React.FC = () => {
   }
 
   // Only admins can see this page
-  if (!profile || profile.role !== "admin") {
+  if (!profile || profile.role !== 'admin') {
     return (
       <div className="p-8 text-sm text-slate-500">
-        Bu sayfa sadece yöneticilere özeldir. Kar hesaplama araçları ve
-        fiyat analizleri yalnızca yönetici hesaplarına açıktır.
+        Bu sayfa sadece yöneticilere özeldir. Kar hesaplama araçları ve fiyat
+        analizleri yalnızca yönetici hesaplarına açıktır.
       </div>
     );
   }
@@ -31,6 +30,4 @@ const ProfitCalculatorPage: React.FC = () => {
       <ProfitCalculatorForm />
     </div>
   );
-};
-
-export default ProfitCalculatorPage;
+}
