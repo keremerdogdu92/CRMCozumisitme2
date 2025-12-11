@@ -108,7 +108,7 @@ const MEETING_COLUMNS: TableColumnDef<
     label: 'Memnuniyet',
     sortable: true,
     isDefaultVisible: true,
-    accessor: (m) => (m.satisfaction_10 ?? -1),
+    accessor: (m) => m.satisfaction_10 ?? -1,
   },
   {
     id: 'note',
@@ -123,6 +123,7 @@ export function MeetingsTable() {
   const { data, isLoading, isError, error } = useMeetingsQuery();
   const { data: profile } = useCurrentProfile();
   const isAdmin = profile?.role === 'admin';
+  const userId = profile?.id ?? null;
 
   const [typeFilter, setTypeFilter] = useState<MeetingType | 'all'>('all');
 
@@ -132,7 +133,7 @@ export function MeetingsTable() {
     toggleColumn,
     setSort,
     isColumnVisible,
-  } = useTablePreferences<MeetingRow>('meetings-table', MEETING_COLUMNS);
+  } = useTablePreferences<MeetingRow>('meetings-table', MEETING_COLUMNS, userId);
 
   if (isLoading) {
     return <p className="text-xs text-slate-500">Görüşmeler yükleniyor...</p>;
