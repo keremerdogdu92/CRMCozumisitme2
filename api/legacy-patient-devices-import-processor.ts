@@ -487,10 +487,28 @@ async function findDeviceIdBySerial(
   return rows[0].id;
 }
 
+/**
+ * Fallback serial generator for legacy rows.
+ * Amaç: devices.serial NOT NULL (+ muhtemel UNIQUE) kısıtını bozmadan,
+ * serial_no boş olan satırlara stabil ama benzersiz bir "legacy" seri üretmek.
+ *
+ * Pattern:
+ *  - Tek cihaz  : LEGACY-{TC}-{rowIndex}
+ *  - Çift kulak : LEGACY-{TC}-{rowIndex}-A / -B
+ */
+function buildFallbackSerial(params: {
+  payload: LegacyDeviceImportNormalizedPayload;
+  rowIndex: number;
+  suffix?: string;
+}): string {
+  const base = `LEGACY-${params.payload.patient_national_id}-${params.rowIndex}`;
+  return params.suffix ? `${base}-${params.suffix}` : base;
+}
+
 async function insertDeviceRowFromLegacy(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
   payload: LegacyDeviceImportNormalizedPayload,
-  serialOverride: string | null,
+  serialOverride: string,
 ): Promise<string> {
   const { data, error } = await supabase
     .from('devices')
@@ -499,7 +517,7 @@ async function insertDeviceRowFromLegacy(
       brand: payload.device_brand,
       model: payload.device_model,
       barcode: null,
-      serial: serialOverride,
+      serial: serialOverride, // NOT NULL / UNIQUE constraint assumed
       status: 'sold', // legacy import are already sold/assigned devices
       hold_patient_id: null,
     })
@@ -518,7 +536,7 @@ async function insertDeviceRowFromLegacy(
 async function upsertDeviceFromLegacyRow(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
   payload: LegacyDeviceImportNormalizedPayload,
-  options: { reuseBySerial: boolean; serialOverride: string | null },
+  options: { reuseBySerial: boolean; serialOverride: string },
 ): Promise<string> {
   const serial = options.serialOverride;
 
@@ -811,33 +829,68 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
         const deviceIds: string[] = [];
 
+        // Baz serial (CSV'den gelen, doluysa onu kullanıyoruz)
+        const csvSerial = normalized.serial_no?.trim() || null;
+
         if (normalized.ear_side === 'Çift') {
           // Pair case: two devices and two patient_devices.
-          // First device: reuse by serial if available.
-          const firstDeviceId = await upsertDeviceFromLegacyRow(supabase, normalized, {
-            reuseBySerial: true,
-            serialOverride: normalized.serial_no,
-          });
+
+          // 1. cihaz: CSV'deki serial varsa onu kullan, yoksa fallback -A
+          const serialFirst =
+            csvSerial ??
+            buildFallbackSerial({
+              payload: normalized,
+              rowIndex: row.row_index,
+              suffix: 'A',
+            });
+
+          // 2. cihaz: her zaman yeni serial (çakışmayı önlemek için suffix -B)
+          const serialSecond =
+            csvSerial != null
+              ? `${csvSerial}-PAIR2`
+              : buildFallbackSerial({
+                  payload: normalized,
+                  rowIndex: row.row_index,
+                  suffix: 'B',
+                });
+
+          const firstDeviceId = await upsertDeviceFromLegacyRow(
+            supabase,
+            normalized,
+            {
+              reuseBySerial: true,
+              serialOverride: serialFirst,
+            },
+          );
           deviceIds.push(firstDeviceId);
 
-          // Second device: always create a new one.
-          // To avoid unique(serial) conflicts, second device uses NULL serial
-          // when the legacy row only had a single serial.
           const secondDeviceId = await upsertDeviceFromLegacyRow(
             supabase,
             normalized,
             {
               reuseBySerial: false,
-              serialOverride: normalized.serial_no ? null : null,
+              serialOverride: serialSecond,
             },
           );
           deviceIds.push(secondDeviceId);
         } else {
-          // Single device case (R, L, Tek)
-          const deviceId = await upsertDeviceFromLegacyRow(supabase, normalized, {
-            reuseBySerial: true,
-            serialOverride: normalized.serial_no,
-          });
+          // Single device case (R, L, Tek).
+
+          const serialSingle =
+            csvSerial ??
+            buildFallbackSerial({
+              payload: normalized,
+              rowIndex: row.row_index,
+            });
+
+          const deviceId = await upsertDeviceFromLegacyRow(
+            supabase,
+            normalized,
+            {
+              reuseBySerial: true,
+              serialOverride: serialSingle,
+            },
+          );
           deviceIds.push(deviceId);
         }
 
@@ -875,12 +928,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         );
         importErrorRowsCount += 1;
 
+        const errMsg =
+          (err as Error)?.message || 'Unknown error during legacy import.';
+
         try {
           await updateLegacyStagingRow(supabase, row.id, {
             status: 'error',
             error_message:
               (row.error_message ? row.error_message + '; ' : '') +
-              'Import failed for this row. See server logs for details.',
+              `Import failed for this row: ${errMsg}`,
             normalized_payload: null,
           });
         } catch (updateErr) {
