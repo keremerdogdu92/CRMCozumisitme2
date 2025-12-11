@@ -10,6 +10,7 @@ import type {
   NewMeetingForm,
   MeetingType,
 } from './types';
+import { useCurrentProfile } from '../auth/useCurrentProfile';
 
 export const MEETINGS_QUERY_KEY = ['meetings'] as const;
 
@@ -25,8 +26,12 @@ export const MEETING_ACCESSORIES_BY_MEETING_QUERY_KEY = (
   meetingId: string,
 ) => ['meeting-accessories', meetingId] as const;
 
-export async function fetchMeetings(): Promise<MeetingRow[]> {
-  const { data, error } = await supabaseClient
+export async function fetchMeetings(
+  opts?: { includeReference: boolean },
+): Promise<MeetingRow[]> {
+  const includeReference = opts?.includeReference ?? false;
+
+  let query = supabaseClient
     .from('meetings')
     .select(
       `
@@ -41,8 +46,16 @@ export async function fetchMeetings(): Promise<MeetingRow[]> {
       satisfaction_10,
       created_at
     `,
-    )
-    .order('created_at', { ascending: false });
+    );
+
+  // Non-admin kullanıcılar için referans görüşmelerini hiç çekme
+  if (!includeReference) {
+    query = query.neq('meeting_type', 'reference');
+  }
+
+  query = query.order('created_at', { ascending: false });
+
+  const { data, error } = await query;
 
   if (error) {
     console.error('Supabase meetings fetch error:', error);
@@ -349,7 +362,7 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
       'Meeting insert did not return an id (MEET_STEP_INSERT_NO_ID)',
       insertedMeetings,
     );
-    throw new Error(
+  throw new Error(
       'MEET_STEP_INSERT_NO_ID: Meeting insert did not return an id',
     );
   }
@@ -409,9 +422,16 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
  */
 
 export function useMeetingsQuery() {
+  const { data: profile, isLoading: profileLoading } = useCurrentProfile();
+  const isAdmin = profile?.role === 'admin';
+
   return useQuery({
-    queryKey: MEETINGS_QUERY_KEY,
-    queryFn: fetchMeetings,
+    queryKey: [
+      ...MEETINGS_QUERY_KEY,
+      isAdmin ? 'with-reference' : 'no-reference',
+    ],
+    queryFn: () => fetchMeetings({ includeReference: !!isAdmin }),
+    enabled: !profileLoading,
   });
 }
 
