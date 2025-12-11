@@ -1,5 +1,5 @@
 // src/components/table/TableColumnsControl.tsx
-// Small button that opens a checkbox list to toggle column visibility.
+// Small button + dropdown with checkboxes to toggle column visibility.
 
 import { useState } from 'react';
 import type { TableColumnDef } from './tableTypes';
@@ -28,7 +28,7 @@ export function TableColumnsControl<TRow>({
       </button>
 
       {open && (
-        <div className="absolute right-0 z-20 mt-1 w-48 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
+        <div className="absolute right-0 z-20 mt-1 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
           <div className="max-h-64 space-y-1 overflow-auto">
             {columns.map((col) => (
               <label
