@@ -9,6 +9,10 @@
 // - Zorunlu alanlar: Ad Soyad, T.C. Kimlik No, Telefon, Ödeme Şekli, Toplam Satış Tutarı.
 // - Telefon E.164 uyumlu normalize edilir (hook içinde).
 // - T.C. Kimlik No sadece rakamlardan oluşur ve 11 hanelidir (hook içinde).
+//
+// v2.6:
+// - SGK expected reimbursement display is multiplied by deviceMultiplier (1|2)
+//   based on device drafts (bilateral or 2 devices).
 
 import type { NewPatientForm } from '../../types';
 import { InlineCreateCard } from '../../../../components/layout/InlineCreateCard';
@@ -62,6 +66,9 @@ export function NewPatientFormCard({
     hasSenetPayment,
     handleSubmit,
     combinedError,
+
+    // v2.6
+    deviceMultiplier,
   } = useNewPatientForm({
     onSubmit,
     externalErrorMessage: errorMessage,
@@ -227,6 +234,10 @@ export function NewPatientFormCard({
                 }
                 sgkExpectedMonth={formState.sgkExpectedMonth ?? ''}
                 sgkPrescriptionNo={formState.sgkPrescriptionNo ?? ''}
+
+                // v2.6: show x2 when bilateral / 2 devices
+                deviceMultiplier={deviceMultiplier}
+
                 onChangeSgkFlag={(value: boolean) =>
                   setFormState((s) => ({
                     ...s,
