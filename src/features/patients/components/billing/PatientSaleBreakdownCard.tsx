@@ -1,5 +1,6 @@
 // src/features/patients/PatientSaleBreakdownCard.tsx
 // Reusable card for per-patient sale breakdown (card / cash / company mix).
+// Supports both editable (form) and read-only summary variants.
 
 import type {
   UpsertPatientSaleBreakdownItem,
@@ -20,6 +21,12 @@ export type PatientSaleBreakdownCardProps = {
   isLoading: boolean;
   isSaving: boolean;
   errorMessage: string | null;
+  /**
+   * When true, the component renders a compact, neutral summary
+   * instead of the blue editing UI. Used in patient detail drawer
+   * when edit mode is closed.
+   */
+  readOnly?: boolean;
 };
 
 const PAYMENT_METHOD_LABELS: { value: PatientPaymentMethod; label: string }[] =
@@ -31,6 +38,12 @@ const PAYMENT_METHOD_LABELS: { value: PatientPaymentMethod; label: string }[] =
     { value: 'Senet', label: 'Senet' },
   ];
 
+function getMethodLabel(method: PatientPaymentMethod): string {
+  return (
+    PAYMENT_METHOD_LABELS.find((m) => m.value === method)?.label ?? method
+  );
+}
+
 export function PatientSaleBreakdownCard({
   items,
   onAddRow,
@@ -41,7 +54,118 @@ export function PatientSaleBreakdownCard({
   isLoading,
   isSaving,
   errorMessage,
+  readOnly,
 }: PatientSaleBreakdownCardProps) {
+  const isReadOnly = !!readOnly;
+
+  if (isLoading) {
+    return (
+      <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+        <p className="text-[11px] text-slate-600">
+          Ödeme dağılımı yükleniyor...
+        </p>
+      </div>
+    );
+  }
+
+  // READ-ONLY VARIANT ---------------------------------------------------------
+  if (isReadOnly) {
+    if (items.length === 0) {
+      // Detay tabında, hiç satır yoksa kart zaten gösterilmiyor;
+      // yine de koruma amaçlı.
+      return null;
+    }
+
+    // Single payment: show as a very compact box in patient theme style.
+    if (items.length === 1) {
+      const item = items[0];
+      return (
+        <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col">
+              <span className="font-medium text-slate-800">
+                Ödeme yöntemi
+              </span>
+              <span className="text-slate-700">
+                {getMethodLabel(item.method)}
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="block text-[11px] text-slate-500">
+                Tutar
+              </span>
+              <span className="text-sm font-semibold text-slate-900">
+                {formatAmount(
+                  Number(
+                    (item.amount ?? '0')
+                      .replace(/\./g, '')
+                      .replace(',', '.'),
+                  ),
+                )}
+              </span>
+            </div>
+          </div>
+          {item.note && (
+            <p className="mt-1 text-[11px] text-slate-600">
+              Not: {item.note}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    // Multiple payments: neutral list box, still compact.
+    return (
+      <div className="space-y-2 rounded-md border border-slate-200 bg-white p-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-xs font-medium text-slate-800">
+            Ödeme dağılımı
+          </p>
+          <p className="text-[11px] text-slate-600">
+            Toplam:{' '}
+            <span className="font-semibold">
+              {formatAmount(totalAmount)}
+            </span>
+          </p>
+        </div>
+
+        <div className="divide-y divide-slate-100 text-[11px]">
+          {items.map((item, index) => (
+            <div
+              key={item.id ?? index}
+              className="flex items-start justify-between gap-2 py-1.5"
+            >
+              <div className="flex-1">
+                <div className="flex flex-wrap items-baseline gap-1">
+                  <span className="font-medium text-slate-800">
+                    {getMethodLabel(item.method)}
+                  </span>
+                  {item.note && (
+                    <span className="text-[11px] text-slate-500">
+                      — {item.note}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <span className="text-[11px] font-semibold text-slate-900">
+                  {formatAmount(
+                    Number(
+                      (item.amount ?? '0')
+                        .replace(/\./g, '')
+                        .replace(',', '.'),
+                    ),
+                  )}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // EDITABLE VARIANT ----------------------------------------------------------
   return (
     <div className="space-y-2 rounded-md border border-sky-200 bg-sky-50 p-3">
       <div className="flex items-start justify-between gap-2">
@@ -64,20 +188,14 @@ export function PatientSaleBreakdownCard({
         </button>
       </div>
 
-      {isLoading && (
-        <p className="text-[11px] text-sky-900">
-          Ödeme dağılımı yükleniyor...
-        </p>
-      )}
-
-      {!isLoading && items.length === 0 && (
+      {items.length === 0 && (
         <p className="text-[11px] text-sky-900">
           Henüz ödeme dağılımı satırı yok. &quot;Satır ekle&quot; ile kart /
           nakit / firma katkısı gibi kalemleri girebilirsin.
         </p>
       )}
 
-      {!isLoading && items.length > 0 && (
+      {items.length > 0 && (
         <div className="space-y-1">
           {items.map((item, index) => (
             <div
