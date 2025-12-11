@@ -4,6 +4,7 @@
 
 import { useMemo } from 'react';
 import type { ReferenceRow } from './types';
+import { useCurrentProfile } from '../auth/useCurrentProfile';
 import { useTablePreferences } from '../../components/table/useTablePreferences';
 import { TableColumnsControl } from '../../components/table/TableColumnsControl';
 import type { TableColumnDef } from '../../components/table/tableTypes';
@@ -226,14 +227,8 @@ export function ReferencesTable({
   items,
   onSelectRow,
 }: ReferencesTableProps) {
-  if (items.length === 0) {
-    return (
-      <div className="text-sm text-slate-500">
-        Filtreye uyan referans bulunamadı. Aramayı temizleyebilir veya
-        yeni referans ekleyebilirsiniz.
-      </div>
-    );
-  }
+  const { data: profile } = useCurrentProfile();
+  const userId = profile?.id ?? null;
 
   const {
     state: prefsState,
@@ -244,6 +239,7 @@ export function ReferencesTable({
   } = useTablePreferences<ReferenceRow>(
     'references-table',
     REFERENCE_COLUMNS,
+    userId,
   );
 
   const sortedItems: ReferenceRow[] = useMemo(() => {
@@ -302,6 +298,15 @@ export function ReferencesTable({
 
     return result;
   }, [items, prefsState.sortBy, prefsState.sortDir]);
+
+  if (items.length === 0) {
+    return (
+      <div className="text-sm text-slate-500">
+        Filtreye uyan referans bulunamadı. Aramayı temizleyebilir veya
+        yeni referans ekleyebilirsiniz.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
