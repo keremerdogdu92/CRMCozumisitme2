@@ -7,6 +7,9 @@
 // - Only the top "SGK hastası" row is always visible.
 // - When sgkFlag === true, the full SGK flow is shown.
 // - When sgkFlag === false, all inner fields are hidden and reset.
+//
+// v2.6:
+// - Supports deviceMultiplier (1 or 2) to show SGK reimbursement for bilateral / 2 devices.
 
 import { SGK_PROFILES } from '../../sgkProfiles';
 
@@ -18,6 +21,16 @@ type NewPatientSgkSectionProps = {
   sgkExpectedReimbursement: string;
   sgkExpectedMonth: string;
   sgkPrescriptionNo: string;
+
+  /**
+   * Multiplier for SGK reimbursement display:
+   * - 1: single device
+   * - 2: bilateral / two devices
+   *
+   * Optional to keep backward compatibility with older callers.
+   */
+  deviceMultiplier?: 1 | 2;
+
   onChangeSgkFlag: (value: boolean) => void;
   onChangeSgkPrescriptionReceived: (value: boolean) => void;
   onChangeSgkRecordedToSystem: (value: boolean) => void;
@@ -33,6 +46,33 @@ type SgkProfile = {
   netToFirm: number;
 };
 
+// Money helpers (TR format support).
+function parseMoneyLikeToNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replace(/\./g, '').replace(',', '.');
+  const num = Number(normalized);
+  if (!Number.isFinite(num)) return null;
+  return num;
+}
+
+function formatMoneyLikeTR(value: number): string {
+  // Keep it compatible with your existing UI style: comma decimal, no currency symbol.
+  // Use 2 decimals only when needed.
+  const fixed = Number.isInteger(value) ? value.toString() : value.toFixed(2);
+  return fixed.replace('.', ',');
+}
+
+function multiplyMoneyLikeString(
+  amount: string,
+  multiplier: number,
+): string {
+  const n = parseMoneyLikeToNumber(amount);
+  if (n == null) return amount; // fallback: show raw
+  const out = Number((n * multiplier).toFixed(2));
+  return formatMoneyLikeTR(out);
+}
+
 export function NewPatientSgkSection({
   sgkFlag,
   sgkPrescriptionReceived,
@@ -41,6 +81,7 @@ export function NewPatientSgkSection({
   sgkExpectedReimbursement,
   sgkExpectedMonth,
   sgkPrescriptionNo,
+  deviceMultiplier = 1,
   onChangeSgkFlag,
   onChangeSgkPrescriptionReceived,
   onChangeSgkRecordedToSystem,
@@ -70,7 +111,7 @@ export function NewPatientSgkSection({
     );
     if (profile) {
       // 3rd column: net amount that SGK is expected to pay to the firm.
-      // Keep it as a TL string; allow comma in UI.
+      // Store base single-device value in state; display may be multiplied.
       const asString = profile.netToFirm.toString().replace('.', ',');
       onChangeSgkExpectedReimbursement(asString);
 
@@ -85,6 +126,11 @@ export function NewPatientSgkSection({
       onChangeSgkExpectedMonth('');
     }
   };
+
+  const displayedReimbursement =
+    deviceMultiplier === 2
+      ? multiplyMoneyLikeString(sgkExpectedReimbursement, 2)
+      : sgkExpectedReimbursement;
 
   return (
     <div className="flex h-full flex-col gap-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
@@ -178,10 +224,15 @@ export function NewPatientSgkSection({
                 type="text"
                 disabled={!sgkFlag}
                 readOnly
-                value={sgkExpectedReimbursement}
+                value={displayedReimbursement}
                 className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
                 placeholder="Profil seçince otomatik hesaplanır"
               />
+              {deviceMultiplier === 2 && (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Çift/2 cihaz seçildiği için SGK tutarı x2 gösteriliyor.
+                </p>
+              )}
             </label>
 
             <label className="flex flex-col gap-1">
