@@ -81,6 +81,38 @@ declare const process: {
   };
 };
 
+// ------------------------
+// Structured error tagging
+// ------------------------
+
+type ImportErrorCategory =
+  | 'validation'
+  | 'duplicate'
+  | 'patient_lookup'
+  | 'inventory_upsert'
+  | 'staging_update'
+  | 'job_update'
+  | 'unknown';
+
+type ImportErrorStage = 'legacy_devices_commit';
+
+type ImportErrorTag = {
+  category: ImportErrorCategory;
+  stage: ImportErrorStage;
+  code: string; // e.g. "LOAD_JOB_FAILED", "SERIAL_ALREADY_SOLD"
+};
+
+function formatImportError(tag: ImportErrorTag, err: unknown): string {
+  const base = `[${tag.category.toUpperCase()}:${tag.stage}:${tag.code}]`;
+  const msg =
+    err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+      ? err
+      : JSON.stringify(err);
+  return `${base} ${msg}`;
+}
+
 function createAdminSupabaseClient() {
   const supabaseUrl =
     process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
@@ -90,12 +122,26 @@ function createAdminSupabaseClient() {
 
   if (!supabaseUrl) {
     throw new Error(
-      'Missing SUPABASE_URL (or VITE_SUPABASE_URL) environment variable.',
+      formatImportError(
+        {
+          category: 'staging_update',
+          stage: 'legacy_devices_commit',
+          code: 'MISSING_SUPABASE_URL',
+        },
+        'Missing SUPABASE_URL (or VITE_SUPABASE_URL) environment variable.',
+      ),
     );
   }
   if (!serviceRoleKey) {
     throw new Error(
-      'Missing SUPABASE_SERVICE_ROLE (or SUPABASE_SERVICE_ROLE_KEY) environment variable.',
+      formatImportError(
+        {
+          category: 'staging_update',
+          stage: 'legacy_devices_commit',
+          code: 'MISSING_SERVICE_ROLE',
+        },
+        'Missing SUPABASE_SERVICE_ROLE (or SUPABASE_SERVICE_ROLE_KEY) environment variable.',
+      ),
     );
   }
 
@@ -119,10 +165,28 @@ async function loadJob(
     .maybeSingle();
 
   if (error) {
-    throw new Error('Failed to load import job: ' + error.message);
+    throw new Error(
+      formatImportError(
+        {
+          category: 'job_update',
+          stage: 'legacy_devices_commit',
+          code: 'LOAD_JOB_FAILED',
+        },
+        error,
+      ),
+    );
   }
   if (!data) {
-    throw new Error('Import job not found for id=' + jobId);
+    throw new Error(
+      formatImportError(
+        {
+          category: 'job_update',
+          stage: 'legacy_devices_commit',
+          code: 'JOB_NOT_FOUND',
+        },
+        `Import job not found for id=${jobId}`,
+      ),
+    );
   }
 
   return data as ImportJobRow;
@@ -141,7 +205,14 @@ async function loadValidatedRows(
 
   if (error) {
     throw new Error(
-      'Failed to load validated legacy device rows: ' + error.message,
+      formatImportError(
+        {
+          category: 'staging_update',
+          stage: 'legacy_devices_commit',
+          code: 'LOAD_VALIDATED_ROWS_FAILED',
+        },
+        error,
+      ),
     );
   }
 
@@ -161,7 +232,14 @@ async function findPatientByNationalId(
 
   if (error) {
     throw new Error(
-      `Failed to find patient for national_id=${nationalId}: ${error.message}`,
+      formatImportError(
+        {
+          category: 'patient_lookup',
+          stage: 'legacy_devices_commit',
+          code: 'PATIENT_LOOKUP_FAILED',
+        },
+        `Failed to find patient for national_id=${nationalId}: ${error.message}`,
+      ),
     );
   }
 
@@ -282,7 +360,14 @@ async function upsertInventoryItemForLegacyDevice(params: {
 
       if (error) {
         throw new Error(
-          `Failed to insert inventory_item for legacy device (${side}): ${error.message}`,
+          formatImportError(
+            {
+              category: 'inventory_upsert',
+              stage: 'legacy_devices_commit',
+              code: side === 'left' ? 'INSERT_LEFT_FAILED' : 'INSERT_RIGHT_FAILED',
+            },
+            `Failed to insert inventory_item for legacy device (${side}): ${error.message}`,
+          ),
         );
       }
     };
@@ -306,7 +391,14 @@ async function upsertInventoryItemForLegacyDevice(params: {
 
     if (existingError) {
       throw new Error(
-        `Failed to lookup inventory item by serial_no=${serial}: ${existingError.message}`,
+        formatImportError(
+          {
+            category: 'inventory_upsert',
+            stage: 'legacy_devices_commit',
+            code: 'LOOKUP_BY_SERIAL_FAILED',
+          },
+          `Failed to lookup inventory item by serial_no=${serial}: ${existingError.message}`,
+        ),
       );
     }
 
@@ -317,7 +409,14 @@ async function upsertInventoryItemForLegacyDevice(params: {
         existing.sold_patient_id !== patientId
       ) {
         throw new Error(
-          `Inventory item with serial=${serial} is already sold to another patient.`,
+          formatImportError(
+            {
+              category: 'inventory_upsert',
+              stage: 'legacy_devices_commit',
+              code: 'SERIAL_ALREADY_SOLD_DIFFERENT_PATIENT',
+            },
+            `Inventory item with serial=${serial} is already sold to another patient.`,
+          ),
         );
       }
 
@@ -336,8 +435,15 @@ async function upsertInventoryItemForLegacyDevice(params: {
 
       if (updateError) {
         throw new Error(
-          'Failed to update existing inventory_item for legacy device: ' +
-            updateError.message,
+          formatImportError(
+            {
+              category: 'inventory_upsert',
+              stage: 'legacy_devices_commit',
+              code: 'UPDATE_EXISTING_FAILED',
+            },
+            'Failed to update existing inventory_item for legacy device: ' +
+              updateError.message,
+          ),
         );
       }
 
@@ -366,8 +472,15 @@ async function upsertInventoryItemForLegacyDevice(params: {
 
   if (insertError) {
     throw new Error(
-      'Failed to insert inventory_item for legacy device: ' +
-        insertError.message,
+      formatImportError(
+        {
+          category: 'inventory_upsert',
+          stage: 'legacy_devices_commit',
+          code: 'INSERT_SINGLE_FAILED',
+        },
+        'Failed to insert inventory_item for legacy device: ' +
+          insertError.message,
+      ),
     );
   }
 }
@@ -386,8 +499,15 @@ async function markRowImported(
 
   if (error) {
     throw new Error(
-      'Failed to update legacy device staging row to imported: ' +
-        error.message,
+      formatImportError(
+        {
+          category: 'staging_update',
+          stage: 'legacy_devices_commit',
+          code: 'UPDATE_STAGING_ROW_FAILED',
+        },
+        'Failed to update legacy device staging row to imported: ' +
+          error.message,
+      ),
     );
   }
 }
@@ -410,16 +530,36 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
-    const supabase = createAdminSupabaseClient();
+    let supabase: ReturnType<typeof createAdminSupabaseClient>;
+    try {
+      supabase = createAdminSupabaseClient();
+    } catch (err) {
+      console.error('Supabase admin client creation failed:', err);
+      res.status(500).json({
+        error: formatImportError(
+          {
+            category: 'staging_update',
+            stage: 'legacy_devices_commit',
+            code: 'ADMIN_CLIENT_INIT_FAILED',
+          },
+          err as Error,
+        ),
+      });
+      return;
+    }
 
     // 1) Job kontrolü
     const job = await loadJob(supabase, jobId);
     if (job.target_entity !== 'legacy_patient_devices') {
       res.status(400).json({
-        error:
-          'Import job target_entity is not legacy_patient_devices (got ' +
-          job.target_entity +
-          ').',
+        error: formatImportError(
+          {
+            category: 'validation',
+            stage: 'legacy_devices_commit',
+            code: 'WRONG_TARGET_ENTITY',
+          },
+          `Import job target_entity is not legacy_patient_devices (got ${job.target_entity}).`,
+        ),
       });
       return;
     }
@@ -451,7 +591,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         if (!payload) {
           errors.push({
             row_index: row.row_index,
-            message: 'Missing normalized_payload.',
+            message: formatImportError(
+              {
+                category: 'validation',
+                stage: 'legacy_devices_commit',
+                code: 'MISSING_NORMALIZED_PAYLOAD',
+              },
+              'Missing normalized_payload.',
+            ),
           });
           continue;
         }
@@ -465,8 +612,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         if (!patient) {
           errors.push({
             row_index: row.row_index,
-            message:
+            message: formatImportError(
+              {
+                category: 'patient_lookup',
+                stage: 'legacy_devices_commit',
+                code: 'PATIENT_NOT_FOUND_OR_MULTIPLE',
+              },
               'Patient not found or multiple patients for this national_id.',
+            ),
           });
           continue;
         }
@@ -495,7 +648,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         );
         errors.push({
           row_index: row.row_index,
-          message: (err as Error).message,
+          message: formatImportError(
+            {
+              category: 'inventory_upsert',
+              stage: 'legacy_devices_commit',
+              code: 'ROW_IMPORT_FAILED',
+            },
+            err as Error,
+          ),
         });
         // Diğer satırlara devam ediyoruz.
       }
@@ -517,7 +677,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     if (jobUpdateError) {
       throw new Error(
-        'Failed to update import_jobs summary: ' + jobUpdateError.message,
+        formatImportError(
+          {
+            category: 'job_update',
+            stage: 'legacy_devices_commit',
+            code: 'JOB_SUMMARY_UPDATE_FAILED',
+          },
+          'Failed to update import_jobs summary: ' + jobUpdateError.message,
+        ),
       );
     }
 
@@ -531,6 +698,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       'Unhandled error in legacy-patient-devices-import-commit:',
       err,
     );
-    res.status(500).json({ error: 'Unhandled server error.' });
+    // Burada da gerçek sebebi döndürüyoruz ki UI / log tarafında daha anlamlı olsun.
+    res.status(500).json({
+      error:
+        err instanceof Error
+          ? err.message
+          : 'Unhandled server error in legacy-patient-devices-import-commit.',
+    });
   }
 }
