@@ -1,6 +1,12 @@
 // src/features/patients/hooks/useNewPatientForm.ts
 // Encapsulated state, validation and breakdown logic for the inline "Yeni Hasta" form.
 // Keeps NewPatientFormCard lean and reusable.
+//
+// v2.6:
+// - Adds derived deviceMultiplier (1|2) based on device drafts:
+//   * if any row has side='bilateral' => 2
+//   * OR if 2+ meaningful device rows exist => 2
+// - Multiplies sgkExpectedReimbursement on submit when multiplier=2.
 
 import { useState, useMemo, FormEvent } from 'react';
 import type {
@@ -103,6 +109,30 @@ export function useNewPatientForm({
     () => paymentRows.some((row) => row.paymentMethod === 'Senet'),
     [paymentRows],
   );
+
+  /**
+   * Device multiplier for SGK:
+   * - 2 if any row is marked bilateral
+   * - OR if 2+ meaningful device rows exist (not just the empty default row)
+   */
+  const deviceMultiplier = useMemo<1 | 2>(() => {
+    const rows = deviceDrafts ?? [];
+
+    const hasBilateral = rows.some((r) => r.side === 'bilateral');
+    if (hasBilateral) return 2;
+
+    const meaningfulCount = rows.filter((r) => {
+      const hasSelection =
+        !!r.inventoryItemId ||
+        !!r.brand?.trim() ||
+        !!r.model?.trim() ||
+        !!r.listPrice?.trim() ||
+        !!r.salePrice?.trim();
+      return hasSelection;
+    }).length;
+
+    return meaningfulCount >= 2 ? 2 : 1;
+  }, [deviceDrafts]);
 
   const resetFormState = () => {
     setFormState({
@@ -254,6 +284,12 @@ export function useNewPatientForm({
             note: '',
           }));
 
+      // SGK reimbursement: base is stored as single-device value.
+      // Multiply on submit if bilateral / 2 devices.
+      const sgkExpectedReimbursementForSubmit = formState.sgkFlag
+        ? multiplyMoneyLikeString(formState.sgkExpectedReimbursement ?? '', deviceMultiplier)
+        : '';
+
       onSubmit({
         fullName,
         phone: normalizedPhone,
@@ -265,9 +301,7 @@ export function useNewPatientForm({
           ? formState.sgkRecordedToSystem
           : false,
         sgkProfileId: formState.sgkFlag ? formState.sgkProfileId : '',
-        sgkExpectedReimbursement: formState.sgkFlag
-          ? formState.sgkExpectedReimbursement
-          : '',
+        sgkExpectedReimbursement: sgkExpectedReimbursementForSubmit,
         sgkExpectedMonth: formState.sgkFlag
           ? formState.sgkExpectedMonth
           : '',
@@ -327,6 +361,9 @@ export function useNewPatientForm({
     handleSubmit,
     combinedError,
     resetFormState,
+
+    // Expose for UI wiring (NewPatientFormCard should pass into NewPatientSgkSection)
+    deviceMultiplier,
   };
 }
 
@@ -405,6 +442,18 @@ function parseMoneyLikeToNumber(value: string): number | null {
   const num = Number(normalized);
   if (!Number.isFinite(num)) return null;
   return num;
+}
+
+function formatMoneyLikeTR(value: number): string {
+  const fixed = Number.isInteger(value) ? value.toString() : value.toFixed(2);
+  return fixed.replace('.', ',');
+}
+
+function multiplyMoneyLikeString(amount: string, multiplier: number): string {
+  const n = parseMoneyLikeToNumber(amount);
+  if (n == null) return amount;
+  const out = Number((n * multiplier).toFixed(2));
+  return formatMoneyLikeTR(out);
 }
 
 export function formatCurrencyTry(amount: number | null): string {
