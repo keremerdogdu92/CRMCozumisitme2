@@ -12,7 +12,7 @@
 --         installment plans (staff + admin).
 --       * `service_role` bypasses org checks and has full access.
 --   - Multi-tenant isolation:
---       * org_id is enforced via JWT claim: auth.jwt()->>'org_id'.
+--       * org_id is enforced via profiles.org_id (auth.uid() → profiles.org_id).
 
 CREATE TABLE public.patient_installment_plans (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -59,11 +59,14 @@ FOR SELECT
 TO authenticated
 USING (
   auth.role() = 'service_role'::text
-  OR (patient_installment_plans.org_id)::text = (auth.jwt() ->> 'org_id')::text
+  OR org_id IN (
+    SELECT p.org_id
+    FROM public.profiles AS p
+    WHERE p.id = auth.uid()
+  )
 );
 
 -- 2) Org-level WRITE (INSERT/UPDATE/DELETE) for all authenticated users
---    Not: Birden çok komut yazmıyoruz, tek komut: FOR ALL
 CREATE POLICY patient_installment_plans_org_write
 ON public.patient_installment_plans
 AS PERMISSIVE
@@ -71,9 +74,17 @@ FOR ALL
 TO authenticated
 USING (
   auth.role() = 'service_role'::text
-  OR (patient_installment_plans.org_id)::text = (auth.jwt() ->> 'org_id')::text
+  OR org_id IN (
+    SELECT p.org_id
+    FROM public.profiles AS p
+    WHERE p.id = auth.uid()
+  )
 )
 WITH CHECK (
   auth.role() = 'service_role'::text
-  OR (patient_installment_plans.org_id)::text = (auth.jwt() ->> 'org_id')::text
+  OR org_id IN (
+    SELECT p.org_id
+    FROM public.profiles AS p
+    WHERE p.id = auth.uid()
+  )
 );
