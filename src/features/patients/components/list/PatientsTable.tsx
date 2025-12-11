@@ -8,6 +8,7 @@ import { ResponsiveTableShell } from '../../../../components/layout/ResponsiveTa
 import { useTablePreferences } from '../../../../components/table/useTablePreferences';
 import { TableColumnsControl } from '../../../../components/table/TableColumnsControl';
 import type { TableColumnDef } from '../../../../components/table/tableTypes';
+import { useCurrentProfile } from '../../../auth/useCurrentProfile';
 
 type PatientsTableProps = {
   patients: PatientRow[];
@@ -33,85 +34,86 @@ type PatientTableColumnId =
   | 'invoice'
   | 'actions';
 
-const PATIENT_COLUMNS: TableColumnDef<PatientRow & { _colId?: PatientTableColumnId }>[] =
-  [
-    {
-      id: 'created_at',
-      label: 'Alış (Kayıt)',
-      sortable: true,
-      isDefaultVisible: true,
-      accessor: (p) => p.created_at ?? null,
-    },
-    {
-      id: 'full_name',
-      label: 'Ad Soyad',
-      sortable: true,
-      isDefaultVisible: true,
-      accessor: (p) => p.full_name ?? '',
-    },
-    {
-      id: 'phone',
-      label: 'Telefon',
-      sortable: false,
-      isDefaultVisible: true,
-      accessor: (p) => p.phone ?? '',
-    },
-    {
-      id: 'device',
-      label: 'Cihaz Modeli',
-      sortable: false,
-      isDefaultVisible: true,
-      accessor: (p) => getDeviceLabel(p),
-    },
-    {
-      id: 'ear',
-      label: 'Kulak',
-      sortable: false,
-      isDefaultVisible: true,
-      accessor: (p) => getDeviceEarLabel(p),
-    },
-    {
-      id: 'sale_total_amount',
-      label: 'Toplam Satış',
-      sortable: true,
-      isDefaultVisible: true,
-      accessor: (p) => p.sale_total_amount ?? 0,
-    },
-    {
-      id: 'satisfaction_10',
-      label: 'Memnuniyet (1–10)',
-      sortable: true,
-      isDefaultVisible: true,
-      accessor: (p) => p.satisfaction_10 ?? -1,
-    },
-    {
-      id: 'last_visit_at',
-      label: 'Son Görüşme',
-      sortable: true,
-      isDefaultVisible: true,
-      accessor: (p) => p.last_visit_at ?? null,
-    },
-    {
-      id: 'sgk',
-      label: 'SGK',
-      sortable: true,
-      isDefaultVisible: true,
-      accessor: (p) => (p.sgk_flag ? 1 : 0),
-    },
-    {
-      id: 'invoice',
-      label: 'Fatura',
-      sortable: true,
-      isDefaultVisible: true,
-      accessor: (p) => (p.invoice_issued ? 1 : 0),
-    },
-    {
-      id: 'actions',
-      label: 'İşlemler',
-      sortable: false,
-      isDefaultVisible: true,
-    },
-  ];
+const PATIENT_COLUMNS: TableColumnDef<
+  PatientRow & { _colId?: PatientTableColumnId }
+>[] = [
+  {
+    id: 'created_at',
+    label: 'Alış (Kayıt)',
+    sortable: true,
+    isDefaultVisible: true,
+    accessor: (p) => p.created_at ?? null,
+  },
+  {
+    id: 'full_name',
+    label: 'Ad Soyad',
+    sortable: true,
+    isDefaultVisible: true,
+    accessor: (p) => p.full_name ?? '',
+  },
+  {
+    id: 'phone',
+    label: 'Telefon',
+    sortable: false,
+    isDefaultVisible: true,
+    accessor: (p) => p.phone ?? '',
+  },
+  {
+    id: 'device',
+    label: 'Cihaz Modeli',
+    sortable: false,
+    isDefaultVisible: true,
+    accessor: (p) => getDeviceLabel(p),
+  },
+  {
+    id: 'ear',
+    label: 'Kulak',
+    sortable: false,
+    isDefaultVisible: true,
+    accessor: (p) => getDeviceEarLabel(p),
+  },
+  {
+    id: 'sale_total_amount',
+    label: 'Toplam Satış',
+    sortable: true,
+    isDefaultVisible: true,
+    accessor: (p) => p.sale_total_amount ?? 0,
+  },
+  {
+    id: 'satisfaction_10',
+    label: 'Memnuniyet (1–10)',
+    sortable: true,
+    isDefaultVisible: true,
+    accessor: (p) => p.satisfaction_10 ?? -1,
+  },
+  {
+    id: 'last_visit_at',
+    label: 'Son Görüşme',
+    sortable: true,
+    isDefaultVisible: true,
+    accessor: (p) => p.last_visit_at ?? null,
+  },
+  {
+    id: 'sgk',
+    label: 'SGK',
+    sortable: true,
+    isDefaultVisible: true,
+    accessor: (p) => (p.sgk_flag ? 1 : 0),
+  },
+  {
+    id: 'invoice',
+    label: 'Fatura',
+    sortable: true,
+    isDefaultVisible: true,
+    accessor: (p) => (p.invoice_issued ? 1 : 0),
+  },
+  {
+    id: 'actions',
+    label: 'İşlemler',
+    sortable: false,
+    isDefaultVisible: true,
+  },
+];
 
 function formatDate(value: string | null): string {
   if (!value) return '-';
@@ -178,6 +180,9 @@ export function PatientsTable({
   onSelectPatient,
   onDeletePatient,
 }: PatientsTableProps) {
+  const { data: profile } = useCurrentProfile();
+  const userId = profile?.id ?? null;
+
   const handleDeleteClick = (patient: PatientRow) => {
     if (!onDeletePatient) return;
 
@@ -198,7 +203,7 @@ export function PatientsTable({
     toggleColumn,
     setSort,
     isColumnVisible,
-  } = useTablePreferences<PatientRow>('patients-table', PATIENT_COLUMNS);
+  } = useTablePreferences<PatientRow>('patients-table', PATIENT_COLUMNS, userId);
 
   const sortedPatients = useMemo(() => {
     if (!prefsState.sortBy) return patients;
@@ -206,7 +211,8 @@ export function PatientsTable({
     const col = PATIENT_COLUMNS.find((c) => c.id === prefsState.sortBy);
     if (!col || !col.sortable) return patients;
 
-    const accessor = col.accessor ?? ((row: PatientRow) => (row as any)[col.id]);
+    const accessor =
+      col.accessor ?? ((row: PatientRow) => (row as any)[col.id]);
 
     const sorted = [...patients];
     sorted.sort((a, b) => {
