@@ -9,6 +9,7 @@ export type TrialRow = {
   next_meet_at: string | null;
   created_at: string;
   reference_id: string | null;
+  note: string | null;
 };
 
 /**
@@ -34,6 +35,9 @@ export type NewTrialForm = {
   // Optional reference link (who sent this trial)
   referenceId?: string | null;
   referenceName?: string;
+
+  // Optional internal note about this trial
+  note: string;
 
   // Device lines for this trial
   devices: TrialDeviceFormRow[];
