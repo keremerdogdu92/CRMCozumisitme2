@@ -2,9 +2,9 @@
 // Summary: Serverless processor for LEGACY patient-device CSV imports.
 // Phase 1: validates staging rows (patients_legacy_devices_import_rows),
 // links them to patients by patient_national_id, and updates row/job status.
-// Phase 2: for validated rows, creates/reuses devices in `public.devices` and
-// inserts patient-device relations in `public.patient_devices`, then marks
-// staging rows as imported and updates job summary.
+// Phase 2: for validated rows, inserts inventory rows in `public.inventory_items`
+// and links them to patients via `sold_patient_id`, then marks staging rows
+// as imported and updates job summary.
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -192,6 +192,25 @@ function normalizeDevicePrice(
     };
   }
   return { value: n };
+}
+
+// Map normalized ear side to inventory_items.ear_side
+// R -> 'right', L -> 'left', Çift -> 'bilateral', Tek -> null.
+function mapEarSideToInventory(
+  value: LegacyDeviceImportSide | null,
+): string | null {
+  if (!value) return null;
+  switch (value) {
+    case 'R':
+      return 'right';
+    case 'L':
+      return 'left';
+    case 'Çift':
+      return 'bilateral';
+    case 'Tek':
+    default:
+      return null;
+  }
 }
 
 // ------------------------
@@ -461,130 +480,42 @@ async function fetchSinglePatientId(
 }
 
 // ------------------------
-// Supabase helpers (devices & patient_devices)
+// Supabase helpers (inventory_items)
 // ------------------------
 
-async function findDeviceIdBySerial(
+async function insertInventoryItemFromLegacy(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
-  orgId: string,
-  serial: string,
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('devices')
-    .select('id')
-    .eq('org_id', orgId)
-    .eq('serial', serial)
-    .limit(1);
-
-  if (error) {
-    throw new Error(
-      `Failed to lookup device by serial=${serial}: ${error.message}`,
-    );
-  }
-
-  const rows = (data ?? []) as { id: string }[];
-  if (!rows.length) return null;
-  return rows[0].id;
-}
-
-/**
- * Fallback serial generator for legacy rows.
- * Amaç: devices.serial NOT NULL (+ muhtemel UNIQUE) kısıtını bozmadan,
- * serial_no boş olan satırlara stabil ama benzersiz bir "legacy" seri üretmek.
- *
- * Pattern:
- *  - Tek cihaz  : LEGACY-{TC}-{rowIndex}
- *  - Çift kulak : LEGACY-{TC}-{rowIndex}-A / -B
- */
-function buildFallbackSerial(params: {
-  payload: LegacyDeviceImportNormalizedPayload;
-  rowIndex: number;
-  suffix?: string;
-}): string {
-  const base = `LEGACY-${params.payload.patient_national_id}-${params.rowIndex}`;
-  return params.suffix ? `${base}-${params.suffix}` : base;
-}
-
-async function insertDeviceRowFromLegacy(
-  supabase: ReturnType<typeof createAdminSupabaseClient>,
-  payload: LegacyDeviceImportNormalizedPayload,
-  serialOverride: string,
-): Promise<string> {
-  const { data, error } = await supabase
-    .from('devices')
-    .insert({
-      org_id: payload.org_id,
-      brand: payload.device_brand,
-      model: payload.device_model,
-      barcode: null,
-      serial: serialOverride, // NOT NULL / UNIQUE constraint assumed
-      status: 'sold', // legacy import are already sold/assigned devices
-      hold_patient_id: null,
-    })
-    .select('id')
-    .single();
-
-  if (error) {
-    throw new Error(
-      `Failed to insert device for legacy row (patient_national_id=${payload.patient_national_id}): ${error.message}`,
-    );
-  }
-
-  return (data as { id: string }).id;
-}
-
-async function upsertDeviceFromLegacyRow(
-  supabase: ReturnType<typeof createAdminSupabaseClient>,
-  payload: LegacyDeviceImportNormalizedPayload,
-  options: { reuseBySerial: boolean; serialOverride: string },
-): Promise<string> {
-  const serial = options.serialOverride;
-
-  // If we have a serial and reuse is allowed, attempt to find existing device.
-  if (options.reuseBySerial && serial) {
-    const existingId = await findDeviceIdBySerial(
-      supabase,
-      payload.org_id,
-      serial,
-    );
-    if (existingId) {
-      return existingId;
-    }
-  }
-
-  // Otherwise create a new device row.
-  return insertDeviceRowFromLegacy(supabase, payload, serial);
-}
-
-async function insertPatientDevicesRows(
-  supabase: ReturnType<typeof createAdminSupabaseClient>,
-  rows: {
-    org_id: string;
-    patient_id: string;
-    device_id: string;
-    side: string | null;
-    assigned_at: string;
-    price: number | null;
-  }[],
+  params: {
+    orgId: string;
+    patientId: string;
+    brand: string;
+    model: string;
+    earSide: string | null;
+    serialNo: string | null;
+    soldAt: string;
+    devicePrice: number | null;
+  },
 ): Promise<void> {
-  if (!rows.length) return;
-
-  const { error } = await supabase.from('patient_devices').insert(
-    rows.map((r) => ({
-      org_id: r.org_id,
-      patient_id: r.patient_id,
-      device_id: r.device_id,
-      side: r.side,
-      price: r.price, // Phase 2: we intentionally keep this NULL (per-row pricing later if needed).
-      assigned_at: r.assigned_at,
-      unassigned_at: null,
-      // archive_code is handled by trigger trg_patient_devices_archive
-    })),
-  );
+  const { error } = await supabase.from('inventory_items').insert({
+    org_id: params.orgId,
+    brand: params.brand,
+    model: params.model,
+    item_type: 'hearing_aid', // Legacy imports are all hearing aids.
+    barcode: null,
+    serial_no: params.serialNo,
+    ear_side: params.earSide,
+    status: 'sold', // Legacy rows represent already-sold devices.
+    purchase_price: null,
+    list_price: null,
+    sold_patient_id: params.patientId,
+    sold_at: params.soldAt,
+    device_price: params.devicePrice,
+    // created_at / updated_at / deleted_at use defaults.
+  });
 
   if (error) {
     throw new Error(
-      'Failed to insert patient_devices rows for legacy import: ' +
+      'Failed to insert inventory item for legacy device row: ' +
         error.message,
     );
   }
@@ -752,11 +683,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     // ------------------------
-    // Phase 2: import validated rows into devices + patient_devices.
+    // Phase 2: import validated rows into inventory_items (sold to patients).
     // ------------------------
-
-    let importedRowsCount = 0;
-    let importErrorRowsCount = 0;
 
     let importCandidates: LegacyDeviceStagingRow[] = [];
     try {
@@ -774,7 +702,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const normalized = row.normalized_payload;
       if (!normalized) {
         // Defensive: should not happen for status=validated, but mark as error if it does.
-        importErrorRowsCount += 1;
         try {
           await updateLegacyStagingRow(supabase, row.id, {
             status: 'error',
@@ -802,7 +729,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         );
 
         if (patientLookup.status !== 'ok') {
-          importErrorRowsCount += 1;
           const msg =
             patientLookup.status === 'missing'
               ? 'No patient found for this national_id in this organization at import time.'
@@ -817,116 +743,32 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
         const patientId = patientLookup.id;
 
-        // 2) Decide device(s) and side(s) for this row.
-        const sides: (string | null)[] =
-          normalized.ear_side === 'Çift'
-            ? ['left', 'right']
-            : normalized.ear_side === 'R'
-            ? ['right']
-            : normalized.ear_side === 'L'
-            ? ['left']
-            : [null]; // 'Tek' → side is unknown / not tracked
+        // 2) Insert single inventory_items row representing this legacy device row.
+        const earSideInventory = mapEarSideToInventory(normalized.ear_side);
+        const soldAt = normalized.sold_at ?? nowIso();
 
-        const deviceIds: string[] = [];
+        await insertInventoryItemFromLegacy(supabase, {
+          orgId: normalized.org_id,
+          patientId,
+          brand: normalized.device_brand,
+          model: normalized.device_model,
+          earSide: earSideInventory,
+          serialNo: normalized.serial_no,
+          soldAt,
+          devicePrice: normalized.device_price,
+        });
 
-        // Baz serial (CSV'den gelen, doluysa onu kullanıyoruz)
-        const csvSerial = normalized.serial_no?.trim() || null;
-
-        if (normalized.ear_side === 'Çift') {
-          // Pair case: two devices and two patient_devices.
-
-          // 1. cihaz: CSV'deki serial varsa onu kullan, yoksa fallback -A
-          const serialFirst =
-            csvSerial ??
-            buildFallbackSerial({
-              payload: normalized,
-              rowIndex: row.row_index,
-              suffix: 'A',
-            });
-
-          // 2. cihaz: her zaman yeni serial (çakışmayı önlemek için suffix -B)
-          const serialSecond =
-            csvSerial != null
-              ? `${csvSerial}-PAIR2`
-              : buildFallbackSerial({
-                  payload: normalized,
-                  rowIndex: row.row_index,
-                  suffix: 'B',
-                });
-
-          const firstDeviceId = await upsertDeviceFromLegacyRow(
-            supabase,
-            normalized,
-            {
-              reuseBySerial: true,
-              serialOverride: serialFirst,
-            },
-          );
-          deviceIds.push(firstDeviceId);
-
-          const secondDeviceId = await upsertDeviceFromLegacyRow(
-            supabase,
-            normalized,
-            {
-              reuseBySerial: false,
-              serialOverride: serialSecond,
-            },
-          );
-          deviceIds.push(secondDeviceId);
-        } else {
-          // Single device case (R, L, Tek).
-
-          const serialSingle =
-            csvSerial ??
-            buildFallbackSerial({
-              payload: normalized,
-              rowIndex: row.row_index,
-            });
-
-          const deviceId = await upsertDeviceFromLegacyRow(
-            supabase,
-            normalized,
-            {
-              reuseBySerial: true,
-              serialOverride: serialSingle,
-            },
-          );
-          deviceIds.push(deviceId);
-        }
-
-        if (deviceIds.length !== sides.length) {
-          throw new Error(
-            `Internal error: deviceIds length (${deviceIds.length}) does not match sides length (${sides.length}) for row_index=${row.row_index}.`,
-          );
-        }
-
-        // 3) Build patient_devices rows.
-        const assignedAt = normalized.sold_at ?? nowIso();
-        const patientDeviceRows = sides.map((side, index) => ({
-          org_id: normalized.org_id,
-          patient_id: patientId,
-          device_id: deviceIds[index],
-          side,
-          price: null, // Phase 2: we are not splitting legacy total price per device.
-          assigned_at: assignedAt,
-        }));
-
-        await insertPatientDevicesRows(supabase, patientDeviceRows);
-
-        // 4) Mark staging row as imported.
+        // 3) Mark staging row as imported.
         await updateLegacyStagingRow(supabase, row.id, {
           status: 'imported',
           imported_at: nowIso(),
           // keep normalized_payload for traceability; do not clear it.
         });
-
-        importedRowsCount += 1;
       } catch (err) {
         console.error(
           `Import failed for legacy device row id=${row.id}, row_index=${row.row_index}:`,
           err,
         );
-        importErrorRowsCount += 1;
 
         const errMsg =
           (err as Error)?.message || 'Unknown error during legacy import.';
@@ -962,7 +804,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           countLegacyRowsByStatus(supabase, jobId, 'imported'),
         ]);
 
-      // Prefer DB-derived imported count, but keep the in-process counter for response clarity.
       const importedRowsFinal = importedRowsInDb;
 
       let nextStatus: 'completed' | 'failed' = 'completed';
@@ -973,7 +814,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         jobErrorMessage =
           'All legacy device rows failed validation or import. No devices were imported.';
       } else if (errorRows > 0 || validatedRows > 0) {
-        // Some rows failed or are still stuck in validated state.
         nextStatus = 'completed';
         jobErrorMessage =
           'Legacy devices import finished with partial errors. Some rows failed validation or import.';
