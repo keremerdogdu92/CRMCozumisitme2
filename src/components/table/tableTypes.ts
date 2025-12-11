@@ -1,13 +1,12 @@
 // src/components/table/tableTypes.ts
-// Generic column definition shared by all tables.
+// Generic table column definitions shared by all feature tables.
 
 export type SortDirection = 'asc' | 'desc';
 
 export type TableColumnDef<TRow> = {
-  id: string;                 // 'full_name', 'phone', 'status' gibi
-  label: string;              // Header'da görünen isim
-  isDefaultVisible?: boolean; // İlk açılışta açık mı?
-  sortable?: boolean;         // Bu kolona göre sıralanabilsin mi?
-  // Tablo içi kullanım için (opsiyonel, sadece type yardımı)
-  accessor?: (row: TRow) => unknown;
+  id: string;                 // internal column key, e.g. 'full_name', 'created_at'
+  label: string;              // header text
+  isDefaultVisible?: boolean; // initial visibility, default: true
+  sortable?: boolean;         // can user sort by this column?
+  accessor?: (row: TRow) => unknown; // optional value accessor for sorting
 };
