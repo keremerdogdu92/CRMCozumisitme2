@@ -443,6 +443,23 @@ export function TrialNewFormCard({
           )}
         </div>
 
+        {/* Note field */}
+        <div className="md:col-span-4">
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            Not (opsiyonel)
+          </label>
+          <textarea
+            value={values.note}
+            onChange={(e) => onChange({ note: e.target.value })}
+            rows={3}
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            placeholder="Örn. İlk görüşmede sağ kulağa daha yatkın, kızıyla birlikte geldi, sessiz ortam tercih ediyor."
+          />
+          <p className="mt-1 text-[11px] text-slate-500">
+            Bu alan sadece iç notlar içindir; hastaya gösterilen teklif çıktısında yer almaz.
+          </p>
+        </div>
+
         {/* Divider */}
         <div className="md:col-span-4 h-px bg-slate-200 my-2" />
 
