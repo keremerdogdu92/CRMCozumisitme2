@@ -1,4 +1,4 @@
-a-- db/schema/trials/trial_devices.sql
+-- db/schema/trials/trial_devices.sql
 -- Purpose: Supabase table definition for `trial_devices`.
 -- Stores quoted devices (brand/model/side/price) attached to a trial.
 -- Includes: CREATE TABLE, constraints and RLS policies.
@@ -62,45 +62,65 @@ TO public
 USING (auth.role() = 'service_role'::text)
 WITH CHECK (auth.role() = 'service_role'::text);
 
--- 2) Org-bazlı SELECT (normal kullanıcılar)
+-- 2) Org-bazlı SELECT (normal kullanıcılar) – profiles üzerinden
 CREATE POLICY "trial_devices_org_select"
 ON public.trial_devices
 AS PERMISSIVE
 FOR SELECT
 TO authenticated
 USING (
-  (org_id)::text = (auth.jwt() ->> 'org_id'::text)
+  org_id IN (
+    SELECT p.org_id
+    FROM public.profiles AS p
+    WHERE p.id = auth.uid()
+  )
 );
 
--- 3) Org-bazlı INSERT (normal kullanıcılar)
+-- 3) Org-bazlı INSERT (normal kullanıcılar) – profiles üzerinden
 CREATE POLICY "trial_devices_org_insert"
 ON public.trial_devices
 AS PERMISSIVE
 FOR INSERT
 TO authenticated
 WITH CHECK (
-  (org_id)::text = (auth.jwt() ->> 'org_id'::text)
+  org_id IN (
+    SELECT p.org_id
+    FROM public.profiles AS p
+    WHERE p.id = auth.uid()
+  )
 );
 
--- 4) Org-bazlı UPDATE (normal kullanıcılar)
+-- 4) Org-bazlı UPDATE (normal kullanıcılar) – profiles üzerinden
 CREATE POLICY "trial_devices_org_update"
 ON public.trial_devices
 AS PERMISSIVE
 FOR UPDATE
 TO authenticated
 USING (
-  (org_id)::text = (auth.jwt() ->> 'org_id'::text)
+  org_id IN (
+    SELECT p.org_id
+    FROM public.profiles AS p
+    WHERE p.id = auth.uid()
+  )
 )
 WITH CHECK (
-  (org_id)::text = (auth.jwt() ->> 'org_id'::text)
+  org_id IN (
+    SELECT p.org_id
+    FROM public.profiles AS p
+    WHERE p.id = auth.uid()
+  )
 );
 
--- 5) Org-bazlı DELETE (normal kullanıcılar) – şu an HARD DELETE
+-- 5) Org-bazlı DELETE (normal kullanıcılar) – şu an HARD DELETE, profiles üzerinden
 CREATE POLICY "trial_devices_org_delete"
 ON public.trial_devices
 AS PERMISSIVE
 FOR DELETE
 TO authenticated
 USING (
-  (org_id)::text = (auth.jwt() ->> 'org_id'::text)
+  org_id IN (
+    SELECT p.org_id
+    FROM public.profiles AS p
+    WHERE p.id = auth.uid()
+  )
 );
