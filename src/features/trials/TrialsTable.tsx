@@ -1,11 +1,13 @@
-// src/features/trials/TrialsTable.tsx
+// src/features/trials/TrialsTable.tsx 
 // Tabular list view for trial rows with column visibility toggles and sorting.
+// Preferences are stored per user via useTablePreferences(userId).
 
 import { useMemo } from 'react';
 import type { TrialRow } from './types';
 import { useTablePreferences } from '../../components/table/useTablePreferences';
 import { TableColumnsControl } from '../../components/table/TableColumnsControl';
 import type { TableColumnDef } from '../../components/table/tableTypes';
+import { useCurrentProfile } from '../auth/useCurrentProfile';
 
 type TrialsTableProps = {
   items: TrialRow[];
@@ -22,64 +24,65 @@ type TrialTableColumnId =
   | 'note'
   | 'actions';
 
-const TRIAL_COLUMNS: TableColumnDef<TrialRow & { _colId?: TrialTableColumnId }>[] =
-  [
-    {
-      id: 'created_at',
-      label: 'Kayıt',
-      sortable: true,
-      isDefaultVisible: true,
-      accessor: (t) => t.created_at ?? null,
-    },
-    {
-      id: 'full_name',
-      label: 'Ad Soyad',
-      sortable: true,
-      isDefaultVisible: true,
-      accessor: (t) => t.full_name ?? '',
-    },
-    {
-      id: 'phone',
-      label: 'Telefon',
-      sortable: false,
-      isDefaultVisible: true,
-      accessor: (t) => t.phone ?? '',
-    },
-    {
-      id: 'first_meet_at',
-      label: 'İlk Görüşme',
-      sortable: true,
-      isDefaultVisible: true,
-      accessor: (t) => t.first_meet_at ?? null,
-    },
-    {
-      id: 'next_meet_at',
-      label: 'Sonraki Randevu',
-      sortable: true,
-      isDefaultVisible: true,
-      accessor: (t) => t.next_meet_at ?? null,
-    },
-    {
-      id: 'reference',
-      label: 'Referans',
-      sortable: true,
-      isDefaultVisible: false,
-      accessor: (t) => (t.reference_id ? 1 : 0),
-    },
-    {
-      id: 'note',
-      label: 'Not',
-      sortable: false,
-      isDefaultVisible: false,
-      accessor: (t) => t.note ?? '',
-    },
-    {
-      id: 'actions',
-      label: 'İşlemler',
-      sortable: false,
-      isDefaultVisible: true,
-    },
-  ];
+const TRIAL_COLUMNS: TableColumnDef<
+  TrialRow & { _colId?: TrialTableColumnId }
+>[] = [
+  {
+    id: 'created_at',
+    label: 'Kayıt',
+    sortable: true,
+    isDefaultVisible: true,
+    accessor: (t) => t.created_at ?? null,
+  },
+  {
+    id: 'full_name',
+    label: 'Ad Soyad',
+    sortable: true,
+    isDefaultVisible: true,
+    accessor: (t) => t.full_name ?? '',
+  },
+  {
+    id: 'phone',
+    label: 'Telefon',
+    sortable: false,
+    isDefaultVisible: true,
+    accessor: (t) => t.phone ?? '',
+  },
+  {
+    id: 'first_meet_at',
+    label: 'İlk Görüşme',
+    sortable: true,
+    isDefaultVisible: true,
+    accessor: (t) => t.first_meet_at ?? null,
+  },
+  {
+    id: 'next_meet_at',
+    label: 'Sonraki Randevu',
+    sortable: true,
+    isDefaultVisible: true,
+    accessor: (t) => t.next_meet_at ?? null,
+  },
+  {
+    id: 'reference',
+    label: 'Referans',
+    sortable: true,
+    isDefaultVisible: false,
+    accessor: (t) => (t.reference_id ? 1 : 0),
+  },
+  {
+    id: 'note',
+    label: 'Not',
+    sortable: false,
+    isDefaultVisible: false,
+    accessor: (t) => t.note ?? '',
+  },
+  {
+    id: 'actions',
+    label: 'İşlemler',
+    sortable: false,
+    isDefaultVisible: true,
+  },
+];
 
 function formatDate(value: string | null): string {
   if (!value) return '-';
@@ -110,13 +113,16 @@ function formatShortDate(value: string | null): string {
 }
 
 export function TrialsTable({ items, onSelectRow }: TrialsTableProps) {
+  const { data: profile } = useCurrentProfile();
+  const userId = profile?.id ?? null;
+
   const {
     state: prefsState,
     visibleColumns,
     toggleColumn,
     setSort,
     isColumnVisible,
-  } = useTablePreferences<TrialRow>('trials-table', TRIAL_COLUMNS);
+  } = useTablePreferences<TrialRow>('trials-table', TRIAL_COLUMNS, userId);
 
   const sortedItems = useMemo(() => {
     if (!prefsState.sortBy) return items;
