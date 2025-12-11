@@ -194,9 +194,12 @@ function chooseEffectiveSoldAt(
 /**
  * Legacy CSV'deki ear_side değerini inventory_items.ear_side alanına map eder.
  *
+ * Not:
+ * - 'Çift' case’i için bu fonksiyon kullanılmıyor; o durumda iki ayrı satır
+ *   (left + right) oluşturuyoruz.
+ *
  * - 'R'    → 'right'
  * - 'L'    → 'left'
- * - 'Çift' → 'bilateral'
  * - 'Tek'  → null (tek cihaz ama kulak belirtilmemiş; UI'da tarafsız görünür)
  */
 function mapEarSideToInventory(
@@ -219,7 +222,14 @@ function mapEarSideToInventory(
  * Legacy cihaz kaydı için inventory_items tarafında satır oluşturur veya
  * varsa mevcut satırı hastaya bağlar.
  *
- * Strateji:
+ * Özel kural (Çift):
+ * - ear_side = 'Çift' ise:
+ *   * Her zaman 2 adet yeni satır oluşturur:
+ *     - left
+ *     - right
+ *   * serial_no boş olabilir (null yazılır).
+ *
+ * Diğer durumlar (R, L, Tek):
  * 1) serial_no doluysa:
  *    - Aynı org_id + serial_no ile inventory_items satırı arar.
  *    - Bulursa:
@@ -228,13 +238,13 @@ function mapEarSideToInventory(
  * 2) Serial boş veya matching satır yoksa:
  *    - Yeni inventory_items satırı oluşturur:
  *      * org_id, brand, model, item_type='hearing_aid'
- *      * barcode=null, serial_no=payload.serial_no
+ *      * barcode=null, serial_no=payload.serial_no (veya null)
  *      * status='sold'
  *      * ear_side = mapEarSideToInventory(payload.ear_side)
  *      * purchase_price = null
  *      * list_price = payload.device_price
  *      * sold_patient_id = patientId
- *      * sold_at = effectiveSoldAtIso (hasta + cihaz tarih kuralı ile)
+ *      * sold_at = effectiveSoldAtIso
  */
 async function upsertInventoryItemForLegacyDevice(params: {
   supabase: ReturnType<typeof createAdminSupabaseClient>;
@@ -245,11 +255,48 @@ async function upsertInventoryItemForLegacyDevice(params: {
 }): Promise<void> {
   const { supabase, orgId, patientId, payload, effectiveSoldAtIso } = params;
 
-  const earSide = mapEarSideToInventory(payload.ear_side);
+  // serial_no opsiyonel; boş string → null
   const serial = payload.serial_no?.trim() || null;
 
+  // 1) Çift kulak → iki ayrı satır (left + right)
+  if (payload.ear_side === 'Çift') {
+    const insertForSide = async (side: 'left' | 'right') => {
+      const { error } = await supabase.from('inventory_items').insert({
+        org_id: orgId,
+        brand: payload.device_brand,
+        model: payload.device_model,
+        item_type: 'hearing_aid',
+        barcode: null,
+        serial_no: serial,
+        ear_side: side,
+        status: 'sold',
+        purchase_price: null,
+        // Tarihsel cihazlar için tavsiye liste fiyatı elimizde yok; eldeki
+        // device_price alanını list_price olarak kullanıyoruz ki
+        // patient_list_with_device tarafında "Tavsiye Satış Toplamı"
+        // tamamen boş kalmasın.
+        list_price: payload.device_price,
+        sold_patient_id: patientId,
+        sold_at: effectiveSoldAtIso,
+      });
+
+      if (error) {
+        throw new Error(
+          `Failed to insert inventory_item for legacy device (${side}): ${error.message}`,
+        );
+      }
+    };
+
+    await insertForSide('left');
+    await insertForSide('right');
+    return;
+  }
+
+  // 2) Tek kulak (R / L / Tek) → upsert mantığı
+  const earSide = mapEarSideToInventory(payload.ear_side);
+
   if (serial) {
-    // 1) Mevcut stok kaydı var mı diye bak (aynı org + serial).
+    // 2.a) Mevcut stok kaydı var mı diye bak (aynı org + serial).
     const { data: existing, error: existingError } = await supabase
       .from('inventory_items')
       .select('id, sold_patient_id')
@@ -298,7 +345,7 @@ async function upsertInventoryItemForLegacyDevice(params: {
     }
   }
 
-  // 2) Mevcut stok kaydı yoksa yeni bir inventory_items satırı oluştur.
+  // 2.b) Mevcut stok kaydı yoksa yeni bir inventory_items satırı oluştur.
   const { error: insertError } = await supabase.from('inventory_items').insert({
     org_id: orgId,
     brand: payload.device_brand,
