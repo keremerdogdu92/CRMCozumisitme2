@@ -1,5 +1,5 @@
 // src/components/table/useTablePreferences.ts
-// Keeps per-table column visibility and sorting preferences in localStorage.
+// Manages per-table column visibility and sorting preferences (with localStorage).
 
 import { useEffect, useMemo, useState } from 'react';
 import type { SortDirection, TableColumnDef } from './tableTypes';
@@ -32,7 +32,6 @@ export function useTablePreferences<TRow>(
   columns: TableColumnDef<TRow>[],
 ) {
   const [state, setState] = useState<TablePrefsState>(() => {
-    // default state
     const defaultColumns: Record<string, boolean> = {};
     for (const col of columns) {
       defaultColumns[col.id] = col.isDefaultVisible ?? true;
@@ -55,7 +54,7 @@ export function useTablePreferences<TRow>(
       };
     }
 
-    // Kolon listesi değişmişse (yeni kolon ekledin vs.) default’larla merge et
+    // Merge saved with current columns (yeni kolon eklenmiş olabilir)
     const mergedColumns: Record<string, boolean> = { ...defaultColumns };
     for (const key of Object.keys(saved.columns ?? {})) {
       if (key in mergedColumns) {
@@ -70,13 +69,12 @@ export function useTablePreferences<TRow>(
     };
   });
 
-  // LocalStorage sync
+  // Persist state
   useEffect(() => {
     if (typeof window === 'undefined') return;
     localStorage.setItem(getStorageKey(tableId), JSON.stringify(state));
   }, [tableId, state]);
 
-  // Public API
   const visibleColumns = useMemo(
     () => columns.filter((c) => state.columns[c.id] !== false),
     [columns, state.columns],
@@ -101,7 +99,6 @@ export function useTablePreferences<TRow>(
           sortDir: 'asc',
         };
       }
-      // Aynı kolona tıklayınca yön değişsin
       const nextDir: SortDirection = prev.sortDir === 'asc' ? 'desc' : 'asc';
       return {
         ...prev,
