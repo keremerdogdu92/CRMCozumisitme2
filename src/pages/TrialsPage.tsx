@@ -14,6 +14,7 @@ const initialFormState: NewTrialForm = {
   phone: '',
   firstMeetAt: '',
   nextMeetAt: '',
+  note: '',
   devices: [
     {
       rowKey: 'row-0',
