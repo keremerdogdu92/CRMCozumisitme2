@@ -235,6 +235,9 @@ export function PatientDetailPaymentsTab({
     return sum + num;
   }, 0);
 
+  const hasBreakdown = breakdownItems.length > 0;
+  const shouldShowBreakdownSection = isEditMode || hasBreakdown;
+
   // Cancel edits: reload latest plan + breakdown from backend and exit edit mode
   const handleCancelEdit = async () => {
     setIsEditMode(false);
@@ -242,7 +245,10 @@ export function PatientDetailPaymentsTab({
     // Refresh plan from backend and sync into form state
     try {
       const result = await refetchPlan();
-      const freshPlan = result.data as PatientInstallmentPlanRow | null | undefined;
+      const freshPlan = result.data as
+        | PatientInstallmentPlanRow
+        | null
+        | undefined;
       if (!freshPlan) {
         setSaleTotal('');
         setUpfrontPaid('');
@@ -285,6 +291,8 @@ export function PatientDetailPaymentsTab({
     }
   };
 
+  const shouldShowPlanForm = isEditMode || !!plan || isPlanLoading;
+
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-2">
@@ -304,7 +312,8 @@ export function PatientDetailPaymentsTab({
           {isEditMode && (
             <>
               <span className="hidden text-[11px] text-slate-500 sm:inline">
-                Düzenleme modunda. Değişiklikleri aşağıdaki kartlardan kaydedebilirsiniz.
+                Düzenleme modunda. Değişiklikleri aşağıdaki kartlardan
+                kaydedebilirsiniz.
               </span>
               <button
                 type="button"
@@ -319,83 +328,64 @@ export function PatientDetailPaymentsTab({
       </div>
 
       {/* Sale breakdown card */}
-      <PatientSaleBreakdownCard
-        items={breakdownItems}
-        onAddRow={isEditMode ? handleAddBreakdownRow : () => {}}
-        onChangeRow={
-          isEditMode ? handleChangeBreakdownRow : () => {}
-        }
-        onRemoveRow={
-          isEditMode ? handleRemoveBreakdownRow : () => {}
-        }
-        onSave={isEditMode ? handleSaveBreakdown : async () => {}}
-        totalAmount={breakdownTotal}
-        isLoading={isBreakdownLoading}
-        isSaving={isBreakdownSaving}
-        errorMessage={breakdownError}
-      />
+      {shouldShowBreakdownSection && (
+        <PatientSaleBreakdownCard
+          items={breakdownItems}
+          onAddRow={isEditMode ? handleAddBreakdownRow : () => {}}
+          onChangeRow={isEditMode ? handleChangeBreakdownRow : () => {}}
+          onRemoveRow={isEditMode ? handleRemoveBreakdownRow : () => {}}
+          onSave={isEditMode ? handleSaveBreakdown : async () => {}}
+          totalAmount={breakdownTotal}
+          isLoading={isBreakdownLoading}
+          isSaving={isBreakdownSaving}
+          errorMessage={breakdownError}
+          readOnly={!isEditMode}
+        />
+      )}
 
-      {/* Plan form (toggle) */}
-      <PatientSenetPlanFormCard
-        plan={plan ?? null}
-        saleTotal={saleTotal}
-        upfrontPaid={upfrontPaid}
-        installmentCount={installmentCount}
-        firstDueDate={firstDueDate}
-        dayOfMonth={dayOfMonth}
-        setSaleTotal={
-          isEditMode ? setSaleTotal : (_v: string) => {}
-        }
-        setUpfrontPaid={
-          isEditMode ? setUpfrontPaid : (_v: string) => {}
-        }
-        setInstallmentCount={
-          isEditMode ? setInstallmentCount : (_v: string) => {}
-        }
-        setFirstDueDate={
-          isEditMode ? setFirstDueDate : (_v: string) => {}
-        }
-        setDayOfMonth={
-          isEditMode ? setDayOfMonth : (_v: string) => {}
-        }
-        isPlanSaveError={isPlanSaveError}
-        planSaveError={planSaveError}
-        isPlanError={isPlanError}
-        planError={planError}
-        isPlanSaving={isPlanSaving}
-        patientId={patientId}
-        upsertPlan={
-          isEditMode
-            ? upsertPlan
-            : async (_input: UpsertPatientInstallmentPlanInput) => {}
-        }
-      />
+      {/* Plan form (only visible when editing or plan exists) */}
+      {shouldShowPlanForm && (
+        <PatientSenetPlanFormCard
+          plan={plan ?? null}
+          saleTotal={saleTotal}
+          upfrontPaid={upfrontPaid}
+          installmentCount={installmentCount}
+          firstDueDate={firstDueDate}
+          dayOfMonth={dayOfMonth}
+          setSaleTotal={isEditMode ? setSaleTotal : (_v: string) => {}}
+          setUpfrontPaid={isEditMode ? setUpfrontPaid : (_v: string) => {}}
+          setInstallmentCount={
+            isEditMode ? setInstallmentCount : (_v: string) => {}
+          }
+          setFirstDueDate={isEditMode ? setFirstDueDate : (_v: string) => {}}
+          setDayOfMonth={isEditMode ? setDayOfMonth : (_v: string) => {}}
+          isPlanSaveError={isPlanSaveError}
+          planSaveError={planSaveError}
+          isPlanError={isPlanError}
+          planError={planError}
+          isPlanSaving={isPlanSaving}
+          patientId={patientId}
+          upsertPlan={
+            isEditMode
+              ? upsertPlan
+              : async (_input: UpsertPatientInstallmentPlanInput) => {}
+          }
+          readOnly={!isEditMode}
+        />
+      )}
 
-      {/* Plan summary */}
-      <div className="space-y-2 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-medium text-emerald-900">
-            Toplam alınan senet ödemesi
-          </span>
-          <span className="text-sm font-bold text-emerald-900">
-            {formatAmount(totalPaid)}
-          </span>
-        </div>
+      {/* Plan summary – only if a senet plan exists */}
+      {plan && (
+        <div className="space-y-2 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-emerald-900">
+              Toplam alınan senet ödemesi
+            </span>
+            <span className="text-sm font-bold text-emerald-900">
+              {formatAmount(totalPaid)}
+            </span>
+          </div>
 
-        {isPlanLoading && (
-          <p className="text-[11px] text-emerald-900">
-            Senet planı yükleniyor...
-          </p>
-        )}
-
-        {!isPlanLoading && !plan && (
-          <p className="text-[11px] text-emerald-900">
-            Bu hasta için henüz senet planı yok. Yukarıdaki formu açıp plan
-            oluşturduktan sonra taksit takibi otomatik hesaplanacak.
-          </p>
-        )}
-
-        {plan && (
           <div className="grid gap-1 text-[11px] text-emerald-900 sm:grid-cols-2">
             <div>
               <div className="flex justify-between gap-2">
@@ -443,8 +433,14 @@ export function PatientDetailPaymentsTab({
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {isPlanLoading && !plan && (
+        <p className="text-[11px] text-slate-500">
+          Senet planı yükleniyor...
+        </p>
+      )}
 
       {/* State messages for payments */}
       {isPaymentsLoading && (
@@ -483,10 +479,7 @@ export function PatientDetailPaymentsTab({
               </thead>
               <tbody>
                 {(payments as PatientPaymentRow[]).map((p) => (
-                  <tr
-                    key={p.id}
-                    className="border-t border-slate-100"
-                  >
+                  <tr key={p.id} className="border-t border-slate-100">
                     <td className="px-3 py-2 text-slate-800">
                       {formatDateTime(p.created_at)}
                     </td>
