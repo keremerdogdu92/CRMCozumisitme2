@@ -47,6 +47,8 @@ export default function ReferencesPage() {
   } = useQuery({
     queryKey: REFERENCES_QUERY_KEY,
     queryFn: fetchReferences,
+    // Only run the query for admins
+    enabled: !!profile && profile.role === 'admin',
   });
 
   const createMutation = useMutation({
