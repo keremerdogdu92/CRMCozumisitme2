@@ -2,6 +2,7 @@
 // Summary: Page wrapper for the Profitability Calculator feature (admin-only).
 
 import { ProfitCalculatorForm } from '../features/profitCalculator/ProfitCalculatorForm';
+import { ProfitCalculatorQuickCommission } from '../features/profitCalculator/components/ProfitCalculatorQuickCommission';
 import { useCurrentProfile } from '../features/auth/useCurrentProfile';
 
 export default function ProfitCalculatorPage() {
@@ -26,7 +27,11 @@ export default function ProfitCalculatorPage() {
   }
 
   return (
-    <div className="p-4">
+    <div className="space-y-4 p-4">
+      {/* Üstte hızlı komisyon aracı */}
+      <ProfitCalculatorQuickCommission />
+
+      {/* Asıl karlılık hesaplama formu */}
       <ProfitCalculatorForm />
     </div>
   );
