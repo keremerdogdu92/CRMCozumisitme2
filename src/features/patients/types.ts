@@ -36,7 +36,7 @@ export type PatientRow = {
    * Optional for backward compatibility; existing rows may not have them.
    *
    * - sgk_profile: code such as 'SGK_0_4_CALISAN'
-   * - sgk_expected_reimbursement: net TL amount expected from SGK
+   * - sgk_expected_reimbursement: net TL amount expected from SGK (TOTAL)
    * - sgk_expected_reimbursement_month: ISO date (yyyy-MM-01) for forecast
    */
   sgk_profile?: string | null;
@@ -108,10 +108,6 @@ export type PatientSgkUpdateInput = {
   sgkPrescriptionNo: string;
 };
 
-/**
- * One payment row recorded via meetings.
- * Backed by meeting_payments table.
- */
 export type PatientPaymentRow = {
   id: string;
   meeting_id: string | null;
@@ -122,10 +118,6 @@ export type PatientPaymentRow = {
   created_at: string;
 };
 
-/**
- * Patient installment (senet) plan row.
- * Backed by patient_installment_plans table.
- */
 export type PatientInstallmentPlanRow = {
   id: string;
   org_id: string;
@@ -141,10 +133,6 @@ export type PatientInstallmentPlanRow = {
   updated_at: string;
 };
 
-/**
- * Input for creating/updating a senet plan for a patient.
- * Values are string because they come from form fields.
- */
 export type UpsertPatientInstallmentPlanInput = {
   patientId: string;
   saleTotal: string;
@@ -154,16 +142,6 @@ export type UpsertPatientInstallmentPlanInput = {
   dayOfMonth: string; // "1"–"31"
 };
 
-/**
- * Per-patient payment breakdown for a sale.
- * Backed by patient_sale_breakdown table.
- *
- * Each row represents one part of the sale:
- * - method: 'Kredi_Kartı', 'Nakit', 'Tim', 'Sivantos', 'Senet'
- *           or 'legacy_unknown' for historical/unknown cases.
- * - amount: TL amount for that method
- * - note: optional explanation (e.g. "Firma katkısı", "Kapora" vb.)
- */
 export type PatientSaleBreakdownRow = {
   id: string;
   org_id: string;
@@ -175,10 +153,6 @@ export type PatientSaleBreakdownRow = {
   created_by: string | null;
 };
 
-/**
- * Input type for editing the sale breakdown in UI.
- * Amount is kept as string for easier binding to <input />.
- */
 export type UpsertPatientSaleBreakdownItem = {
   id?: string;
   method: PatientPaymentMethod;
@@ -186,10 +160,6 @@ export type UpsertPatientSaleBreakdownItem = {
   note: string;
 };
 
-/**
- * Per-patient device rows resolved from inventory_items.
- * Used in PatientDetailDevicesTab via api.devices.ts.
- */
 export type PatientDeviceEarSide = 'right' | 'left' | 'bilateral';
 
 export type PatientDeviceRow = {
@@ -231,16 +201,6 @@ export type DeviceRepairRow = {
   note: string | null;
 };
 
-/**
- * Draft devices collected on "New Patient" form.
- *
- * - inventoryItemId: optional link to an inventory_items row.
- *   Eğer doluysa, hasta kaydından sonra bu stok satırı hastaya bağlanır
- *   (sold_patient_id, sold_at, ear_side, status='sold').
- *
- * - Diğer alanlar UI için; brand/model/listPrice stok seçildiğinde
- *   otomatik doldurulabilir ama istenirse elle override edilebilir.
- */
 export type NewPatientDeviceSide = 'right' | 'left' | 'bilateral' | '';
 
 export type NewPatientDeviceDraft = {
@@ -253,13 +213,6 @@ export type NewPatientDeviceDraft = {
   note: string;
 };
 
-/**
- * Input collected from the "New Patient" form.
- * Extended with optional financial drafts to chain:
- * - savePatientSaleBreakdown
- * - upsertPatientInstallmentPlan
- * after the patient row is created.
- */
 export type NewPatientForm = {
   fullName: string;
   phone: string;
@@ -269,60 +222,30 @@ export type NewPatientForm = {
 
   /**
    * SGK profile selection and expected reimbursement.
-   * Optional for now so that older flows (CSV import vb.) still compile.
+   * - sgkExpectedReimbursement is TOTAL (netToFirm * sgkDeviceCount).
+   * - sgkDeviceCount is a manual choice (NOT derived from devices).
    */
   sgkProfileId?: string; // e.g. 'SGK_0_4_CALISAN'
   sgkExpectedReimbursement?: string; // TL string; parsed by parseMoneyToNumber
   sgkExpectedMonth?: string; // "yyyy-MM" (input type="month")
   sgkPrescriptionNo?: string;
+  sgkDeviceCount?: '1' | '2';
 
-  /**
-   * Payment meta collected at creation time.
-   * saleTotal: toplam gerçek satış; tüm ödeme türleri için zorunlu.
-   * cardFeeRate: yalnızca Kredi Kartı için, taksit tablosundan gelir.
-   */
   paymentMethod: PatientPaymentMethodFormValue;
   saleTotal: string;
   cardFeeRate: string;
 
-  /**
-   * Optional legacy sale date used only during CSV imports.
-   * When provided, it is used to backfill patients.created_at and
-   * invoice_issued_at (for rows imported as "invoice already issued").
-   * Expected format: "yyyy-MM-dd".
-   */
   legacySaleDate?: string;
 
-  /**
-   * Optional reference attached while creating the patient.
-   * Now fully wired to backend via patients.reference_id.
-   */
   referenceId: string | null;
   referenceName: string;
 
-  /**
-   * Identity / contact / address fields collected on create.
-   */
   nationalId: string;
   kinPhone: string;
   address: string;
 
-  /**
-   * Financial drafts used in "new patient" flow.
-   * These are NOT persisted by createPatient directly; they are intended
-   * to be chained with savePatientSaleBreakdown and
-   * upsertPatientInstallmentPlan after the patient row is created.
-   *
-   * They are optional so that older callers (CSV import, tests, vb.)
-   * continue to work without providing them.
-   */
   saleBreakdownDraft?: UpsertPatientSaleBreakdownItem[];
   installmentPlanDraft?: UpsertPatientInstallmentPlanInput | null;
 
-  /**
-   * Device drafts collected at creation time.
-   * Benzer şekilde, createPatient sonrasında inventory_items üzerinden
-   * hastaya bağlanmak için kullanılır.
-   */
   deviceDrafts?: NewPatientDeviceDraft[];
 };
