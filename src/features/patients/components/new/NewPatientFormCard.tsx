@@ -1,6 +1,7 @@
 // src/features/patients/components/new/NewPatientFormCard.tsx
 // Inline "Yeni Hasta" form card using InlineCreateCard and modular subsections.
 
+import { useState } from 'react';
 import type { NewPatientForm } from '../../types';
 import { InlineCreateCard } from '../../../../components/layout/InlineCreateCard';
 import { FormSection } from '../../../../components/layout/FormSection';
@@ -11,6 +12,8 @@ import { PatientSenetPlanFormCard } from '../billing/PatientSenetPlanFormCard';
 import { NewPatientDevicesSection } from './NewPatientDevicesSection';
 import { Button } from '../../../../components/ui/Button';
 import { useNewPatientForm, formatCurrencyTry } from '../../hooks/useNewPatientForm';
+
+type DeviceFlowType = 'rechargeable_device' | 'battery_device' | 'battery_only';
 
 type NewPatientFormCardProps = {
   open: boolean;
@@ -54,6 +57,18 @@ export function NewPatientFormCard({
     onSubmit,
     externalErrorMessage: errorMessage,
   });
+
+  /**
+   * Device flow type is currently UI-only (not persisted in formState yet).
+   * Next step: move this into useNewPatientForm + types + API payload.
+   */
+  const [deviceFlowType, setDeviceFlowType] = useState<DeviceFlowType>('rechargeable_device');
+
+  /**
+   * Pill prescription checkbox (UI + SGK computation).
+   * Next step: persist into formState + payload.
+   */
+  const [sgkPillPrescription, setSgkPillPrescription] = useState<boolean>(false);
 
   return (
     <InlineCreateCard
@@ -178,11 +193,29 @@ export function NewPatientFormCard({
           </div>
         </FormSection>
 
-        {/* SGK + Ödeme bloğu */}
+        {/* Cihazlar bloğu (ÖNCE) */}
+        <FormSection
+          title="Cihazlar"
+          description="Önce cihaz/pil tipini seçin. Seçime göre cihaz satırları, şarj aleti veya pil kutusu açılır."
+        >
+          <NewPatientDevicesSection
+            deviceFlowType={deviceFlowType}
+            onChangeDeviceFlowType={setDeviceFlowType}
+            items={deviceDrafts}
+            onAddRow={handleAddDeviceRow}
+            onChangeRow={handleChangeDeviceRow}
+            onRemoveRow={handleRemoveDeviceRow}
+          />
+        </FormSection>
+
+        {/* SGK + Ödeme bloğu (SONRA) */}
         <FormSection title="SGK ve Ödeme">
           <div className="grid gap-3 md:grid-cols-12 md:items-start">
             <div className="md:col-span-4">
               <NewPatientSgkSection
+                deviceFlowType={deviceFlowType}
+                sgkPillPrescription={sgkPillPrescription}
+                onChangeSgkPillPrescription={(v) => setSgkPillPrescription(v)}
                 sgkFlag={formState.sgkFlag}
                 sgkPrescriptionReceived={formState.sgkPrescriptionReceived}
                 sgkRecordedToSystem={formState.sgkRecordedToSystem}
@@ -330,18 +363,6 @@ export function NewPatientFormCard({
               />
             </div>
           )}
-        </FormSection>
-
-        <FormSection
-          title="Cihazlar"
-          description="Stoktaki cihazları bu hastaya bağlamak için kulak yönü ve cihaz seçimlerini burada yapabilirsiniz. Hasta kaydından sonra inventory'de ilgili satırlar 'satıldı' olarak işaretlenecek."
-        >
-          <NewPatientDevicesSection
-            items={deviceDrafts}
-            onAddRow={handleAddDeviceRow}
-            onChangeRow={handleChangeDeviceRow}
-            onRemoveRow={handleRemoveDeviceRow}
-          />
         </FormSection>
 
         <div className="flex justify-end">
