@@ -2,11 +2,10 @@
 // Encapsulated state, validation and breakdown logic for the inline "Yeni Hasta" form.
 // Keeps NewPatientFormCard lean and reusable.
 //
-// v2.6:
-// - Adds derived deviceMultiplier (1|2) based on device drafts:
-//   * if any row has side='bilateral' => 2
-//   * OR if 2+ meaningful device rows exist => 2
-// - Multiplies sgkExpectedReimbursement on submit when multiplier=2.
+// v2.7:
+// - Removes derived deviceMultiplier logic (SGK is decoupled from device drafts).
+// - Adds sgkDeviceCount ('1'|'2') stored in formState (manual choice).
+// - sgkExpectedReimbursement is stored as TOTAL already; no submit-time multiplication.
 
 import { useState, useMemo, FormEvent } from 'react';
 import type {
@@ -49,10 +48,7 @@ type UseNewPatientFormArgs = {
   externalErrorMessage?: string;
 };
 
-export function useNewPatientForm({
-  onSubmit,
-  externalErrorMessage,
-}: UseNewPatientFormArgs) {
+export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPatientFormArgs) {
   const [formState, setFormState] = useState<NewPatientForm>({
     fullName: '',
     phone: '',
@@ -64,6 +60,7 @@ export function useNewPatientForm({
     sgkExpectedReimbursement: '',
     sgkExpectedMonth: '',
     sgkPrescriptionNo: '',
+    sgkDeviceCount: '1',
     paymentMethod: '',
     saleTotal: '',
     cardFeeRate: '',
@@ -80,22 +77,16 @@ export function useNewPatientForm({
   const [localError, setLocalError] = useState<string | null>(null);
 
   // Çoklu ödeme satırları.
-  const [paymentRows, setPaymentRows] = useState<PaymentRowDraft[]>([
-    createEmptyPaymentRow(),
-  ]);
+  const [paymentRows, setPaymentRows] = useState<PaymentRowDraft[]>([createEmptyPaymentRow()]);
 
   // Senet plan taslağı.
   const [senetUpfrontPaid, setSenetUpfrontPaid] = useState<string>('');
-  const [senetInstallmentCount, setSenetInstallmentCount] =
-    useState<string>('');
-  const [senetFirstDueDate, setSenetFirstDueDate] =
-    useState<string>('');
+  const [senetInstallmentCount, setSenetInstallmentCount] = useState<string>('');
+  const [senetFirstDueDate, setSenetFirstDueDate] = useState<string>('');
   const [senetDayOfMonth, setSenetDayOfMonth] = useState<string>('');
 
   // Cihaz taslakları: form en az bir cihaz satırı ile açılır.
-  const [deviceDrafts, setDeviceDrafts] = useState<NewPatientDeviceDraft[]>([
-    createEmptyDeviceDraft(),
-  ]);
+  const [deviceDrafts, setDeviceDrafts] = useState<NewPatientDeviceDraft[]>([createEmptyDeviceDraft()]);
 
   const paymentsTotal = useMemo(() => {
     return paymentRows.reduce((sum, row) => {
@@ -110,30 +101,6 @@ export function useNewPatientForm({
     [paymentRows],
   );
 
-  /**
-   * Device multiplier for SGK:
-   * - 2 if any row is marked bilateral
-   * - OR if 2+ meaningful device rows exist (not just the empty default row)
-   */
-  const deviceMultiplier = useMemo<1 | 2>(() => {
-    const rows = deviceDrafts ?? [];
-
-    const hasBilateral = rows.some((r) => r.side === 'bilateral');
-    if (hasBilateral) return 2;
-
-    const meaningfulCount = rows.filter((r) => {
-      const hasSelection =
-        !!r.inventoryItemId ||
-        !!r.brand?.trim() ||
-        !!r.model?.trim() ||
-        !!r.listPrice?.trim() ||
-        !!r.salePrice?.trim();
-      return hasSelection;
-    }).length;
-
-    return meaningfulCount >= 2 ? 2 : 1;
-  }, [deviceDrafts]);
-
   const resetFormState = () => {
     setFormState({
       fullName: '',
@@ -145,6 +112,7 @@ export function useNewPatientForm({
       sgkExpectedReimbursement: '',
       sgkExpectedMonth: '',
       sgkPrescriptionNo: '',
+      sgkDeviceCount: '1',
       paymentMethod: '',
       saleTotal: '',
       cardFeeRate: '',
@@ -170,32 +138,20 @@ export function useNewPatientForm({
     setPaymentRows((rows) => [...rows, createEmptyPaymentRow()]);
   };
 
-  const handleChangePaymentRow = (
-    index: number,
-    patch: Partial<PaymentRowDraft>,
-  ) => {
-    setPaymentRows((rows) =>
-      rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
-    );
+  const handleChangePaymentRow = (index: number, patch: Partial<PaymentRowDraft>) => {
+    setPaymentRows((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
 
   const handleRemovePaymentRow = (index: number) => {
-    setPaymentRows((rows) =>
-      rows.length <= 1 ? rows : rows.filter((_, i) => i !== index),
-    );
+    setPaymentRows((rows) => (rows.length <= 1 ? rows : rows.filter((_, i) => i !== index)));
   };
 
   const handleAddDeviceRow = () => {
     setDeviceDrafts((rows) => [...rows, createEmptyDeviceDraft()]);
   };
 
-  const handleChangeDeviceRow = (
-    index: number,
-    patch: Partial<NewPatientDeviceDraft>,
-  ) => {
-    setDeviceDrafts((rows) =>
-      rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
-    );
+  const handleChangeDeviceRow = (index: number, patch: Partial<NewPatientDeviceDraft>) => {
+    setDeviceDrafts((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
 
   const handleRemoveDeviceRow = (index: number) => {
@@ -238,8 +194,7 @@ export function useNewPatientForm({
     }
 
     const saleTotalNumber = paymentsTotal;
-    const saleTotalRaw =
-      saleTotalNumber > 0 ? saleTotalNumber.toString() : '';
+    const saleTotalRaw = saleTotalNumber > 0 ? saleTotalNumber.toString() : '';
 
     if (!saleTotalRaw) {
       setLocalError('Toplam satış tutarı zorunludur.');
@@ -258,62 +213,41 @@ export function useNewPatientForm({
         senetFirstDueDate.trim() !== '' &&
         senetDayOfMonth.trim() !== '';
 
-      const installmentPlanDraft: UpsertPatientInstallmentPlanInput | null =
-        hasInstallmentDraft
-          ? {
-              patientId: '', // createPatient sonrası zincirde doldurulacak.
-              saleTotal: saleTotalRaw,
-              upfrontPaid: senetUpfrontPaid.trim(),
-              installmentCount: senetInstallmentCount.trim(),
-              firstDueDate: senetFirstDueDate.trim(),
-              dayOfMonth: senetDayOfMonth.trim(),
-            }
-          : null;
+      const installmentPlanDraft: UpsertPatientInstallmentPlanInput | null = hasInstallmentDraft
+        ? {
+            patientId: '', // createPatient sonrası zincirde doldurulacak.
+            saleTotal: saleTotalRaw,
+            upfrontPaid: senetUpfrontPaid.trim(),
+            installmentCount: senetInstallmentCount.trim(),
+            firstDueDate: senetFirstDueDate.trim(),
+            dayOfMonth: senetDayOfMonth.trim(),
+          }
+        : null;
 
       // Çoklu ödeme satırlarından saleBreakdownDraft üret.
-      const saleBreakdownDraft: UpsertPatientSaleBreakdownItem[] =
-        paymentRows
-          .filter(
-            (row) =>
-              !!row.paymentMethod && row.amount.trim().length > 0,
-          )
-          .map((row) => ({
-            id: undefined,
-            method: row.paymentMethod as PatientPaymentMethod,
-            amount: row.amount.trim(),
-            note: '',
-          }));
-
-      // SGK reimbursement: base is stored as single-device value.
-      // Multiply on submit if bilateral / 2 devices.
-      const sgkExpectedReimbursementForSubmit = formState.sgkFlag
-        ? multiplyMoneyLikeString(formState.sgkExpectedReimbursement ?? '', deviceMultiplier)
-        : '';
+      const saleBreakdownDraft: UpsertPatientSaleBreakdownItem[] = paymentRows
+        .filter((row) => !!row.paymentMethod && row.amount.trim().length > 0)
+        .map((row) => ({
+          id: undefined,
+          method: row.paymentMethod as PatientPaymentMethod,
+          amount: row.amount.trim(),
+          note: '',
+        }));
 
       onSubmit({
         fullName,
         phone: normalizedPhone,
         sgkFlag: formState.sgkFlag,
-        sgkPrescriptionReceived: formState.sgkFlag
-          ? formState.sgkPrescriptionReceived
-          : false,
-        sgkRecordedToSystem: formState.sgkFlag
-          ? formState.sgkRecordedToSystem
-          : false,
+        sgkPrescriptionReceived: formState.sgkFlag ? formState.sgkPrescriptionReceived : false,
+        sgkRecordedToSystem: formState.sgkFlag ? formState.sgkRecordedToSystem : false,
         sgkProfileId: formState.sgkFlag ? formState.sgkProfileId : '',
-        sgkExpectedReimbursement: sgkExpectedReimbursementForSubmit,
-        sgkExpectedMonth: formState.sgkFlag
-          ? formState.sgkExpectedMonth
-          : '',
-        sgkPrescriptionNo: formState.sgkFlag
-          ? (formState.sgkPrescriptionNo ?? '').trim()
-          : '',
+        sgkExpectedReimbursement: formState.sgkFlag ? formState.sgkExpectedReimbursement ?? '' : '',
+        sgkExpectedMonth: formState.sgkFlag ? formState.sgkExpectedMonth : '',
+        sgkPrescriptionNo: formState.sgkFlag ? (formState.sgkPrescriptionNo ?? '').trim() : '',
+        sgkDeviceCount: formState.sgkFlag ? (formState.sgkDeviceCount ?? '1') : '1',
         paymentMethod: primaryPayment.paymentMethod,
         saleTotal: saleTotalRaw,
-        cardFeeRate:
-          primaryPayment.paymentMethod === 'Kredi_Kartı'
-            ? primaryPayment.cardFeeRate
-            : '',
+        cardFeeRate: primaryPayment.paymentMethod === 'Kredi_Kartı' ? primaryPayment.cardFeeRate : '',
         referenceId: formState.referenceId,
         referenceName: formState.referenceName,
         nationalId: normalizedNationalId,
@@ -327,10 +261,7 @@ export function useNewPatientForm({
       // İstersen çağıran tarafta success sonrası resetFormState() çalıştırabilirsin.
       // resetFormState();
     } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : 'Form doğrulaması sırasında hata oluştu.';
+      const message = err instanceof Error ? err.message : 'Form doğrulaması sırasında hata oluştu.';
       setLocalError(message);
     }
   };
@@ -361,9 +292,6 @@ export function useNewPatientForm({
     handleSubmit,
     combinedError,
     resetFormState,
-
-    // Expose for UI wiring (NewPatientFormCard should pass into NewPatientSgkSection)
-    deviceMultiplier,
   };
 }
 
@@ -388,9 +316,7 @@ function normalizePhone(input: string): string {
   if (v.startsWith('+')) {
     const digits = v.slice(1).replace(/\D/g, '');
     if (digits.length < 8 || digits.length > 15) {
-      throw new Error(
-        'Telefon numarası geçerli bir uluslararası formatta değil.',
-      );
+      throw new Error('Telefon numarası geçerli bir uluslararası formatta değil.');
     }
     return `+${digits}`;
   }
@@ -399,9 +325,7 @@ function normalizePhone(input: string): string {
   if (v.startsWith('00')) {
     const digits = v.slice(2).replace(/\D/g, '');
     if (digits.length < 8 || digits.length > 15) {
-      throw new Error(
-        'Telefon numarası geçerli bir uluslararası formatta değil.',
-      );
+      throw new Error('Telefon numarası geçerli bir uluslararası formatta değil.');
     }
     return `+${digits}`;
   }
@@ -420,9 +344,7 @@ function normalizePhone(input: string): string {
     return `+90${digits.slice(1)}`;
   }
 
-  throw new Error(
-    'Telefon numarası 10–11 haneli TR veya geçerli uluslararası formatta olmalıdır.',
-  );
+  throw new Error('Telefon numarası 10–11 haneli TR veya geçerli uluslararası formatta olmalıdır.');
 }
 
 // Normalize T.C.: keep digits only and require 11 digits.
@@ -442,18 +364,6 @@ function parseMoneyLikeToNumber(value: string): number | null {
   const num = Number(normalized);
   if (!Number.isFinite(num)) return null;
   return num;
-}
-
-function formatMoneyLikeTR(value: number): string {
-  const fixed = Number.isInteger(value) ? value.toString() : value.toFixed(2);
-  return fixed.replace('.', ',');
-}
-
-function multiplyMoneyLikeString(amount: string, multiplier: number): string {
-  const n = parseMoneyLikeToNumber(amount);
-  if (n == null) return amount;
-  const out = Number((n * multiplier).toFixed(2));
-  return formatMoneyLikeTR(out);
 }
 
 export function formatCurrencyTry(amount: number | null): string {
