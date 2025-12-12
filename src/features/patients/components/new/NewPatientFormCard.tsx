@@ -1,18 +1,5 @@
 // src/features/patients/components/new/NewPatientFormCard.tsx
 // Inline "Yeni Hasta" form card using InlineCreateCard and modular subsections.
-// Layout:
-// - Column 1 (desktop): Ad Soyad, T.C. Kimlik No
-// - Column 2 (desktop): Telefon, Yakın Telefon
-// - Column 3 (desktop): Referans, Adres
-//
-// v2 kuralları:
-// - Zorunlu alanlar: Ad Soyad, T.C. Kimlik No, Telefon, Ödeme Şekli, Toplam Satış Tutarı.
-// - Telefon E.164 uyumlu normalize edilir (hook içinde).
-// - T.C. Kimlik No sadece rakamlardan oluşur ve 11 hanelidir (hook içinde).
-//
-// v2.6:
-// - SGK expected reimbursement display is multiplied by deviceMultiplier (1|2)
-//   based on device drafts (bilateral or 2 devices).
 
 import type { NewPatientForm } from '../../types';
 import { InlineCreateCard } from '../../../../components/layout/InlineCreateCard';
@@ -23,10 +10,7 @@ import { NewPatientPaymentSection } from './NewPatientPaymentSection';
 import { PatientSenetPlanFormCard } from '../billing/PatientSenetPlanFormCard';
 import { NewPatientDevicesSection } from './NewPatientDevicesSection';
 import { Button } from '../../../../components/ui/Button';
-import {
-  useNewPatientForm,
-  formatCurrencyTry,
-} from '../../hooks/useNewPatientForm';
+import { useNewPatientForm, formatCurrencyTry } from '../../hooks/useNewPatientForm';
 
 type NewPatientFormCardProps = {
   open: boolean;
@@ -66,9 +50,6 @@ export function NewPatientFormCard({
     hasSenetPayment,
     handleSubmit,
     combinedError,
-
-    // v2.6
-    deviceMultiplier,
   } = useNewPatientForm({
     onSubmit,
     externalErrorMessage: errorMessage,
@@ -91,11 +72,8 @@ export function NewPatientFormCard({
           <div className="grid gap-3 md:grid-cols-12">
             {/* Column 1: Ad Soyad + T.C. Kimlik No */}
             <div className="space-y-2 md:col-span-4">
-              {/* Ad Soyad */}
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Ad Soyad
-                </label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Ad Soyad</label>
                 <input
                   type="text"
                   required
@@ -111,11 +89,8 @@ export function NewPatientFormCard({
                 />
               </div>
 
-              {/* T.C. Kimlik No */}
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  T.C. Kimlik No
-                </label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">T.C. Kimlik No</label>
                 <input
                   type="text"
                   required
@@ -134,11 +109,8 @@ export function NewPatientFormCard({
 
             {/* Column 2: Telefon + Yakın Telefon */}
             <div className="space-y-2 md:col-span-4">
-              {/* Telefon */}
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Telefon
-                </label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Telefon</label>
                 <input
                   type="tel"
                   required
@@ -154,11 +126,8 @@ export function NewPatientFormCard({
                 />
               </div>
 
-              {/* Yakın Telefonu */}
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Yakın Telefonu
-                </label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Yakın Telefonu</label>
                 <input
                   type="tel"
                   value={formState.kinPhone}
@@ -176,18 +145,11 @@ export function NewPatientFormCard({
 
             {/* Column 3: Referans + Adres */}
             <div className="space-y-2 md:col-span-4">
-              {/* Referans */}
               <div className="relative">
                 <NewPatientReferenceField
                   referenceId={formState.referenceId}
                   referenceName={formState.referenceName}
-                  onChangeReference={({
-                    id,
-                    name,
-                  }: {
-                    id: string | null;
-                    name: string;
-                  }) =>
+                  onChangeReference={({ id, name }: { id: string | null; name: string }) =>
                     setFormState((s) => ({
                       ...s,
                       referenceId: id,
@@ -197,11 +159,8 @@ export function NewPatientFormCard({
                 />
               </div>
 
-              {/* Adres */}
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Adres
-                </label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Adres</label>
                 <textarea
                   value={formState.address}
                   onChange={(e) =>
@@ -222,40 +181,27 @@ export function NewPatientFormCard({
         {/* SGK + Ödeme bloğu */}
         <FormSection title="SGK ve Ödeme">
           <div className="grid gap-3 md:grid-cols-12 md:items-start">
-            {/* SGK üçlüsü + profil */}
             <div className="md:col-span-4">
               <NewPatientSgkSection
                 sgkFlag={formState.sgkFlag}
                 sgkPrescriptionReceived={formState.sgkPrescriptionReceived}
                 sgkRecordedToSystem={formState.sgkRecordedToSystem}
                 sgkProfileId={formState.sgkProfileId ?? ''}
-                sgkExpectedReimbursement={
-                  formState.sgkExpectedReimbursement ?? ''
-                }
+                sgkExpectedReimbursement={formState.sgkExpectedReimbursement ?? ''}
                 sgkExpectedMonth={formState.sgkExpectedMonth ?? ''}
                 sgkPrescriptionNo={formState.sgkPrescriptionNo ?? ''}
-
-                // v2.6: show x2 when bilateral / 2 devices
-                deviceMultiplier={deviceMultiplier}
-
+                sgkDeviceCount={formState.sgkDeviceCount ?? '1'}
                 onChangeSgkFlag={(value: boolean) =>
                   setFormState((s) => ({
                     ...s,
                     sgkFlag: value,
-                    sgkPrescriptionReceived: value
-                      ? s.sgkPrescriptionReceived
-                      : false,
-                    sgkRecordedToSystem: value
-                      ? s.sgkRecordedToSystem
-                      : false,
+                    sgkPrescriptionReceived: value ? s.sgkPrescriptionReceived : false,
+                    sgkRecordedToSystem: value ? s.sgkRecordedToSystem : false,
                     sgkProfileId: value ? s.sgkProfileId ?? '' : '',
-                    sgkExpectedReimbursement: value
-                      ? s.sgkExpectedReimbursement ?? ''
-                      : '',
+                    sgkExpectedReimbursement: value ? s.sgkExpectedReimbursement ?? '' : '',
                     sgkExpectedMonth: value ? s.sgkExpectedMonth ?? '' : '',
-                    sgkPrescriptionNo: value
-                      ? s.sgkPrescriptionNo ?? ''
-                      : '',
+                    sgkPrescriptionNo: value ? s.sgkPrescriptionNo ?? '' : '',
+                    sgkDeviceCount: value ? (s.sgkDeviceCount ?? '1') : '1',
                   }))
                 }
                 onChangeSgkPrescriptionReceived={(value: boolean) =>
@@ -294,10 +240,15 @@ export function NewPatientFormCard({
                     sgkPrescriptionNo: value,
                   }))
                 }
+                onChangeSgkDeviceCount={(value: '1' | '2') =>
+                  setFormState((s) => ({
+                    ...s,
+                    sgkDeviceCount: value,
+                  }))
+                }
               />
             </div>
 
-            {/* Çoklu ödeme satırları + toplam */}
             <div className="md:col-span-8 space-y-3">
               {paymentRows.map((row, index) => (
                 <div
@@ -305,9 +256,7 @@ export function NewPatientFormCard({
                   className="space-y-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2"
                 >
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-slate-700">
-                      Ödeme #{index + 1}
-                    </span>
+                    <span className="text-xs font-medium text-slate-700">Ödeme #{index + 1}</span>
                     {paymentRows.length > 1 && (
                       <button
                         type="button"
@@ -323,19 +272,9 @@ export function NewPatientFormCard({
                     paymentMethod={row.paymentMethod}
                     saleTotal={row.amount}
                     cardFeeRate={row.cardFeeRate}
-                    onChangePaymentMethod={(value) =>
-                      handleChangePaymentRow(index, {
-                        paymentMethod: value,
-                      })
-                    }
-                    onChangeSaleTotal={(value) =>
-                      handleChangePaymentRow(index, { amount: value })
-                    }
-                    onChangeCardFeeRate={(value) =>
-                      handleChangePaymentRow(index, {
-                        cardFeeRate: value,
-                      })
-                    }
+                    onChangePaymentMethod={(value) => handleChangePaymentRow(index, { paymentMethod: value })}
+                    onChangeSaleTotal={(value) => handleChangePaymentRow(index, { amount: value })}
+                    onChangeCardFeeRate={(value) => handleChangePaymentRow(index, { cardFeeRate: value })}
                   />
                 </div>
               ))}
@@ -351,21 +290,17 @@ export function NewPatientFormCard({
                 <p className="text-[11px] text-slate-700">
                   Çoklu ödemelerin toplamı:{' '}
                   <span className="font-semibold">
-                    {formatCurrencyTry(
-                      paymentsTotal > 0 ? paymentsTotal : null,
-                    )}
+                    {formatCurrencyTry(paymentsTotal > 0 ? paymentsTotal : null)}
                   </span>
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Senet planı – yalnızca en az bir satırda "Senet" seçildiyse */}
           {hasSenetPayment && (
             <div className="mt-3 space-y-3">
               <p className="text-[11px] text-slate-600">
-                Aşağıdaki alanlar bu yeni hasta için senet planı taslağını
-                tutar. Hasta kaydından sonra bu bilgiler detay ekranındaki
+                Aşağıdaki alanlar bu yeni hasta için senet planı taslağını tutar. Hasta kaydından sonra bu bilgiler detay ekranındaki
                 Ödemeler sekmesinde de düzenlenebilir.
               </p>
 
@@ -377,7 +312,6 @@ export function NewPatientFormCard({
                 firstDueDate={senetFirstDueDate}
                 dayOfMonth={senetDayOfMonth}
                 setSaleTotal={(_v: string) => {
-                  // Toplam, ödeme satırlarından geldiği için burada manuel set edilmiyor.
                   return;
                 }}
                 setUpfrontPaid={setSenetUpfrontPaid}
@@ -398,7 +332,6 @@ export function NewPatientFormCard({
           )}
         </FormSection>
 
-        {/* Cihazlar bloğu – her zaman en az bir satır açık */}
         <FormSection
           title="Cihazlar"
           description="Stoktaki cihazları bu hastaya bağlamak için kulak yönü ve cihaz seçimlerini burada yapabilirsiniz. Hasta kaydından sonra inventory'de ilgili satırlar 'satıldı' olarak işaretlenecek."
@@ -411,14 +344,8 @@ export function NewPatientFormCard({
           />
         </FormSection>
 
-        {/* Submit button */}
         <div className="flex justify-end">
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            disabled={isSubmitting}
-          >
+          <Button type="submit" variant="primary" size="md" disabled={isSubmitting}>
             {isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
           </Button>
         </div>
