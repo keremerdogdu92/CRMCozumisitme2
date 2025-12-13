@@ -1,5 +1,14 @@
 // src/features/patients/api/api.patients.create.ts
 // Create patient rows and attach optional financial/device drafts.
+//
+// Patch v2.9:
+// - FIX (critical): attachDevicesToPatientFromDrafts now honors draft.inventoryItemId.
+//   * If inventoryItemId is provided, ONLY that row is updated (org_id + status=in_stock + deleted_at IS NULL guards).
+//   * If missing, falls back to brand/model lookup (in_stock) and logs a WARN.
+// - ADD: chargerInventoryItemId is now also marked as sold (best-effort).
+// - ADD (best-effort): batteryLines are recorded as meeting_accessories by creating a patient meeting first.
+//   * Uses cost_price/sale_price = 0 for now (no pricing fields exist on BatteryLineDraft).
+//   * Logged as WARN so it can be extended later without silently hiding missing pricing.
 
 import { supabaseClient } from '../../../utils/supabaseClient';
 import type {
@@ -7,6 +16,7 @@ import type {
   PatientRow,
   PatientPaymentMethod,
   NewPatientDeviceDraft,
+  BatteryLineDraft,
 } from '../types';
 import { parseMoneyToNumber } from './api.core';
 import { savePatientSaleBreakdown } from './api.saleBreakdown';
@@ -20,9 +30,42 @@ export type CreatePatientOptions = {
   setInvoiceIssuedTrue?: boolean;
 };
 
+type InventoryItemStatus = 'in_stock' | 'sold' | string;
+type InventoryEarSide = 'right' | 'left' | 'bilateral' | null;
+
+function normalizeSide(side: string): InventoryEarSide {
+  return side === 'right' || side === 'left' || side === 'bilateral'
+    ? (side as InventoryEarSide)
+    : null;
+}
+
+function safeTrim(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function formatBatteryLineName(line: BatteryLineDraft): string {
+  const type = safeTrim(line.batteryType);
+  const brand = safeTrim(line.brand);
+  const q = line.quantity ?? { box: 0, pack: 0, unit: 0 };
+  const box = Number.isFinite(q.box) ? q.box : 0;
+  const pack = Number.isFinite(q.pack) ? q.pack : 0;
+  const unit = Number.isFinite(q.unit) ? q.unit : 0;
+
+  // Keep this human-readable and stable for future parsing/reporting.
+  // Example: "Battery 10 - Rayovac (box:1 pack:0 unit:0)"
+  const labelBrand = brand ? ` - ${brand}` : '';
+  return `Battery ${type}${labelBrand} (box:${box} pack:${pack} unit:${unit})`;
+}
+
 /**
  * Attach inventory_items to a patient based on device drafts collected in the form.
  * Best-effort only; failures are logged but do not fail the patient creation.
+ *
+ * Rules:
+ * - If draft.inventoryItemId exists:
+ *   update ONLY that row with guards: org_id + status=in_stock + deleted_at IS NULL.
+ * - Else:
+ *   fallback to brand/model lookup (first in_stock row), but WARN because it can mismatch.
  */
 async function attachDevicesToPatientFromDrafts(params: {
   orgId: string;
@@ -32,24 +75,84 @@ async function attachDevicesToPatientFromDrafts(params: {
   const { orgId, patientId, drafts } = params;
   if (!drafts || drafts.length === 0) return;
 
+  const nowIso = new Date().toISOString();
+
   for (const draft of drafts) {
-    const brand = (draft.brand ?? '').trim();
-    const model = (draft.model ?? '').trim();
+    const inventoryItemId = safeTrim(draft.inventoryItemId ?? '');
+    const brand = safeTrim(draft.brand);
+    const model = safeTrim(draft.model);
+
+    // Side is optional and may be empty string from UI.
+    const side = normalizeSide(safeTrim(draft.side));
+
+    // If inventoryItemId is provided, we must use it and ignore brand/model matching.
+    if (inventoryItemId) {
+      try {
+        const { data: updatedRows, error: updateError } = await supabaseClient
+          .from('inventory_items')
+          .update({
+            sold_patient_id: patientId,
+            sold_at: nowIso,
+            status: 'sold',
+            ear_side: side,
+          })
+          .eq('id', inventoryItemId)
+          .eq('org_id', orgId)
+          .eq('status', 'in_stock' as InventoryItemStatus)
+          .is('deleted_at', null)
+          .select('id');
+
+        if (updateError) {
+          console.error(
+            'STEP_DEVICE_ATTACH_UPDATE_BY_ID: Failed to update inventory_items by inventoryItemId',
+            { orgId, inventoryItemId, patientId, updateError },
+          );
+          continue;
+        }
+
+        const updated = (updatedRows ?? []) as { id: string }[];
+        if (updated.length === 0) {
+          console.warn(
+            'STEP_DEVICE_ATTACH_UPDATE_BY_ID_NOOP: inventoryItemId not updated (not in_stock / wrong org / deleted)',
+            { orgId, inventoryItemId, patientId },
+          );
+          continue;
+        }
+
+        continue;
+      } catch (err) {
+        console.error(
+          'STEP_DEVICE_ATTACH_BY_ID_UNEXPECTED: Unexpected error while attaching device by inventoryItemId',
+          { orgId, inventoryItemId, patientId, err },
+        );
+        continue;
+      }
+    }
+
+    // No inventoryItemId → fallback path.
+    // Requires brand/model (otherwise we cannot resolve a stock item).
     if (!brand || !model) continue;
+
+    console.warn(
+      'STEP_DEVICE_ATTACH_FALLBACK_USED: inventoryItemId missing; falling back to brand/model match (may be wrong if duplicates exist)',
+      { orgId, patientId, brand, model },
+    );
 
     try {
       const { data, error } = await supabaseClient
         .from('inventory_items')
-        .select('id, ear_side, status')
+        .select('id')
         .eq('org_id', orgId)
         .eq('brand', brand)
         .eq('model', model)
-        .eq('status', 'in_stock')
+        .eq('status', 'in_stock' as InventoryItemStatus)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true })
         .limit(1);
 
       if (error) {
         console.error(
-          'STEP_DEVICE_ATTACH_QUERY: Failed to query inventory_items for device draft',
+          'STEP_DEVICE_ATTACH_QUERY_FALLBACK: Failed to query inventory_items for device draft fallback',
           { orgId, brand, model, error },
         );
         continue;
@@ -58,43 +161,187 @@ async function attachDevicesToPatientFromDrafts(params: {
       const row = (data ?? [])[0] as { id: string } | undefined;
       if (!row) {
         console.warn(
-          'STEP_DEVICE_ATTACH_NO_MATCH: No in_stock inventory item found for draft',
+          'STEP_DEVICE_ATTACH_NO_MATCH_FALLBACK: No in_stock inventory item found for fallback match',
           { orgId, brand, model },
         );
         continue;
       }
 
-      const side =
-        draft.side === 'right' ||
-        draft.side === 'left' ||
-        draft.side === 'bilateral'
-          ? draft.side
-          : null;
-
-      const { error: updateError } = await supabaseClient
+      const { data: updatedRows, error: updateError } = await supabaseClient
         .from('inventory_items')
         .update({
           sold_patient_id: patientId,
-          sold_at: new Date().toISOString(),
+          sold_at: nowIso,
           status: 'sold',
           ear_side: side,
         })
-        .eq('id', row.id);
+        .eq('id', row.id)
+        .eq('org_id', orgId)
+        .eq('status', 'in_stock' as InventoryItemStatus)
+        .is('deleted_at', null)
+        .select('id');
 
       if (updateError) {
         console.error(
-          'STEP_DEVICE_ATTACH_UPDATE: Failed to update inventory_items row for device draft',
-          { inventoryItemId: row.id, patientId, updateError },
+          'STEP_DEVICE_ATTACH_UPDATE_FALLBACK: Failed to update inventory_items row for fallback match',
+          { orgId, inventoryItemId: row.id, patientId, updateError },
+        );
+        continue;
+      }
+
+      const updated = (updatedRows ?? []) as { id: string }[];
+      if (updated.length === 0) {
+        console.warn(
+          'STEP_DEVICE_ATTACH_UPDATE_FALLBACK_NOOP: Fallback candidate not updated (race / not in_stock / deleted)',
+          { orgId, inventoryItemId: row.id, patientId },
         );
         continue;
       }
     } catch (err) {
       console.error(
-        'STEP_DEVICE_ATTACH_UNEXPECTED: Unexpected error while attaching device draft',
+        'STEP_DEVICE_ATTACH_FALLBACK_UNEXPECTED: Unexpected error while attaching device fallback',
         { orgId, patientId, brand, model, err },
       );
       continue;
     }
+  }
+}
+
+/**
+ * Mark a charger inventory item as sold and linked to the patient.
+ * Best-effort only.
+ */
+async function attachChargerToPatient(params: {
+  orgId: string;
+  patientId: string;
+  chargerInventoryItemId: string;
+}): Promise<void> {
+  const { orgId, patientId, chargerInventoryItemId } = params;
+  const id = safeTrim(chargerInventoryItemId);
+  if (!id) return;
+
+  const nowIso = new Date().toISOString();
+
+  try {
+    const { data: updatedRows, error } = await supabaseClient
+      .from('inventory_items')
+      .update({
+        sold_patient_id: patientId,
+        sold_at: nowIso,
+        status: 'sold',
+        // chargers should not carry ear_side; do not overwrite existing value unless needed
+      })
+      .eq('id', id)
+      .eq('org_id', orgId)
+      .eq('status', 'in_stock' as InventoryItemStatus)
+      .is('deleted_at', null)
+      .select('id');
+
+    if (error) {
+      console.error('STEP_CHARGER_ATTACH_UPDATE: Failed to mark charger as sold', {
+        orgId,
+        patientId,
+        chargerInventoryItemId: id,
+        error,
+      });
+      return;
+    }
+
+    const updated = (updatedRows ?? []) as { id: string }[];
+    if (updated.length === 0) {
+      console.warn(
+        'STEP_CHARGER_ATTACH_NOOP: chargerInventoryItemId not updated (not in_stock / wrong org / deleted)',
+        { orgId, patientId, chargerInventoryItemId: id },
+      );
+    }
+  } catch (err) {
+    console.error(
+      'STEP_CHARGER_ATTACH_UNEXPECTED: Unexpected error while attaching charger',
+      { orgId, patientId, chargerInventoryItemId: id, err },
+    );
+  }
+}
+
+/**
+ * Record battery sales as meeting_accessories.
+ * Requires meeting_id, so we create a minimal patient meeting first.
+ * Best-effort only.
+ */
+async function recordBatteryLinesAsAccessories(params: {
+  orgId: string;
+  patientId: string;
+  patientName: string;
+  createdBy: string;
+  batteryLines: BatteryLineDraft[];
+}): Promise<void> {
+  const { orgId, patientId, patientName, createdBy, batteryLines } = params;
+  if (!batteryLines || batteryLines.length === 0) return;
+
+  // NOTE: BatteryLineDraft currently has no pricing → record 0 for now.
+  console.warn(
+    'STEP_BATTERY_ACCESSORIES_PRICING_MISSING: Recording battery lines with cost_price/sale_price = 0 (extend later if pricing is added to BatteryLineDraft)',
+    { orgId, patientId },
+  );
+
+  const meetingAtIso = new Date().toISOString();
+
+  try {
+    const { data: meetingRow, error: meetingError } = await supabaseClient
+      .from('meetings')
+      .insert({
+        org_id: orgId,
+        meeting_type: 'patient',
+        patient_id: patientId,
+        subject: 'Accessory Sale',
+        subject_name: safeTrim(patientName) || null,
+        at: meetingAtIso,
+        created_by: createdBy,
+      })
+      .select('id')
+      .single();
+
+    if (meetingError) {
+      console.error(
+        'STEP_BATTERY_ACCESSORIES_MEETING_INSERT: Failed to create meeting for accessories',
+        { orgId, patientId, meetingError },
+      );
+      return;
+    }
+
+    const meetingId = (meetingRow as any)?.id as string | undefined;
+    if (!meetingId) {
+      console.error(
+        'STEP_BATTERY_ACCESSORIES_MEETING_ID_MISSING: Meeting insert returned no id',
+        { orgId, patientId },
+      );
+      return;
+    }
+
+    const accessoryRows = batteryLines.map((line) => ({
+      org_id: orgId,
+      meeting_id: meetingId,
+      patient_id: patientId,
+      name: formatBatteryLineName(line),
+      cost_price: 0,
+      sale_price: 0,
+    }));
+
+    const { error: accessoriesError } = await supabaseClient
+      .from('meeting_accessories')
+      .insert(accessoryRows);
+
+    if (accessoriesError) {
+      console.error(
+        'STEP_BATTERY_ACCESSORIES_INSERT: Failed to insert meeting_accessories rows for battery lines',
+        { orgId, patientId, meetingId, accessoriesError },
+      );
+      return;
+    }
+  } catch (err) {
+    console.error(
+      'STEP_BATTERY_ACCESSORIES_UNEXPECTED: Unexpected error while recording battery accessories',
+      { orgId, patientId, err },
+    );
   }
 }
 
@@ -176,10 +423,7 @@ export async function createPatient(
   let card_fee_rate: number | null = null;
   let card_fee_amount: number | null = null;
 
-  sale_total_amount = parseMoneyToNumber(
-    saleTotalRaw,
-    'SALE_TOTAL_AMOUNT',
-  );
+  sale_total_amount = parseMoneyToNumber(saleTotalRaw, 'SALE_TOTAL_AMOUNT');
 
   if (input.paymentMethod) {
     payment_method = input.paymentMethod as PatientPaymentMethod;
@@ -232,9 +476,7 @@ export async function createPatient(
         month < 1 ||
         month > 12
       ) {
-        throw new Error(
-          'SGK_EXPECTED_MONTH: Geçerli bir ay seçin (yyyy-AA).',
-        );
+        throw new Error('SGK_EXPECTED_MONTH: Geçerli bir ay seçin (yyyy-AA).');
       }
 
       const date = new Date(Date.UTC(year, month - 1, 15));
@@ -256,9 +498,7 @@ export async function createPatient(
     sgk_prescription_received: input.sgkFlag
       ? input.sgkPrescriptionReceived
       : false,
-    sgk_recorded_to_system: input.sgkFlag
-      ? input.sgkRecordedToSystem
-      : false,
+    sgk_recorded_to_system: input.sgkFlag ? input.sgkRecordedToSystem : false,
     reference_id: input.referenceId,
     payment_method,
     sale_total_amount,
@@ -356,28 +596,26 @@ export async function createPatient(
         ? Number(row.sgk_expected_reimbursement)
         : null,
     sgk_expected_reimbursement_month:
-      (row.sgk_expected_reimbursement_month as
-        | string
-        | null
-        | undefined) ?? null,
+      (row.sgk_expected_reimbursement_month as string | null | undefined) ??
+      null,
     device_brand: null,
     device_model: null,
     device_total_price: null,
     device_ear_side_summary: null,
     payment_method: (row.payment_method as PatientPaymentMethod | null) ?? null,
-    sale_total_amount:
-      (row.sale_total_amount as number | null | undefined) ?? null,
+    sale_total_amount: (row.sale_total_amount as number | null | undefined) ?? null,
     card_fee_rate: (row.card_fee_rate as number | null | undefined) ?? null,
     card_fee_amount: (row.card_fee_amount as number | null | undefined) ?? null,
     invoice_issued: (row.invoice_issued as boolean | null | undefined) ?? null,
-    invoice_issued_at:
-      (row.invoice_issued_at as string | null | undefined) ?? null,
+    invoice_issued_at: (row.invoice_issued_at as string | null | undefined) ?? null,
   };
 
   // v2 chaining (best-effort)
   const saleBreakdownDraft = input.saleBreakdownDraft ?? [];
   const installmentPlanDraft = input.installmentPlanDraft ?? null;
   const deviceDrafts = input.deviceDrafts ?? [];
+  const chargerInventoryItemId = input.chargerInventoryItemId ?? null;
+  const batteryLines = input.batteryLines ?? [];
 
   if (saleBreakdownDraft.length > 0) {
     try {
@@ -417,6 +655,38 @@ export async function createPatient(
     } catch (err) {
       console.error(
         'STEP_CHAIN_DEVICE: Unexpected error while attaching device drafts after patient insert',
+        err,
+      );
+    }
+  }
+
+  if (chargerInventoryItemId) {
+    try {
+      await attachChargerToPatient({
+        orgId,
+        patientId: inserted.id,
+        chargerInventoryItemId,
+      });
+    } catch (err) {
+      console.error(
+        'STEP_CHAIN_CHARGER: Unexpected error while attaching charger after patient insert',
+        err,
+      );
+    }
+  }
+
+  if (batteryLines.length > 0) {
+    try {
+      await recordBatteryLinesAsAccessories({
+        orgId,
+        patientId: inserted.id,
+        patientName: inserted.full_name,
+        createdBy: user.id,
+        batteryLines,
+      });
+    } catch (err) {
+      console.error(
+        'STEP_CHAIN_BATTERIES: Unexpected error while recording battery accessories after patient insert',
         err,
       );
     }
