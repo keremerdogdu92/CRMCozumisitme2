@@ -2,10 +2,11 @@
 // Encapsulated state, validation and breakdown logic for the inline "Yeni Hasta" form.
 // Keeps NewPatientFormCard lean and reusable.
 //
-// v2.7:
-// - Removes derived deviceMultiplier logic (SGK is decoupled from device drafts).
-// - Adds sgkDeviceCount ('1'|'2') stored in formState (manual choice).
-// - sgkExpectedReimbursement is stored as TOTAL already; no submit-time multiplication.
+// v2.8:
+// - Adds deviceFlowType (rechargeable/battery/battery-only) and keeps it soft (no strict validation).
+// - Adds optional chargerInventoryItemId for rechargeable flow (UI-guided, not required).
+// - Adds batteryLines draft support (single line with box/pack/unit quantities; list can grow later).
+// - Adds sgkPillPrescription flag (for battery flows) to support extra reimbursement logic later.
 
 import { useState, useMemo, FormEvent } from 'react';
 import type {
@@ -15,6 +16,8 @@ import type {
   UpsertPatientSaleBreakdownItem,
   UpsertPatientInstallmentPlanInput,
   NewPatientDeviceDraft,
+  BatteryLineDraft,
+  NewPatientDeviceFlowType,
 } from '../types';
 
 type PaymentRowDraft = {
@@ -43,6 +46,18 @@ function createEmptyDeviceDraft(): NewPatientDeviceDraft {
   };
 }
 
+function createEmptyBatteryLineDraft(): BatteryLineDraft {
+  return {
+    batteryType: '10',
+    brand: '',
+    quantity: {
+      box: 0,
+      pack: 0,
+      unit: 0,
+    },
+  };
+}
+
 type UseNewPatientFormArgs = {
   onSubmit: (values: NewPatientForm) => void;
   externalErrorMessage?: string;
@@ -52,6 +67,12 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
   const [formState, setFormState] = useState<NewPatientForm>({
     fullName: '',
     phone: '',
+
+    // Device flow defaults to rechargeable devices.
+    deviceFlowType: 'rechargeable_device',
+    chargerInventoryItemId: null,
+    batteryLines: [createEmptyBatteryLineDraft()],
+
     // SGK default false – her hasta SGK'lı gelmiyor.
     sgkFlag: false,
     sgkPrescriptionReceived: false,
@@ -61,6 +82,10 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
     sgkExpectedMonth: '',
     sgkPrescriptionNo: '',
     sgkDeviceCount: '1',
+
+    // Battery-specific SGK flag (only meaningful for battery flows).
+    sgkPillPrescription: false,
+
     paymentMethod: '',
     saleTotal: '',
     cardFeeRate: '',
@@ -105,6 +130,11 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
     setFormState({
       fullName: '',
       phone: '',
+
+      deviceFlowType: 'rechargeable_device' as NewPatientDeviceFlowType,
+      chargerInventoryItemId: null,
+      batteryLines: [createEmptyBatteryLineDraft()],
+
       sgkFlag: false,
       sgkPrescriptionReceived: false,
       sgkRecordedToSystem: false,
@@ -113,6 +143,8 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
       sgkExpectedMonth: '',
       sgkPrescriptionNo: '',
       sgkDeviceCount: '1',
+      sgkPillPrescription: false,
+
       paymentMethod: '',
       saleTotal: '',
       cardFeeRate: '',
@@ -237,24 +269,38 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
       onSubmit({
         fullName,
         phone: normalizedPhone,
+
+        // New flow fields (soft, no strict validation yet)
+        deviceFlowType: formState.deviceFlowType ?? 'rechargeable_device',
+        chargerInventoryItemId: formState.chargerInventoryItemId ?? null,
+        batteryLines: formState.batteryLines ?? [],
+        sgkPillPrescription: !!formState.sgkPillPrescription,
+
         sgkFlag: formState.sgkFlag,
         sgkPrescriptionReceived: formState.sgkFlag ? formState.sgkPrescriptionReceived : false,
         sgkRecordedToSystem: formState.sgkFlag ? formState.sgkRecordedToSystem : false,
+
+        // Note: UI will hide/disable profile selection for battery_only later.
         sgkProfileId: formState.sgkFlag ? formState.sgkProfileId : '',
         sgkExpectedReimbursement: formState.sgkFlag ? formState.sgkExpectedReimbursement ?? '' : '',
         sgkExpectedMonth: formState.sgkFlag ? formState.sgkExpectedMonth : '',
         sgkPrescriptionNo: formState.sgkFlag ? (formState.sgkPrescriptionNo ?? '').trim() : '',
         sgkDeviceCount: formState.sgkFlag ? (formState.sgkDeviceCount ?? '1') : '1',
+
         paymentMethod: primaryPayment.paymentMethod,
         saleTotal: saleTotalRaw,
         cardFeeRate: primaryPayment.paymentMethod === 'Kredi_Kartı' ? primaryPayment.cardFeeRate : '',
+
         referenceId: formState.referenceId,
         referenceName: formState.referenceName,
         nationalId: normalizedNationalId,
         kinPhone: formState.kinPhone.trim(),
         address: formState.address.trim(),
+
         saleBreakdownDraft,
         installmentPlanDraft,
+
+        // Keep device drafts separate state until UI refactor is complete.
         deviceDrafts,
       });
 
@@ -271,14 +317,17 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
   return {
     formState,
     setFormState,
+
     paymentRows,
     handleAddPaymentRow,
     handleChangePaymentRow,
     handleRemovePaymentRow,
+
     deviceDrafts,
     handleAddDeviceRow,
     handleChangeDeviceRow,
     handleRemoveDeviceRow,
+
     senetUpfrontPaid,
     setSenetUpfrontPaid,
     senetInstallmentCount,
@@ -287,6 +336,7 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
     setSenetFirstDueDate,
     senetDayOfMonth,
     setSenetDayOfMonth,
+
     paymentsTotal,
     hasSenetPayment,
     handleSubmit,
@@ -310,7 +360,7 @@ function normalizePhone(input: string): string {
   }
 
   // Remove common separators but keep leading '+' or '00'
-  let v = raw.replace(/[()\s-]/g, '');
+  const v = raw.replace(/[()\s-]/g, '');
 
   // Case 1: starts with '+'
   if (v.startsWith('+')) {
