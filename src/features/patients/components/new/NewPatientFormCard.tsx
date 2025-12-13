@@ -1,8 +1,11 @@
 // src/features/patients/components/new/NewPatientFormCard.tsx
-// Inline "Yeni Hasta" form card using InlineCreateCard and modular subsections.
+// Summary: Inline "Yeni Hasta" form card. Re-ordered sections so Devices come before SGK/Payment.
+// v2.8:
+// - Removes UI-only local state for deviceFlowType + sgkPillPrescription.
+// - Persists deviceFlowType, chargerInventoryItemId, batteryLines, sgkPillPrescription in formState.
+// - Wires NewPatientDevicesSection + NewPatientSgkSection to formState.
 
-import { useState } from 'react';
-import type { NewPatientForm } from '../../types';
+import type { NewPatientForm, BatteryLineDraft } from '../../types';
 import { InlineCreateCard } from '../../../../components/layout/InlineCreateCard';
 import { FormSection } from '../../../../components/layout/FormSection';
 import { NewPatientReferenceField } from './NewPatientReferenceField';
@@ -12,8 +15,6 @@ import { PatientSenetPlanFormCard } from '../billing/PatientSenetPlanFormCard';
 import { NewPatientDevicesSection } from './NewPatientDevicesSection';
 import { Button } from '../../../../components/ui/Button';
 import { useNewPatientForm, formatCurrencyTry } from '../../hooks/useNewPatientForm';
-
-type DeviceFlowType = 'rechargeable_device' | 'battery_device' | 'battery_only';
 
 type NewPatientFormCardProps = {
   open: boolean;
@@ -58,17 +59,7 @@ export function NewPatientFormCard({
     externalErrorMessage: errorMessage,
   });
 
-  /**
-   * Device flow type is currently UI-only (not persisted in formState yet).
-   * Next step: move this into useNewPatientForm + types + API payload.
-   */
-  const [deviceFlowType, setDeviceFlowType] = useState<DeviceFlowType>('rechargeable_device');
-
-  /**
-   * Pill prescription checkbox (UI + SGK computation).
-   * Next step: persist into formState + payload.
-   */
-  const [sgkPillPrescription, setSgkPillPrescription] = useState<boolean>(false);
+  const deviceFlowType = formState.deviceFlowType ?? 'rechargeable_device';
 
   return (
     <InlineCreateCard
@@ -88,7 +79,9 @@ export function NewPatientFormCard({
             {/* Column 1: Ad Soyad + T.C. Kimlik No */}
             <div className="space-y-2 md:col-span-4">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Ad Soyad</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Ad Soyad
+                </label>
                 <input
                   type="text"
                   required
@@ -105,7 +98,9 @@ export function NewPatientFormCard({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">T.C. Kimlik No</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  T.C. Kimlik No
+                </label>
                 <input
                   type="text"
                   required
@@ -125,7 +120,9 @@ export function NewPatientFormCard({
             {/* Column 2: Telefon + Yakın Telefon */}
             <div className="space-y-2 md:col-span-4">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Telefon</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Telefon
+                </label>
                 <input
                   type="tel"
                   required
@@ -142,7 +139,9 @@ export function NewPatientFormCard({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Yakın Telefonu</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Yakın Telefonu
+                </label>
                 <input
                   type="tel"
                   value={formState.kinPhone}
@@ -164,7 +163,13 @@ export function NewPatientFormCard({
                 <NewPatientReferenceField
                   referenceId={formState.referenceId}
                   referenceName={formState.referenceName}
-                  onChangeReference={({ id, name }: { id: string | null; name: string }) =>
+                  onChangeReference={({
+                    id,
+                    name,
+                  }: {
+                    id: string | null;
+                    name: string;
+                  }) =>
                     setFormState((s) => ({
                       ...s,
                       referenceId: id,
@@ -175,7 +180,9 @@ export function NewPatientFormCard({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Adres</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Adres
+                </label>
                 <textarea
                   value={formState.address}
                   onChange={(e) =>
@@ -200,7 +207,32 @@ export function NewPatientFormCard({
         >
           <NewPatientDevicesSection
             deviceFlowType={deviceFlowType}
-            onChangeDeviceFlowType={setDeviceFlowType}
+            onChangeDeviceFlowType={(value) =>
+              setFormState((s) => ({
+                ...s,
+                deviceFlowType: value,
+                // Keep charger selection only for rechargeable flow.
+                chargerInventoryItemId:
+                  value === 'rechargeable_device'
+                    ? s.chargerInventoryItemId ?? null
+                    : null,
+                // Keep battery lines only for battery flows (but do not clear them to avoid data loss).
+              }))
+            }
+            chargerInventoryItemId={formState.chargerInventoryItemId ?? null}
+            onChangeChargerInventoryItemId={(id) =>
+              setFormState((s) => ({
+                ...s,
+                chargerInventoryItemId: id,
+              }))
+            }
+            batteryLines={(formState.batteryLines ?? []) as BatteryLineDraft[]}
+            onChangeBatteryLines={(lines) =>
+              setFormState((s) => ({
+                ...s,
+                batteryLines: lines,
+              }))
+            }
             items={deviceDrafts}
             onAddRow={handleAddDeviceRow}
             onChangeRow={handleChangeDeviceRow}
@@ -214,8 +246,13 @@ export function NewPatientFormCard({
             <div className="md:col-span-4">
               <NewPatientSgkSection
                 deviceFlowType={deviceFlowType}
-                sgkPillPrescription={sgkPillPrescription}
-                onChangeSgkPillPrescription={(v) => setSgkPillPrescription(v)}
+                sgkPillPrescription={!!formState.sgkPillPrescription}
+                onChangeSgkPillPrescription={(v) =>
+                  setFormState((s) => ({
+                    ...s,
+                    sgkPillPrescription: v,
+                  }))
+                }
                 sgkFlag={formState.sgkFlag}
                 sgkPrescriptionReceived={formState.sgkPrescriptionReceived}
                 sgkRecordedToSystem={formState.sgkRecordedToSystem}
@@ -235,6 +272,7 @@ export function NewPatientFormCard({
                     sgkExpectedMonth: value ? s.sgkExpectedMonth ?? '' : '',
                     sgkPrescriptionNo: value ? s.sgkPrescriptionNo ?? '' : '',
                     sgkDeviceCount: value ? (s.sgkDeviceCount ?? '1') : '1',
+                    sgkPillPrescription: value ? !!s.sgkPillPrescription : false,
                   }))
                 }
                 onChangeSgkPrescriptionReceived={(value: boolean) =>
@@ -289,7 +327,9 @@ export function NewPatientFormCard({
                   className="space-y-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2"
                 >
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-slate-700">Ödeme #{index + 1}</span>
+                    <span className="text-xs font-medium text-slate-700">
+                      Ödeme #{index + 1}
+                    </span>
                     {paymentRows.length > 1 && (
                       <button
                         type="button"
@@ -305,9 +345,15 @@ export function NewPatientFormCard({
                     paymentMethod={row.paymentMethod}
                     saleTotal={row.amount}
                     cardFeeRate={row.cardFeeRate}
-                    onChangePaymentMethod={(value) => handleChangePaymentRow(index, { paymentMethod: value })}
-                    onChangeSaleTotal={(value) => handleChangePaymentRow(index, { amount: value })}
-                    onChangeCardFeeRate={(value) => handleChangePaymentRow(index, { cardFeeRate: value })}
+                    onChangePaymentMethod={(value) =>
+                      handleChangePaymentRow(index, { paymentMethod: value })
+                    }
+                    onChangeSaleTotal={(value) =>
+                      handleChangePaymentRow(index, { amount: value })
+                    }
+                    onChangeCardFeeRate={(value) =>
+                      handleChangePaymentRow(index, { cardFeeRate: value })
+                    }
                   />
                 </div>
               ))}
@@ -333,8 +379,9 @@ export function NewPatientFormCard({
           {hasSenetPayment && (
             <div className="mt-3 space-y-3">
               <p className="text-[11px] text-slate-600">
-                Aşağıdaki alanlar bu yeni hasta için senet planı taslağını tutar. Hasta kaydından sonra bu bilgiler detay ekranındaki
-                Ödemeler sekmesinde de düzenlenebilir.
+                Aşağıdaki alanlar bu yeni hasta için senet planı taslağını tutar.
+                Hasta kaydından sonra bu bilgiler detay ekranındaki Ödemeler
+                sekmesinde de düzenlenebilir.
               </p>
 
               <PatientSenetPlanFormCard
