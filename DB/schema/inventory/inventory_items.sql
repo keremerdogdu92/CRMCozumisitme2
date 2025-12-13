@@ -65,18 +65,30 @@ CREATE TABLE public.inventory_items (
   )
 ) TABLESPACE pg_default;
 
-CREATE UNIQUE INDEX IF NOT EXISTS inventory_items_org_barcode_idx
-ON public.inventory_items USING btree (org_id, barcode)
-TABLESPACE pg_default
-WHERE barcode IS NOT NULL;
+-- NOTE:
+-- Barcode is NOT unique. Same model can have same barcode across multiple stock items,
+-- and barcode may change with production series. We keep barcode as informational.
+
+-- (Optional) If you ever need barcode search performance later, add a non-unique index.
+-- CREATE INDEX IF NOT EXISTS inventory_items_org_barcode_idx
+-- ON public.inventory_items USING btree (org_id, barcode)
+-- TABLESPACE pg_default
+-- WHERE barcode IS NOT NULL AND barcode <> '' AND deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS inventory_items_org_status_idx
 ON public.inventory_items USING btree (org_id, status)
 TABLESPACE pg_default;
 
+-- Existing composite index (kept)
 CREATE INDEX IF NOT EXISTS inventory_items_org_brand_model_idx
 ON public.inventory_items USING btree (org_id, brand, model)
 TABLESPACE pg_default;
+
+-- New: direct model index (helps when filtering/searching by model without brand)
+CREATE INDEX IF NOT EXISTS inventory_items_org_model_idx
+ON public.inventory_items USING btree (org_id, model)
+TABLESPACE pg_default
+WHERE deleted_at IS NULL;
 
 -- ============================================================
 -- RLS POLICIES FOR public.inventory_items
