@@ -1,5 +1,12 @@
 // src/features/patients/types.ts
 // Shared TypeScript types for the Patients feature.
+//
+// v2.8:
+// - Adds device flow typing for new patient form:
+//   rechargeable device / battery device / battery-only
+// - Adds battery (pil) draft types (single-line with box/pack/unit quantities)
+// - Adds optional charger inventory selection for rechargeable devices
+// - Adds optional SGK "pill prescription" flag to support extra reimbursement logic later
 
 export type PatientPaymentMethod =
   | 'Tim'
@@ -213,9 +220,58 @@ export type NewPatientDeviceDraft = {
   note: string;
 };
 
+/**
+ * Device flow mode for the New Patient form.
+ * This is UI/flow state (not necessarily stored in DB yet).
+ */
+export type NewPatientDeviceFlowType =
+  | 'rechargeable_device' // hearing aids (rechargeable) + optional charger selection
+  | 'battery_device' // hearing aids (battery) + batteries box rendered
+  | 'battery_only'; // only batteries box rendered (no device drafts, no SGK profile)
+
+export type BatteryType = '10' | '312' | '13' | '675';
+
+export type BatteryQuantityDraft = {
+  /**
+   * These are "semantic" quantities to support future inventory without redesign:
+   * - 1 box = 10 packs
+   * - 1 pack = 6 units
+   *
+   * UI may not display derived unit totals everywhere.
+   */
+  box: number; // 0..n
+  pack: number; // 0..n
+  unit: number; // 0..n
+};
+
+export type BatteryLineDraft = {
+  batteryType: BatteryType;
+  brand: string;
+  quantity: BatteryQuantityDraft;
+};
+
 export type NewPatientForm = {
   fullName: string;
   phone: string;
+
+  /**
+   * Flow selection at the top of device section.
+   * Default: 'rechargeable_device'
+   */
+  deviceFlowType?: NewPatientDeviceFlowType;
+
+  /**
+   * Optional charger selection for rechargeable flow.
+   * For now: store the selected inventory item id (inventory_items.id).
+   */
+  chargerInventoryItemId?: string | null;
+
+  /**
+   * Batteries draft (single line; multiple quantities per line).
+   * Only used for battery_device and battery_only flows.
+   */
+  batteryLines?: BatteryLineDraft[];
+
   sgkFlag: boolean;
   sgkPrescriptionReceived: boolean;
   sgkRecordedToSystem: boolean;
@@ -230,6 +286,15 @@ export type NewPatientForm = {
   sgkExpectedMonth?: string; // "yyyy-MM" (input type="month")
   sgkPrescriptionNo?: string;
   sgkDeviceCount?: '1' | '2';
+
+  /**
+   * Extra SGK checkbox for batteries (pilli cihaz / sadece pil).
+   * When true and sgkFlag is enabled, UI will add the fixed extra reimbursement
+   * based on sgkDeviceCount (e.g., 624 TL incl. VAT * 1/2).
+   *
+   * NOTE: This is flow-dependent. For rechargeable_device it should be ignored.
+   */
+  sgkPillPrescription?: boolean;
 
   paymentMethod: PatientPaymentMethodFormValue;
   saleTotal: string;
