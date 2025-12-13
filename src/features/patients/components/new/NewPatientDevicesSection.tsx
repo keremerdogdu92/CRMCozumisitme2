@@ -1,42 +1,24 @@
 // src/features/patients/components/new/NewPatientDevicesSection.tsx
-// Device draft section used in the "New Patient" form.
-//
-// Kurallar:
-// - En az bir cihaz satırı her zaman açık gelir; ek satırlar "Cihaz ekle" ile eklenir.
-// - Marka, stokta olan cihaz markalarından seçilir.
-// - Model, seçilen markaya ait stok modellerinden seçilir.
-// - Seri No, seçilen marka+model kombinasyonuna ve henüz hastaya bağlanmamış,
-//   başka satırlarda da seçilmemiş stok cihazlarından seçilir.
-// - Seri No seçilince inventoryItemId set edilir, brand/model/listPrice stoktan doldurulur.
-// - Hastaya satış fiyatı cihaz bazında girilmez; toplam satış yukarıdaki ödeme alanında tutulur.
-//
-// vNext (UI-first):
-// - Adds deviceFlowType dropdown (default: rechargeable_device).
-// - Shows optional charger selector for rechargeable_device.
-// - Shows battery box for battery_device and battery_only.
-// - battery_only hides device drafts UI (only battery box remains).
+// Summary: Device draft section used in the "New Patient" form.
+// v2.8:
+// - Adds deviceFlowType selector (rechargeable/battery device/battery only).
+// - Filters inventory items by item_type for device vs charger selection.
+// - Adds charger selection for rechargeable flow.
+// - Adds "Pil kutusu" list: addable lines, each line has box/pack/unit quantities in a single row.
 
-import { useMemo, useState } from 'react';
-import type { NewPatientDeviceDraft } from '../../types';
+import type { BatteryLineDraft, NewPatientDeviceDraft, NewPatientDeviceFlowType } from '../../types';
 import { useInventoryItems } from '../../../inventory/api';
 import type { InventoryItemRow } from '../../../inventory/types';
 
-type DeviceFlowType = 'rechargeable_device' | 'battery_device' | 'battery_only';
-
-type BatteryPackType = 'box' | 'pack' | 'unit';
-
-type BatteryLineDraft = {
-  id: string;
-  batteryType: '10' | '312' | '13' | '675';
-  brand: string;
-  qtyBox: number;
-  qtyPack: number;
-  qtyUnit: number;
-};
-
 type NewPatientDevicesSectionProps = {
-  deviceFlowType: DeviceFlowType;
-  onChangeDeviceFlowType: (value: DeviceFlowType) => void;
+  deviceFlowType: NewPatientDeviceFlowType;
+  onChangeDeviceFlowType: (value: NewPatientDeviceFlowType) => void;
+
+  chargerInventoryItemId: string | null;
+  onChangeChargerInventoryItemId: (id: string | null) => void;
+
+  batteryLines: BatteryLineDraft[];
+  onChangeBatteryLines: (lines: BatteryLineDraft[]) => void;
 
   items: NewPatientDeviceDraft[];
   onAddRow: () => void;
@@ -51,31 +33,51 @@ const SIDE_OPTIONS = [
   { value: 'bilateral', label: 'Çift' },
 ] as const;
 
-const DEVICE_FLOW_OPTIONS: Array<{ value: DeviceFlowType; label: string }> = [
-  { value: 'rechargeable_device', label: 'Şarjlı cihaz' },
-  { value: 'battery_device', label: 'Pilli cihaz' },
-  { value: 'battery_only', label: 'Pil' },
+const DEVICE_FLOW_OPTIONS: { value: NewPatientDeviceFlowType; label: string; hint: string }[] = [
+  {
+    value: 'rechargeable_device',
+    label: 'Şarjlı cihaz',
+    hint: 'Cihaz satırları + opsiyonel şarj aleti seçimi',
+  },
+  {
+    value: 'battery_device',
+    label: 'Pilli cihaz',
+    hint: 'Cihaz satırları + pil kutusu',
+  },
+  {
+    value: 'battery_only',
+    label: 'Sadece pil',
+    hint: 'Sadece pil kutusu (cihaz satırları kapalı)',
+  },
 ];
 
-const BATTERY_TYPES: Array<BatteryLineDraft['batteryType']> = ['10', '312', '13', '675'];
-
-// Placeholder list for now.
-// Next step: feed from catalogs (DB / views) and/or org settings.
-const BATTERY_BRANDS_PLACEHOLDER = ['Duracell', 'Rayovac', 'Varta', 'Panasonic'];
-
-function clampNonNegativeInt(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  const n = Math.floor(value);
-  return n < 0 ? 0 : n;
+function clampInt(v: number, min: number, max: number): number {
+  if (!Number.isFinite(v)) return min;
+  return Math.max(min, Math.min(max, Math.trunc(v)));
 }
 
-function uid(): string {
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+function toIntSafe(value: string): number {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return 0;
+  const n = Number(digits);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function createEmptyBatteryLine(): BatteryLineDraft {
+  return {
+    batteryType: '10',
+    brand: '',
+    quantity: { box: 0, pack: 0, unit: 0 },
+  };
 }
 
 export function NewPatientDevicesSection({
   deviceFlowType,
   onChangeDeviceFlowType,
+  chargerInventoryItemId,
+  onChangeChargerInventoryItemId,
+  batteryLines,
+  onChangeBatteryLines,
   items,
   onAddRow,
   onChangeRow,
@@ -88,124 +90,79 @@ export function NewPatientDevicesSection({
     (row) => row.status === 'in_stock' && !row.sold_patient_id && !row.deleted_at,
   );
 
-  // item_type may or may not exist on InventoryItemRow typing depending on your local types.
-  // We gate it defensively.
-  const getItemType = (row: InventoryItemRow): string => {
-    const anyRow = row as unknown as { item_type?: string };
-    return anyRow.item_type ?? '';
+  // Separate pools:
+  const availableDeviceInventory = availableInventory.filter(
+    (row) => row.item_type === 'hearing_aid',
+  );
+  const availableChargerInventory = availableInventory.filter(
+    (row) => row.item_type === 'charger',
+  );
+
+  // Unique marka listesi (devices only)
+  const brandOptions = Array.from(
+    new Set(availableDeviceInventory.map((row) => row.brand).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b));
+
+  const selectedInventoryIds = items
+    .map((d) => d.inventoryItemId)
+    .filter((id): id is string => !!id);
+
+  const showDeviceRows = deviceFlowType === 'rechargeable_device' || deviceFlowType === 'battery_device';
+  const showChargerSelect = deviceFlowType === 'rechargeable_device';
+  const showBatteryBox = deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
+
+  const updateBatteryLine = (index: number, patch: Partial<BatteryLineDraft>) => {
+    onChangeBatteryLines(
+      (batteryLines ?? []).map((l, i) => (i === index ? { ...l, ...patch } : l)),
+    );
   };
 
-  const deviceInventory = useMemo(() => {
-    if (!availableInventory.length) return [];
-    // If item_type exists and is meaningful, exclude chargers from "device" picker.
-    // Otherwise keep current behavior unchanged.
-    const hasItemType = availableInventory.some((r) => !!getItemType(r));
-    if (!hasItemType) return availableInventory;
-    return availableInventory.filter((r) => getItemType(r) !== 'charger');
-  }, [availableInventory]);
-
-  const chargerInventory = useMemo(() => {
-    if (!availableInventory.length) return [];
-    const hasItemType = availableInventory.some((r) => !!getItemType(r));
-    if (!hasItemType) return [];
-    return availableInventory.filter((r) => getItemType(r) === 'charger');
-  }, [availableInventory]);
-
-  // ------------------------
-  // Charger (optional) UI draft (not persisted yet)
-  // ------------------------
-  const [chargerBrand, setChargerBrand] = useState<string>('');
-  const [chargerModel, setChargerModel] = useState<string>('');
-  const [chargerInventoryId, setChargerInventoryId] = useState<string>('');
-
-  const chargerBrandOptions = useMemo(() => {
-    return Array.from(new Set(chargerInventory.map((r) => r.brand).filter(Boolean))).sort((a, b) =>
-      a.localeCompare(b),
-    );
-  }, [chargerInventory]);
-
-  const chargerModelOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        chargerInventory
-          .filter((r) => !chargerBrand || r.brand === chargerBrand)
-          .map((r) => r.model)
-          .filter(Boolean),
-      ),
-    ).sort((a, b) => a.localeCompare(b));
-  }, [chargerInventory, chargerBrand]);
-
-  const chargerSerialOptions = useMemo(() => {
-    return chargerInventory.filter((r) => {
-      if (chargerBrand && r.brand !== chargerBrand) return false;
-      if (chargerModel && r.model !== chargerModel) return false;
-      return true;
+  const updateBatteryQuantity = (
+    index: number,
+    key: 'box' | 'pack' | 'unit',
+    rawValue: string,
+  ) => {
+    const n = clampInt(toIntSafe(rawValue), 0, 999);
+    const line = (batteryLines ?? [])[index];
+    if (!line) return;
+    updateBatteryLine(index, {
+      quantity: {
+        ...line.quantity,
+        [key]: n,
+      },
     });
-  }, [chargerInventory, chargerBrand, chargerModel]);
-
-  // ------------------------
-  // Battery box drafts (UI-first, not persisted yet)
-  // ------------------------
-  const [batteryLines, setBatteryLines] = useState<BatteryLineDraft[]>([
-    {
-      id: uid(),
-      batteryType: '10',
-      brand: '',
-      qtyBox: 0,
-      qtyPack: 0,
-      qtyUnit: 0,
-    },
-  ]);
+  };
 
   const addBatteryLine = () => {
-    setBatteryLines((prev) => [
-      ...prev,
-      { id: uid(), batteryType: '10', brand: '', qtyBox: 0, qtyPack: 0, qtyUnit: 0 },
-    ]);
+    onChangeBatteryLines([...(batteryLines ?? []), createEmptyBatteryLine()]);
   };
 
-  const removeBatteryLine = (id: string) => {
-    setBatteryLines((prev) => (prev.length > 1 ? prev.filter((l) => l.id !== id) : prev));
+  const removeBatteryLine = (index: number) => {
+    const next = (batteryLines ?? []).filter((_, i) => i !== index);
+    onChangeBatteryLines(next.length > 0 ? next : [createEmptyBatteryLine()]);
   };
-
-  const patchBatteryLine = (id: string, patch: Partial<BatteryLineDraft>) => {
-    setBatteryLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
-  };
-
-  // Unique marka listesi (device list)
-  const brandOptions = useMemo(() => {
-    return Array.from(new Set(deviceInventory.map((row) => row.brand).filter(Boolean))).sort((a, b) =>
-      a.localeCompare(b),
-    );
-  }, [deviceInventory]);
-
-  const selectedInventoryIds = items.map((d) => d.inventoryItemId).filter((id): id is string => !!id);
-
-  const showDeviceDrafts = deviceFlowType !== 'battery_only';
-  const showBatteryBox = deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
-  const showChargerBox = deviceFlowType === 'rechargeable_device';
 
   return (
     <div className="space-y-3">
-      {/* Device flow type selector */}
-      <div className="grid gap-2 md:grid-cols-12">
-        <div className="md:col-span-4">
-          <label className="mb-1 block text-[11px] font-medium text-slate-600">Cihaz Tipi</label>
-          <select
-            value={deviceFlowType}
-            onChange={(e) => onChangeDeviceFlowType(e.target.value as DeviceFlowType)}
-            className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          >
-            {DEVICE_FLOW_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-[11px] text-slate-500">
-            Seçime göre şarj aleti veya pil kutusu açılır. Bu adım kaydetmeyi engellemez.
-          </p>
-        </div>
+      {/* Flow selector */}
+      <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+        <label className="mb-1 block text-[11px] font-medium text-slate-600">
+          Cihaz / Pil Tipi
+        </label>
+        <select
+          value={deviceFlowType}
+          onChange={(e) => onChangeDeviceFlowType(e.target.value as NewPatientDeviceFlowType)}
+          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        >
+          {DEVICE_FLOW_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-[11px] text-slate-500">
+          {DEVICE_FLOW_OPTIONS.find((o) => o.value === deviceFlowType)?.hint}
+        </p>
       </div>
 
       {isLoading && <p className="text-[11px] text-slate-500">Stok listesi yükleniyor…</p>}
@@ -216,14 +173,136 @@ export function NewPatientDevicesSection({
         </p>
       )}
 
-      {/* Device drafts */}
-      {showDeviceDrafts && (
+      {/* Charger selection (rechargeable) */}
+      {showChargerSelect && (
+        <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
+          <label className="mb-1 block text-[11px] font-medium text-slate-600">
+            Şarj Aleti (opsiyonel)
+          </label>
+          <select
+            value={chargerInventoryItemId ?? ''}
+            onChange={(e) => onChangeChargerInventoryItemId(e.target.value ? e.target.value : null)}
+            className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            disabled={availableChargerInventory.length === 0}
+          >
+            <option value="">
+              {availableChargerInventory.length > 0 ? 'Şarj aleti seç...' : 'Stokta şarj aleti yok'}
+            </option>
+            {availableChargerInventory.map((row) => (
+              <option key={row.id} value={row.id}>
+                {(row.serial_no || row.barcode || 'Seri yok') + ' • ' + row.brand + ' ' + row.model}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Seçilirse, hasta kaydı sonrası bu satır da hastaya "satıldı" olarak işaretlenir.
+          </p>
+        </div>
+      )}
+
+      {/* Battery box */}
+      {showBatteryBox && (
+        <div className="space-y-2 rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-slate-700">Pil Kutusu</p>
+              <p className="text-[11px] text-slate-500">
+                Tek satırda çoklu miktar: kutu / paket / adet.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={addBatteryLine}
+              className="inline-flex items-center rounded-md border border-dashed border-primary-300 px-3 py-1.5 text-xs font-medium text-primary-700 hover:border-primary-400 hover:bg-primary-50"
+            >
+              Satır ekle
+            </button>
+          </div>
+
+          {(batteryLines ?? []).map((line, index) => (
+            <div
+              key={index}
+              className="grid gap-2 rounded-md border border-slate-200 bg-slate-50 p-2 md:grid-cols-12"
+            >
+              <div className="md:col-span-3">
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">Pil Tipi</label>
+                <select
+                  value={line.batteryType}
+                  onChange={(e) =>
+                    updateBatteryLine(index, { batteryType: e.target.value as BatteryLineDraft['batteryType'] })
+                  }
+                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                >
+                  <option value="10">10</option>
+                  <option value="312">312</option>
+                  <option value="13">13</option>
+                  <option value="675">675</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">Marka</label>
+                <input
+                  type="text"
+                  value={line.brand}
+                  onChange={(e) => updateBatteryLine(index, { brand: e.target.value })}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="Örn. Rayovac"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">Kutu</label>
+                <input
+                  inputMode="numeric"
+                  value={String(line.quantity.box ?? 0)}
+                  onChange={(e) => updateBatteryQuantity(index, 'box', e.target.value)}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">Paket</label>
+                <input
+                  inputMode="numeric"
+                  value={String(line.quantity.pack ?? 0)}
+                  onChange={(e) => updateBatteryQuantity(index, 'pack', e.target.value)}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">Adet</label>
+                <input
+                  inputMode="numeric"
+                  value={String(line.quantity.unit ?? 0)}
+                  onChange={(e) => updateBatteryQuantity(index, 'unit', e.target.value)}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+
+              <div className="md:col-span-12 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => removeBatteryLine(index)}
+                  className="text-[11px] font-medium text-red-600 hover:underline"
+                >
+                  Satırı sil
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Device rows */}
+      {showDeviceRows && (
         <>
           {items.map((item, index) => {
-            // Seçilen markaya göre modeller
+            // Seçilen markaya göre modeller (devices only)
             const modelOptions = Array.from(
               new Set(
-                deviceInventory
+                availableDeviceInventory
                   .filter((row) => !item.brand || row.brand === item.brand)
                   .map((row) => row.model)
                   .filter(Boolean),
@@ -233,8 +312,8 @@ export function NewPatientDevicesSection({
             // Bu satır hariç seçilmiş inventory id'leri
             const otherSelectedIds = selectedInventoryIds.filter((id) => id !== item.inventoryItemId);
 
-            // Seri numarası / stok seçenekleri
-            const serialOptions = deviceInventory.filter((row) => {
+            // Seri numarası / stok seçenekleri (devices only)
+            const serialOptions = availableDeviceInventory.filter((row) => {
               if (otherSelectedIds.includes(row.id)) return false;
               if (item.brand && row.brand !== item.brand) return false;
               if (item.model && row.model !== item.model) return false;
@@ -269,7 +348,7 @@ export function NewPatientDevicesSection({
                 return;
               }
 
-              const inv = deviceInventory.find((row) => row.id === inventoryId);
+              const inv = availableDeviceInventory.find((row) => row.id === inventoryId);
               if (!inv) {
                 onChangeRow(index, { inventoryItemId: inventoryId });
                 return;
@@ -304,7 +383,9 @@ export function NewPatientDevicesSection({
                 {/* Kulak + Marka + Model */}
                 <div className="grid gap-2 md:grid-cols-12">
                   <div className="md:col-span-3">
-                    <label className="mb-1 block text-[11px] font-medium text-slate-600">Kulak</label>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      Kulak
+                    </label>
                     <select
                       value={item.side}
                       onChange={(e) =>
@@ -323,7 +404,9 @@ export function NewPatientDevicesSection({
                   </div>
 
                   <div className="md:col-span-4">
-                    <label className="mb-1 block text-[11px] font-medium text-slate-600">Marka (stok)</label>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      Marka (stok)
+                    </label>
                     <select
                       value={item.brand}
                       onChange={(e) => handleSelectBrand(e.target.value)}
@@ -339,11 +422,13 @@ export function NewPatientDevicesSection({
                   </div>
 
                   <div className="md:col-span-5">
-                    <label className="mb-1 block text-[11px] font-medium text-slate-600">Model (stok)</label>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      Model (stok)
+                    </label>
                     <select
                       value={item.model}
                       onChange={(e) => handleSelectModel(e.target.value)}
-                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
+                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                       disabled={!item.brand}
                     >
                       <option value="">{item.brand ? 'Model seç...' : 'Önce marka seçin'}</option>
@@ -359,11 +444,13 @@ export function NewPatientDevicesSection({
                 {/* Seri No + info */}
                 <div className="grid gap-2 md:grid-cols-12">
                   <div className="md:col-span-6">
-                    <label className="mb-1 block text-[11px] font-medium text-slate-600">Seri No (stoktan bağla)</label>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      Seri No (stoktan bağla)
+                    </label>
                     <select
                       value={item.inventoryItemId ?? ''}
                       onChange={(e) => handleSelectInventory(e.target.value ? e.target.value : null)}
-                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
+                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                       disabled={!item.brand || !item.model}
                     >
                       <option value="">
@@ -386,7 +473,9 @@ export function NewPatientDevicesSection({
                 {/* Liste fiyatı + not */}
                 <div className="grid gap-2 md:grid-cols-12">
                   <div className="md:col-span-4">
-                    <label className="mb-1 block text-[11px] font-medium text-slate-600">Liste Fiyatı (tek cihaz)</label>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      Liste Fiyatı (tek cihaz)
+                    </label>
                     <input
                       type="text"
                       value={item.listPrice}
@@ -397,7 +486,9 @@ export function NewPatientDevicesSection({
                   </div>
 
                   <div className="md:col-span-8">
-                    <label className="mb-1 block text-[11px] font-medium text-slate-600">Not</label>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      Not
+                    </label>
                     <input
                       type="text"
                       value={item.note}
@@ -421,201 +512,6 @@ export function NewPatientDevicesSection({
             </button>
           </div>
         </>
-      )}
-
-      {/* Optional charger selector */}
-      {showChargerBox && (
-        <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-slate-700">Şarj Aleti (opsiyonel)</span>
-          </div>
-
-          <p className="text-[11px] text-slate-600">
-            Şarjlı cihaz satışlarında şarj aleti seçmeniz önerilir. Seçmeseniz de kaydetmeye devam edebilirsiniz.
-          </p>
-
-          {chargerInventory.length === 0 ? (
-            <p className="text-[11px] text-slate-500">
-              Not: Şarj aletlerini stoktan ayırmak için inventory_items.item_type = &quot;charger&quot; kullanılabilir.
-              Şu an stokta &quot;charger&quot; tipinde item bulunamadı.
-            </p>
-          ) : (
-            <div className="grid gap-2 md:grid-cols-12">
-              <div className="md:col-span-4">
-                <label className="mb-1 block text-[11px] font-medium text-slate-600">Marka (charger)</label>
-                <select
-                  value={chargerBrand}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setChargerBrand(v);
-                    setChargerModel('');
-                    setChargerInventoryId('');
-                  }}
-                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                >
-                  <option value="">Marka seç...</option>
-                  {chargerBrandOptions.map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="md:col-span-4">
-                <label className="mb-1 block text-[11px] font-medium text-slate-600">Model (charger)</label>
-                <select
-                  value={chargerModel}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setChargerModel(v);
-                    setChargerInventoryId('');
-                  }}
-                  disabled={!chargerBrand}
-                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
-                >
-                  <option value="">{chargerBrand ? 'Model seç...' : 'Önce marka seçin'}</option>
-                  {chargerModelOptions.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="md:col-span-4">
-                <label className="mb-1 block text-[11px] font-medium text-slate-600">Seri No (charger)</label>
-                <select
-                  value={chargerInventoryId}
-                  onChange={(e) => setChargerInventoryId(e.target.value)}
-                  disabled={!chargerBrand || !chargerModel}
-                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
-                >
-                  <option value="">
-                    {chargerBrand && chargerModel ? 'Seri numarası seç...' : 'Önce marka ve model seçin'}
-                  </option>
-                  {chargerSerialOptions.map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {(row.serial_no || row.barcode || 'Seri yok') + ' • ' + row.brand + ' ' + row.model}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Battery box */}
-      {showBatteryBox && (
-        <div className="space-y-2 rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-slate-700">Pil</span>
-            <button
-              type="button"
-              onClick={addBatteryLine}
-              className="text-[11px] font-medium text-primary-700 hover:underline"
-            >
-              Pil satırı ekle
-            </button>
-          </div>
-
-          <p className="text-[11px] text-slate-500">
-            Miktar alanları aynı satırda birlikte girilebilir (örn: 3 kutu + 2 paket). 1 kutu = 10 paket, 1 paket = 6 adet.
-          </p>
-
-          <div className="space-y-2">
-            {batteryLines.map((line) => (
-              <div
-                key={line.id}
-                className="grid gap-2 rounded-md border border-slate-100 bg-slate-50 p-2 md:grid-cols-12 md:items-end"
-              >
-                <div className="md:col-span-3">
-                  <label className="mb-1 block text-[11px] font-medium text-slate-600">Pil Tipi</label>
-                  <select
-                    value={line.batteryType}
-                    onChange={(e) =>
-                      patchBatteryLine(line.id, { batteryType: e.target.value as BatteryLineDraft['batteryType'] })
-                    }
-                    className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  >
-                    {BATTERY_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="md:col-span-3">
-                  <label className="mb-1 block text-[11px] font-medium text-slate-600">Marka</label>
-                  <select
-                    value={line.brand}
-                    onChange={(e) => patchBatteryLine(line.id, { brand: e.target.value })}
-                    className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  >
-                    <option value="">Marka seç...</option>
-                    {BATTERY_BRANDS_PLACEHOLDER.map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-[11px] font-medium text-slate-600">Kutu</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={line.qtyBox}
-                    onChange={(e) => patchBatteryLine(line.id, { qtyBox: clampNonNegativeInt(Number(e.target.value)) })}
-                    className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    placeholder="0"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-[11px] font-medium text-slate-600">Paket</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={line.qtyPack}
-                    onChange={(e) => patchBatteryLine(line.id, { qtyPack: clampNonNegativeInt(Number(e.target.value)) })}
-                    className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    placeholder="0"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-[11px] font-medium text-slate-600">Adet</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={line.qtyUnit}
-                    onChange={(e) => patchBatteryLine(line.id, { qtyUnit: clampNonNegativeInt(Number(e.target.value)) })}
-                    className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    placeholder="0"
-                  />
-                </div>
-
-                <div className="md:col-span-12 flex items-center justify-between">
-                  <p className="text-[10px] text-slate-500">
-                    Bu satır: {line.qtyBox} kutu, {line.qtyPack} paket, {line.qtyUnit} adet
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => removeBatteryLine(line.id)}
-                    className="text-[11px] font-medium text-red-600 hover:underline"
-                    disabled={batteryLines.length <= 1}
-                  >
-                    Satırı sil
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       )}
     </div>
   );
