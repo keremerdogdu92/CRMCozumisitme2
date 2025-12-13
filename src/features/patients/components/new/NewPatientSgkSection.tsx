@@ -1,34 +1,19 @@
 // src/features/patients/components/new/NewPatientSgkSection.tsx
-// SGK block used in the NewPatientFormCard: flag + checkboxes +
-// optional prescription number + SGK profile dropdown +
-// expected reimbursement (locked) + month (locked) + device count.
-//
-// Behaviour:
-// - Only the top "SGK hastası" row is always visible.
-// - When sgkFlag === true, the full SGK flow is shown.
-// - When sgkFlag === false, all inner fields are hidden and reset.
-//
-// v2.8 (UI-first):
-// - Adds sgkPillPrescription checkbox (always visible when SGK enabled).
-// - Adds deviceFlowType control to hide/disable profile selection for "battery_only".
-// - Adds pill reimbursement extra: 624 TL (KDV dahil) * sgkDeviceCount
-//   when deviceFlowType is battery_device or battery_only and sgkPillPrescription is true.
+// Summary: SGK block used in the NewPatientFormCard.
+// v2.8:
+// - Adds deviceFlowType awareness.
+// - Adds sgkPillPrescription checkbox for battery flows.
+// - Computes sgkExpectedReimbursement as TOTAL (profile * count) + (pillExtra * count if enabled).
+// - For battery_only: hides profile selection; reimbursement is pill-only when enabled.
 
 import { SGK_PROFILES } from '../../sgkProfiles';
-
-type DeviceFlowType = 'rechargeable_device' | 'battery_device' | 'battery_only';
+import type { NewPatientDeviceFlowType } from '../../types';
 
 type NewPatientSgkSectionProps = {
-  deviceFlowType?: DeviceFlowType;
+  deviceFlowType: NewPatientDeviceFlowType;
 
-  /**
-   * If true, adds extra pill reimbursement for battery flows:
-   * 624 TL (KDV dahil) * sgkDeviceCount
-   *
-   * UI-first: not persisted in patient form state yet.
-   */
-  sgkPillPrescription?: boolean;
-  onChangeSgkPillPrescription?: (value: boolean) => void;
+  sgkPillPrescription: boolean;
+  onChangeSgkPillPrescription: (value: boolean) => void;
 
   sgkFlag: boolean;
   sgkPrescriptionReceived: boolean;
@@ -60,7 +45,9 @@ type SgkProfile = {
   netToFirm: number;
 };
 
-const PILL_EXTRA_REIMBURSEMENT_KDV_INCLUSIVE = 624;
+// Fixed extra reimbursement for pill prescriptions (incl. VAT).
+// NOTE: This is intentionally hardcoded for now (business rule).
+const SGK_PILL_EXTRA_PER_DEVICE_TL = 624;
 
 // Money helpers (TR format support).
 function formatMoneyLikeTR(value: number): string {
@@ -68,32 +55,33 @@ function formatMoneyLikeTR(value: number): string {
   return fixed.replace('.', ',');
 }
 
-function getMultiplier(count: '1' | '2'): number {
+function toCountMultiplier(count: '1' | '2'): number {
   return count === '2' ? 2 : 1;
 }
 
-function computeBaseFromProfile(profileId: string, count: '1' | '2'): number {
-  if (!profileId) return 0;
-  const profile = (SGK_PROFILES as SgkProfile[]).find((p) => p.id === profileId);
-  if (!profile) return 0;
-  return Number((profile.netToFirm * getMultiplier(count)).toFixed(2));
+function computeTotal(
+  profileNetToFirm: number | null,
+  count: '1' | '2',
+  pillPrescription: boolean,
+): string {
+  const mult = toCountMultiplier(count);
+  const base = profileNetToFirm != null ? profileNetToFirm * mult : 0;
+  const pillExtra = pillPrescription ? SGK_PILL_EXTRA_PER_DEVICE_TL * mult : 0;
+  const total = Number((base + pillExtra).toFixed(2));
+  return total > 0 ? formatMoneyLikeTR(total) : '';
 }
 
-function computePillExtra(count: '1' | '2'): number {
-  return Number((PILL_EXTRA_REIMBURSEMENT_KDV_INCLUSIVE * getMultiplier(count)).toFixed(2));
-}
-
-function computeExpectedMonth3MonthsAhead(): string {
+function computeDefaultExpectedMonth(): string {
   const base = new Date();
   base.setMonth(base.getMonth() + 3);
   const yyyy = base.getFullYear();
   const mm = String(base.getMonth() + 1).padStart(2, '0');
-  return `${yyyy}-${mm}`;
+  return `${yyyy}-${mm}`; // type="month" format
 }
 
 export function NewPatientSgkSection({
-  deviceFlowType = 'rechargeable_device',
-  sgkPillPrescription = false,
+  deviceFlowType,
+  sgkPillPrescription,
   onChangeSgkPillPrescription,
   sgkFlag,
   sgkPrescriptionReceived,
@@ -113,7 +101,7 @@ export function NewPatientSgkSection({
   onChangeSgkDeviceCount,
 }: NewPatientSgkSectionProps) {
   const isBatteryFlow = deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
-  const isProfileSelectable = deviceFlowType !== 'battery_only';
+  const isBatteryOnly = deviceFlowType === 'battery_only';
 
   const resetSgkDerivedFields = () => {
     onChangeSgkPrescriptionReceived(false);
@@ -123,51 +111,65 @@ export function NewPatientSgkSection({
     onChangeSgkExpectedMonth('');
     onChangeSgkPrescriptionNo('');
     onChangeSgkDeviceCount('1');
-    onChangeSgkPillPrescription?.(false);
+    onChangeSgkPillPrescription(false);
   };
 
   const handleToggleSgkFlag = (checked: boolean) => {
     onChangeSgkFlag(checked);
     if (!checked) {
-      // When SGK is turned off, derived flags and profile fields must be reset.
       resetSgkDerivedFields();
+    } else {
+      // When SGK is enabled, recompute based on current selections.
+      recomputeExpected(checked, sgkProfileId, sgkDeviceCount, sgkPillPrescription);
     }
   };
 
-  const computeAndSetReimbursementAndMonth = (profileId: string, count: '1' | '2', pillRx: boolean) => {
-    const base = isProfileSelectable ? computeBaseFromProfile(profileId, count) : 0;
-    const pillExtra = isBatteryFlow && pillRx ? computePillExtra(count) : 0;
+  const findProfileNetToFirm = (profileId: string): number | null => {
+    const profile = (SGK_PROFILES as SgkProfile[]).find((p) => p.id === profileId);
+    return profile ? profile.netToFirm : null;
+  };
 
-    const total = Number((base + pillExtra).toFixed(2));
-
-    if (total <= 0) {
+  const recomputeExpected = (
+    enabled: boolean,
+    profileId: string,
+    count: '1' | '2',
+    pill: boolean,
+  ) => {
+    if (!enabled) {
       onChangeSgkExpectedReimbursement('');
-      // Keep month empty if nothing to collect
       onChangeSgkExpectedMonth('');
       return;
     }
 
-    onChangeSgkExpectedReimbursement(formatMoneyLikeTR(total));
+    // battery_only: ignore profile and compute only from pill prescription
+    if (isBatteryOnly) {
+      const total = computeTotal(null, count, pill);
+      onChangeSgkExpectedReimbursement(total);
+      onChangeSgkExpectedMonth(total ? computeDefaultExpectedMonth() : '');
+      return;
+    }
 
-    // Default expected month = 3 months after "now".
-    onChangeSgkExpectedMonth(computeExpectedMonth3MonthsAhead());
+    // rechargeable/battery_device: profile is optional; pill adds extra if enabled.
+    const netToFirm = profileId ? findProfileNetToFirm(profileId) : null;
+    const total = computeTotal(netToFirm, count, pill);
+    onChangeSgkExpectedReimbursement(total);
+    onChangeSgkExpectedMonth(total ? computeDefaultExpectedMonth() : '');
   };
 
   const handleChangeProfile = (value: string) => {
     onChangeSgkProfileId(value);
-
-    // Even if profile is cleared, pill extra may still apply on battery flows.
-    computeAndSetReimbursementAndMonth(value, sgkDeviceCount, sgkPillPrescription);
+    recomputeExpected(sgkFlag, value, sgkDeviceCount, sgkPillPrescription);
   };
 
   const handleChangeDeviceCount = (value: '1' | '2') => {
     onChangeSgkDeviceCount(value);
-    computeAndSetReimbursementAndMonth(sgkProfileId, value, sgkPillPrescription);
+    recomputeExpected(sgkFlag, sgkProfileId, value, sgkPillPrescription);
   };
 
   const handleTogglePillPrescription = (checked: boolean) => {
-    onChangeSgkPillPrescription?.(checked);
-    computeAndSetReimbursementAndMonth(sgkProfileId, sgkDeviceCount, checked);
+    onChangeSgkPillPrescription(checked);
+    // pill checkbox impacts total reimbursement
+    recomputeExpected(sgkFlag, sgkProfileId, sgkDeviceCount, checked);
   };
 
   return (
@@ -186,7 +188,6 @@ export function NewPatientSgkSection({
         </label>
       </div>
 
-      {/* Details are only visible when SGK is enabled */}
       {sgkFlag && (
         <>
           <div className="flex flex-col gap-1 pl-5 text-xs">
@@ -212,17 +213,19 @@ export function NewPatientSgkSection({
               <span>Sisteme işlendi mi?</span>
             </label>
 
-            {/* Pill prescription (always visible; effective only on battery flows) */}
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                disabled={!sgkFlag}
-                checked={sgkPillPrescription}
-                onChange={(e) => handleTogglePillPrescription(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
-              />
-              <span>Pil Reçetesi</span>
-            </label>
+            {/* Battery-only extra checkbox */}
+            {isBatteryFlow && (
+              <label className="mt-1 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  disabled={!sgkFlag}
+                  checked={sgkPillPrescription}
+                  onChange={(e) => handleTogglePillPrescription(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+                />
+                <span>Pil reçetesi var mı? (ek ödeme)</span>
+              </label>
+            )}
 
             {/* Prescription number */}
             <label className="mt-1 flex flex-col gap-1">
@@ -236,18 +239,11 @@ export function NewPatientSgkSection({
                 placeholder="Reçete numarası"
               />
             </label>
-
-            {deviceFlowType === 'rechargeable_device' && (
-              <p className="mt-1 text-[11px] text-slate-500">
-                Pil Reçetesi seçeneği pil satışlarında kullanılır. Şarjlı cihaz akışında hesaplamaya etkisi yoktur.
-              </p>
-            )}
           </div>
 
           {/* SGK profile + device count + derived totals */}
           <div className="mt-2 flex flex-col gap-2 text-xs">
-            {/* Profile is hidden for battery_only */}
-            {isProfileSelectable ? (
+            {!isBatteryOnly && (
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-700">SGK Profili</span>
                 <select
@@ -264,12 +260,6 @@ export function NewPatientSgkSection({
                   ))}
                 </select>
               </label>
-            ) : (
-              <div className="rounded-md border border-slate-200 bg-white px-2 py-2">
-                <p className="text-[11px] text-slate-600">
-                  Pil hastalarında SGK profili seçilmez. SGK cihaz adedi (1/2) seçimi pil ödemesi çarpanı için kullanılır.
-                </p>
-              </div>
             )}
 
             <label className="flex flex-col gap-1">
@@ -296,13 +286,8 @@ export function NewPatientSgkSection({
                 readOnly
                 value={sgkExpectedReimbursement}
                 className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
-                placeholder="Seçimlere göre otomatik hesaplanır"
+                placeholder="Profil seçince otomatik hesaplanır"
               />
-              {isBatteryFlow && sgkPillPrescription && (
-                <p className="mt-1 text-[11px] text-slate-600">
-                  Pil reçetesi ek ödemesi: {PILL_EXTRA_REIMBURSEMENT_KDV_INCLUSIVE} TL (KDV dahil) × cihaz adedi
-                </p>
-              )}
             </label>
 
             <label className="flex flex-col gap-1">
@@ -317,8 +302,8 @@ export function NewPatientSgkSection({
             </label>
 
             <p className="mt-1 text-[11px] text-slate-500">
-              Beklenen ödeme tutarı ve ayı sistem tarafından otomatik hesaplanır (yaklaşık 3 ay sonrası). Bu alanlar sonradan elle
-              değiştirilmez.
+              Beklenen ödeme tutarı ve ayı sistem tarafından otomatik hesaplanır (yaklaşık 3 ay sonrası).
+              Bu alanlar sonradan elle değiştirilmez.
             </p>
           </div>
         </>
