@@ -12,6 +12,12 @@
 // - SGK is decoupled from device drafts.
 // - sgkDeviceCount is a manual choice (1/2) managed by SGK section.
 // - sgkExpectedReimbursement is treated as TOTAL and is NOT re-computed here.
+//
+// Patch v2.9:
+// - For deviceFlowType === 'battery_only': payment becomes optional.
+//   * No required validation for payment rows / totals.
+//   * No saleBreakdownDraft / installmentPlanDraft generated.
+//   * paymentMethod/saleTotal/cardFeeRate are submitted as empty strings.
 
 import { useState, useMemo, FormEvent } from 'react';
 import type {
@@ -202,6 +208,11 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
     const tcRaw = formState.nationalId;
     const phoneRaw = formState.phone;
 
+    const deviceFlowType: NewPatientDeviceFlowType =
+      formState.deviceFlowType ?? 'rechargeable_device';
+    const isBatteryOnly = deviceFlowType === 'battery_only';
+    const isBatteryFlow = deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
+
     if (!fullName) {
       setLocalError('Ad Soyad alanı zorunludur.');
       return;
@@ -215,27 +226,32 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
       return;
     }
 
-    if (paymentRows.length === 0) {
-      setLocalError('En az bir ödeme satırı eklemeniz gerekiyor.');
-      return;
-    }
+    // Payment rules:
+    // - battery_only: payment is optional (SGK-only battery patient).
+    // - others: keep strict validation.
+    if (!isBatteryOnly) {
+      if (paymentRows.length === 0) {
+        setLocalError('En az bir ödeme satırı eklemeniz gerekiyor.');
+        return;
+      }
 
-    const primaryPayment = paymentRows[0];
-    if (!primaryPayment.paymentMethod) {
-      setLocalError('İlk ödeme satırında bir ödeme şekli seçmelisiniz.');
-      return;
-    }
-    if (!primaryPayment.amount.trim()) {
-      setLocalError('İlk ödeme satırında bir tutar girmelisiniz.');
-      return;
-    }
+      const primaryPayment = paymentRows[0];
+      if (!primaryPayment.paymentMethod) {
+        setLocalError('İlk ödeme satırında bir ödeme şekli seçmelisiniz.');
+        return;
+      }
+      if (!primaryPayment.amount.trim()) {
+        setLocalError('İlk ödeme satırında bir tutar girmelisiniz.');
+        return;
+      }
 
-    const saleTotalNumber = paymentsTotal;
-    const saleTotalRaw = saleTotalNumber > 0 ? saleTotalNumber.toString() : '';
+      const saleTotalNumber = paymentsTotal;
+      const saleTotalRaw = saleTotalNumber > 0 ? saleTotalNumber.toString() : '';
 
-    if (!saleTotalRaw) {
-      setLocalError('Toplam satış tutarı zorunludur.');
-      return;
+      if (!saleTotalRaw) {
+        setLocalError('Toplam satış tutarı zorunludur.');
+        return;
+      }
     }
 
     try {
@@ -244,8 +260,15 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
 
       setLocalError(null);
 
-      // Senet plan taslağı: yalnızca temel alanlar doluysa oluştur.
+      // Build payment payload conditionally.
+      const primaryPayment = paymentRows[0] ?? createEmptyPaymentRow();
+
+      const saleTotalNumber = paymentsTotal;
+      const saleTotalRaw = saleTotalNumber > 0 ? saleTotalNumber.toString() : '';
+
+      // Senet plan taslağı: yalnızca battery_only değilse ve temel alanlar doluysa oluştur.
       const hasInstallmentDraft =
+        !isBatteryOnly &&
         senetInstallmentCount.trim() !== '' &&
         senetFirstDueDate.trim() !== '' &&
         senetDayOfMonth.trim() !== '';
@@ -261,19 +284,17 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
           }
         : null;
 
-      // Çoklu ödeme satırlarından saleBreakdownDraft üret.
-      const saleBreakdownDraft: UpsertPatientSaleBreakdownItem[] = paymentRows
-        .filter((row) => !!row.paymentMethod && row.amount.trim().length > 0)
-        .map((row) => ({
-          id: undefined,
-          method: row.paymentMethod as PatientPaymentMethod,
-          amount: row.amount.trim(),
-          note: '',
-        }));
-
-      const deviceFlowType: NewPatientDeviceFlowType =
-        formState.deviceFlowType ?? 'rechargeable_device';
-      const isBatteryFlow = deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
+      // Çoklu ödeme satırlarından saleBreakdownDraft üret (battery_only ise tamamen boş).
+      const saleBreakdownDraft: UpsertPatientSaleBreakdownItem[] = isBatteryOnly
+        ? []
+        : paymentRows
+            .filter((row) => !!row.paymentMethod && row.amount.trim().length > 0)
+            .map((row) => ({
+              id: undefined,
+              method: row.paymentMethod as PatientPaymentMethod,
+              amount: row.amount.trim(),
+              note: '',
+            }));
 
       onSubmit({
         fullName,
@@ -299,9 +320,17 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
         sgkPrescriptionNo: formState.sgkFlag ? (formState.sgkPrescriptionNo ?? '').trim() : '',
         sgkDeviceCount: formState.sgkFlag ? (formState.sgkDeviceCount ?? '1') : '1',
 
-        paymentMethod: primaryPayment.paymentMethod,
-        saleTotal: saleTotalRaw,
-        cardFeeRate: primaryPayment.paymentMethod === 'Kredi_Kartı' ? primaryPayment.cardFeeRate : '',
+        // Payment fields:
+        // - battery_only: keep empty (SGK-only).
+        // - others: strict & mapped from primary row.
+        paymentMethod: isBatteryOnly ? '' : primaryPayment.paymentMethod,
+        saleTotal: isBatteryOnly ? '' : saleTotalRaw,
+        cardFeeRate:
+          isBatteryOnly
+            ? ''
+            : primaryPayment.paymentMethod === 'Kredi_Kartı'
+              ? primaryPayment.cardFeeRate
+              : '',
 
         referenceId: formState.referenceId,
         referenceName: formState.referenceName,
