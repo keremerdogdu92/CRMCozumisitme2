@@ -7,6 +7,11 @@
 // - Adds optional chargerInventoryItemId for rechargeable flow (UI-guided, not required).
 // - Adds batteryLines draft support (single line with box/pack/unit quantities; list can grow later).
 // - Adds sgkPillPrescription flag (for battery flows) to support extra reimbursement logic later.
+//
+// IMPORTANT (SGK logic):
+// - SGK is decoupled from device drafts.
+// - sgkDeviceCount is a manual choice (1/2) managed by SGK section.
+// - sgkExpectedReimbursement is treated as TOTAL and is NOT re-computed here.
 
 import { useState, useMemo, FormEvent } from 'react';
 import type {
@@ -266,24 +271,31 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
           note: '',
         }));
 
+      const deviceFlowType: NewPatientDeviceFlowType =
+        formState.deviceFlowType ?? 'rechargeable_device';
+      const isBatteryFlow = deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
+
       onSubmit({
         fullName,
         phone: normalizedPhone,
 
         // New flow fields (soft, no strict validation yet)
-        deviceFlowType: formState.deviceFlowType ?? 'rechargeable_device',
-        chargerInventoryItemId: formState.chargerInventoryItemId ?? null,
-        batteryLines: formState.batteryLines ?? [],
-        sgkPillPrescription: !!formState.sgkPillPrescription,
+        deviceFlowType,
+        chargerInventoryItemId:
+          deviceFlowType === 'rechargeable_device' ? formState.chargerInventoryItemId ?? null : null,
+        batteryLines: isBatteryFlow ? formState.batteryLines ?? [] : [],
+        sgkPillPrescription: formState.sgkFlag && isBatteryFlow ? !!formState.sgkPillPrescription : false,
 
         sgkFlag: formState.sgkFlag,
         sgkPrescriptionReceived: formState.sgkFlag ? formState.sgkPrescriptionReceived : false,
         sgkRecordedToSystem: formState.sgkFlag ? formState.sgkRecordedToSystem : false,
 
-        // Note: UI will hide/disable profile selection for battery_only later.
+        // SGK values are authored by the SGK UI section:
+        // - sgkDeviceCount is manual
+        // - sgkExpectedReimbursement is TOTAL
         sgkProfileId: formState.sgkFlag ? formState.sgkProfileId : '',
-        sgkExpectedReimbursement: formState.sgkFlag ? formState.sgkExpectedReimbursement ?? '' : '',
-        sgkExpectedMonth: formState.sgkFlag ? formState.sgkExpectedMonth : '',
+        sgkExpectedReimbursement: formState.sgkFlag ? (formState.sgkExpectedReimbursement ?? '') : '',
+        sgkExpectedMonth: formState.sgkFlag ? (formState.sgkExpectedMonth ?? '') : '',
         sgkPrescriptionNo: formState.sgkFlag ? (formState.sgkPrescriptionNo ?? '').trim() : '',
         sgkDeviceCount: formState.sgkFlag ? (formState.sgkDeviceCount ?? '1') : '1',
 
