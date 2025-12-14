@@ -14,6 +14,7 @@ import { PatientDetailPaymentsTab } from './PatientDetailPaymentsTab';
 import { PatientDetailDevicesTab } from './PatientDetailDevicesTab';
 import { PatientDetailSgkInvoiceTab } from './PatientDetailSgkInvoiceTab';
 import { PatientDetailAccessoriesTab } from './PatientDetailAccessoriesTab';
+import { PatientDetailBatteryPrescriptionsTab } from './PatientDetailBatteryPrescriptionsTab';
 import { PATIENTS_QUERY_KEY } from '../../api/api.core';
 import { updatePatientInvoiceStatus } from '../../api/api.patients';
 import type { MeetingRow } from '../../../meetings/types';
@@ -30,6 +31,7 @@ type PatientDetailTabId =
   | 'meetings'
   | 'payments'
   | 'accessories'
+  | 'batteryPrescriptions'
   | 'audiogram';
 
 type PatientDetailDrawerProps = {
@@ -167,8 +169,6 @@ export function PatientDetailDrawer({
         err instanceof Error
           ? err.message
           : 'Hasta silinirken beklenmeyen bir hata oluştu.';
-      // Basit ama görünür olsun diye alert kullanıyoruz.
-      // İleride toast sistemi geldikten sonra buraya taşınabilir.
       // eslint-disable-next-line no-alert
       alert(message);
     },
@@ -212,7 +212,6 @@ export function PatientDetailDrawer({
   };
 
   const handleSoftDeletePatient = (row: PatientRow) => {
-    // React Query v5: pending state => isPending
     if (deletePatientMutation.isPending) return;
     deletePatientMutation.mutate(row.id);
   };
@@ -224,6 +223,7 @@ export function PatientDetailDrawer({
     { id: 'meetings', label: 'Görüşmeler' },
     { id: 'payments', label: 'Ödemeler' },
     { id: 'accessories', label: 'Aksesuarlar' },
+    { id: 'batteryPrescriptions', label: 'Pil Reçeteleri' },
     { id: 'audiogram', label: 'Audiogram' },
   ];
 
@@ -431,7 +431,11 @@ export function PatientDetailDrawer({
         )}
 
         {activeTab === 'accessories' && (
-          <PatientDetailAccessoriesTab
+          <PatientDetailAccessoriesTab patientId={patient.id} open={open} />
+        )}
+
+        {activeTab === 'batteryPrescriptions' && (
+          <PatientDetailBatteryPrescriptionsTab
             patientId={patient.id}
             open={open}
           />
