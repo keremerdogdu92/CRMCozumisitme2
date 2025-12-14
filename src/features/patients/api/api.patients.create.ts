@@ -274,7 +274,6 @@ async function recordBatteryPrescriptionDeliveries(params: {
   try {
     await createBatteryPrescriptionDeliveries({
       orgId,
-      createdBy,
       input: {
         patientId,
         lines,
