@@ -1,16 +1,14 @@
 -- db/schema/patients/patient_list_with_device.view.sql
 -- Purpose: View definition for `patient_list_with_device`.
 -- Combines patients with their sold devices and reference info for listing screens.
--- Includes: DROP VIEW + CREATE VIEW with internal CTE aggregation over inventory_items.
+-- Includes: CREATE VIEW with internal CTE aggregation over inventory_items.
 -- Source of truth: Supabase view definition.
 --
 -- Security:
 --   - security_invoker = on → view runs with caller's permissions,
 --     so RLS on patients / inventory_items / references is enforced.
 
-DROP VIEW IF EXISTS public.patient_list_with_device;
-
-CREATE VIEW public.patient_list_with_device
+CREATE OR REPLACE VIEW public.patient_list_with_device
 WITH (security_invoker = on) AS
 WITH device_agg AS (
   SELECT
@@ -33,7 +31,6 @@ WITH device_agg AS (
     public.inventory_items AS i
   WHERE
     i.status = 'sold'::text
-    AND i.sold_patient_id IS NOT NULL
   GROUP BY
     i.org_id,
     i.sold_patient_id
@@ -45,51 +42,33 @@ SELECT
   p.phone,
   p.created_at,
   p.last_visit_at,
-
-  -- SGK + satisfaction
   p.sgk_flag,
   p.sgk_prescription_no,
   p.sgk_docs_received,
   p.sgk_processed,
-  p.satisfaction_10,
   p.sgk_prescription_received,
   p.sgk_recorded_to_system,
-
-  -- Identity / address / relative
+  p.is_battery_patient,
   p.national_id,
   p.address,
   p.kin_phone,
-
-  -- Reference
   p.reference_id,
-  r.full_name AS reference_name,
-  r.phone AS reference_phone,
-
-  -- Archive + payment
   p.archive_code,
   p.payment_method,
   p.sale_total_amount,
   p.card_fee_rate,
   p.card_fee_amount,
-
-  -- Invoice status
   p.invoice_issued,
   p.invoice_issued_at,
-
-  -- Device summary
+  r.full_name AS reference_name,
+  r.phone AS reference_phone,
   da.device_brand,
   da.device_model,
   da.device_total_price,
   da.device_ear_side_summary,
-
-  -- SGK profile-based reimbursement metadata
   p.sgk_profile,
   p.sgk_expected_reimbursement,
-  p.sgk_expected_reimbursement_month,
-
-  -- Battery flag (NEW)
-  p.is_battery_patient
-
+  p.sgk_expected_reimbursement_month
 FROM
   public.patients AS p
   LEFT JOIN public."references" AS r
