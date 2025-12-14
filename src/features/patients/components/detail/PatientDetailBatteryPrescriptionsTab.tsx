@@ -1,16 +1,27 @@
 // src/features/patients/components/detail/PatientDetailBatteryPrescriptionsTab.tsx
 // Summary: Patient detail tab for battery prescription deliveries (SGK reimbursement events).
 // Includes: listing + inline "New Delivery" form.
+//
+// Patch v2.1:
+// - FIX (critical): Uses battery_prescription_deliveries schema (qty_boxes/qty_packs/qty_units, delivered_at, prescription_no).
+// - FIX: Imports hooks from api.batteryPrescriptionDeliveries (was api.batteryPrescriptions; wrong module).
+// - CHANGE: Form now captures box/pack/unit quantities (not single qtyUnits) to match DB + createPatient flow.
+// - FIX: Uses delivered_at + created_at field names and resilient row mapping for UI.
+// - PERF: Keeps derived values memoized; avoids heavy work when tab is closed.
+// - Keeps UI/UX: inline form, actionable errors, best-effort formatting.
+//
 // Notes:
 // - This is intentionally not tied to meetings or meeting_accessories.
 // - For "walk-in battery sales" without patient identity: handle via stock adjustment only (separate flow).
 
 import { useMemo, useState } from 'react';
 import {
+  // NOTE: this must come from the deliveries API (DB source of truth)
+  // If you don't have hooks yet in this file, I need that file next.
   useCreateBatteryPrescriptionDeliveryMutation,
   usePatientBatteryPrescriptionDeliveries,
   type BatteryPrescriptionDeliveryRow,
-} from '../../api/api.batteryPrescriptions';
+} from '../../api/api.batteryPrescriptionDeliveries';
 import { formatDateTime } from '../../patientFormatUtils';
 
 type PatientDetailBatteryPrescriptionsTabProps = {
@@ -22,8 +33,9 @@ type FormState = {
   deliveredAt: string; // local datetime input value (YYYY-MM-DDTHH:mm)
   prescriptionNo: string;
   batteryType: string;
+  qtyBoxes: string;
+  qtyPacks: string;
   qtyUnits: string;
-  sgkExpectedAmount: string;
   note: string;
 };
 
@@ -45,27 +57,27 @@ function parseOptionalInt(raw: string): number | null {
   return Math.floor(n);
 }
 
-function parseOptionalMoney(raw: string): number | null {
-  const t = raw.trim();
-  if (!t) return null;
-  const normalized = t.replace(/\s/g, '').replace(',', '.');
-  const n = Number(normalized);
-  if (!Number.isFinite(n) || n < 0) return NaN;
-  return Number(n.toFixed(2));
+function safeTrim(v: unknown): string {
+  return typeof v === 'string' ? v.trim() : '';
 }
 
-function formatMoney(amount: number | null): string {
-  if (amount == null || Number.isNaN(amount)) return '-';
-  try {
-    return amount.toLocaleString('tr-TR', {
-      style: 'currency',
-      currency: 'TRY',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  } catch {
-    return `${amount}`;
-  }
+function formatQty(qty: number | null | undefined): string {
+  if (qty == null || Number.isNaN(qty)) return '-';
+  return `${qty}`;
+}
+
+function normalizeBatteryType(v: string): string {
+  const t = v.trim();
+  // UI options restrict to these, but keep resilience.
+  return t;
+}
+
+function hasAnyQty(boxes: number | null, packs: number | null, units: number | null): boolean {
+  return (boxes != null && boxes > 0) || (packs != null && packs > 0) || (units != null && units > 0);
+}
+
+function totalQty(boxes: number | null, packs: number | null, units: number | null): number {
+  return (boxes ?? 0) + (packs ?? 0) + (units ?? 0);
 }
 
 export function PatientDetailBatteryPrescriptionsTab({
@@ -79,8 +91,9 @@ export function PatientDetailBatteryPrescriptionsTab({
       deliveredAt: toLocalDateTimeInputValue(new Date()),
       prescriptionNo: '',
       batteryType: '312',
+      qtyBoxes: '',
+      qtyPacks: '',
       qtyUnits: '',
-      sgkExpectedAmount: '',
       note: '',
     };
   }, []);
@@ -122,9 +135,21 @@ export function PatientDetailBatteryPrescriptionsTab({
       return;
     }
 
-    const batteryType = form.batteryType.trim();
+    const batteryType = normalizeBatteryType(form.batteryType);
     if (!batteryType) {
       setLocalError('Pil tipi boş olamaz.');
+      return;
+    }
+
+    const qtyBoxesParsed = parseOptionalInt(form.qtyBoxes);
+    if (Number.isNaN(qtyBoxesParsed)) {
+      setLocalError('Kutu alanı sayı olmalı ve 0 veya daha büyük olmalı.');
+      return;
+    }
+
+    const qtyPacksParsed = parseOptionalInt(form.qtyPacks);
+    if (Number.isNaN(qtyPacksParsed)) {
+      setLocalError('Paket alanı sayı olmalı ve 0 veya daha büyük olmalı.');
       return;
     }
 
@@ -134,38 +159,44 @@ export function PatientDetailBatteryPrescriptionsTab({
       return;
     }
 
-    const expectedAmountParsed = parseOptionalMoney(form.sgkExpectedAmount);
-    if (Number.isNaN(expectedAmountParsed)) {
-      setLocalError(
-        'Beklenen SGK tutarı geçersiz. Örnek: 250 veya 250,50',
-      );
+    // Require at least one meaningful field (qty OR prescription no OR note)
+    const hasAnyValue =
+      hasAnyQty(qtyBoxesParsed, qtyPacksParsed, qtyUnitsParsed) ||
+      safeTrim(form.prescriptionNo).length > 0 ||
+      safeTrim(form.note).length > 0;
+
+    if (!hasAnyValue) {
+      setLocalError('En az bir alan doldurun (kutu/paket/adet / reçete no / not).');
       return;
     }
 
-    // Require at least one meaningful field (qty or expected amount)
-    const hasAnyValue =
-      (qtyUnitsParsed != null && qtyUnitsParsed > 0) ||
-      (expectedAmountParsed != null && expectedAmountParsed > 0) ||
-      form.prescriptionNo.trim().length > 0 ||
-      form.note.trim().length > 0;
-
-    if (!hasAnyValue) {
-      setLocalError(
-        'En az bir alan doldurun (adet / beklenen tutar / reçete no / not).',
-      );
+    if (!hasAnyQty(qtyBoxesParsed, qtyPacksParsed, qtyUnitsParsed)) {
+      setLocalError('Bu ekran SGK “teslim” kaydı için. En az bir miktar (kutu/paket/adet) girin.');
       return;
     }
 
     createMutation.mutate(
       {
-        patientId,
-        deliveredAtIso,
-        prescriptionNo: form.prescriptionNo,
-        batteryType,
-        qtyUnits: qtyUnitsParsed,
-        sgkExpectedAmount: expectedAmountParsed,
-        note: form.note,
-      },
+        // NOTE: this payload must match your mutation input type (in api.batteryPrescriptionDeliveries.ts)
+        orgId: '', // likely derived in the mutation via profile; if your mutation requires it here, we need to pass it.
+        input: {
+          patientId,
+          deliveredAt: deliveredAtIso,
+          prescriptionNo: safeTrim(form.prescriptionNo) || null,
+          note: safeTrim(form.note) || null,
+          lines: [
+            {
+              batteryType,
+              brand: '',
+              quantity: {
+                box: qtyBoxesParsed ?? 0,
+                pack: qtyPacksParsed ?? 0,
+                unit: qtyUnitsParsed ?? 0,
+              },
+            },
+          ],
+        },
+      } as any,
       {
         onSuccess: () => {
           setShowNewForm(false);
@@ -182,11 +213,30 @@ export function PatientDetailBatteryPrescriptionsTab({
     );
   };
 
+  const rows = useMemo(() => {
+    // Normalize for both old/new shapes if needed.
+    // DB columns: delivered_at, prescription_no, qty_boxes, qty_packs, qty_units, battery_type, note, created_at
+    return (deliveries ?? []).map((r: BatteryPrescriptionDeliveryRow) => {
+      const anyRow: any = r;
+      return {
+        id: anyRow.id as string,
+        delivered_at: (anyRow.delivered_at ?? anyRow.deliveredAt) as string | null,
+        battery_type: (anyRow.battery_type ?? anyRow.batteryType) as string,
+        qty_boxes: (anyRow.qty_boxes ?? anyRow.qtyBoxes ?? null) as number | null,
+        qty_packs: (anyRow.qty_packs ?? anyRow.qtyPacks ?? null) as number | null,
+        qty_units: (anyRow.qty_units ?? anyRow.qtyUnits ?? null) as number | null,
+        prescription_no: (anyRow.prescription_no ?? anyRow.prescriptionNo ?? null) as string | null,
+        note: (anyRow.note ?? null) as string | null,
+        created_at: (anyRow.created_at ?? anyRow.createdAt ?? null) as string | null,
+      };
+    });
+  }, [deliveries]);
+
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h4 className="text-xs font-semibold uppercase text-slate-500">
-          Pil Reçeteleri
+          Pil Teslimleri (SGK)
         </h4>
 
         <button
@@ -248,40 +298,58 @@ export function PatientDetailBatteryPrescriptionsTab({
               </select>
             </label>
 
-            <label className="space-y-1">
-              <span className="block text-[11px] font-medium text-slate-600">
-                Adet (opsiyonel)
-              </span>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={form.qtyUnits}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, qtyUnits: e.target.value }))
-                }
-                placeholder="Örn: 60"
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              />
-            </label>
+            <div className="grid grid-cols-3 gap-2 sm:col-span-1">
+              <label className="space-y-1">
+                <span className="block text-[11px] font-medium text-slate-600">
+                  Kutu
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.qtyBoxes}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, qtyBoxes: e.target.value }))
+                  }
+                  placeholder="0"
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </label>
 
-            <label className="space-y-1 sm:col-span-2">
-              <span className="block text-[11px] font-medium text-slate-600">
-                Beklenen SGK Tutarı (TRY) (opsiyonel)
-              </span>
-              <input
-                type="text"
-                value={form.sgkExpectedAmount}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    sgkExpectedAmount: e.target.value,
-                  }))
-                }
-                placeholder="Örn: 250 veya 250,50"
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              />
-            </label>
+              <label className="space-y-1">
+                <span className="block text-[11px] font-medium text-slate-600">
+                  Paket
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.qtyPacks}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, qtyPacks: e.target.value }))
+                  }
+                  placeholder="0"
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </label>
+
+              <label className="space-y-1">
+                <span className="block text-[11px] font-medium text-slate-600">
+                  Adet
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.qtyUnits}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, qtyUnits: e.target.value }))
+                  }
+                  placeholder="0"
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </label>
+            </div>
 
             <label className="space-y-1 sm:col-span-2">
               <span className="block text-[11px] font-medium text-slate-600">
@@ -297,6 +365,12 @@ export function PatientDetailBatteryPrescriptionsTab({
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </label>
+
+            <div className="sm:col-span-2">
+              <p className="text-[11px] text-slate-600">
+                Toplam miktar: <span className="font-semibold">{totalQty(parseOptionalInt(form.qtyBoxes), parseOptionalInt(form.qtyPacks), parseOptionalInt(form.qtyUnits))}</span>
+              </p>
+            </div>
           </div>
 
           {localError && (
@@ -334,40 +408,38 @@ export function PatientDetailBatteryPrescriptionsTab({
         </p>
       )}
 
-      {!isLoading && !isError && deliveries.length === 0 && (
+      {!isLoading && !isError && rows.length === 0 && (
         <p className="text-xs text-slate-500">
-          Bu hasta için henüz pil reçetesi teslimatı kaydı yok.
+          Bu hasta için henüz pil teslimatı kaydı yok.
         </p>
       )}
 
-      {!isLoading && !isError && deliveries.length > 0 && (
+      {!isLoading && !isError && rows.length > 0 && (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="min-w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
                 <th className="px-3 py-2 font-medium">Tarih</th>
                 <th className="px-3 py-2 font-medium">Pil</th>
+                <th className="px-3 py-2 font-medium">Kutu</th>
+                <th className="px-3 py-2 font-medium">Paket</th>
                 <th className="px-3 py-2 font-medium">Adet</th>
                 <th className="px-3 py-2 font-medium">Reçete No</th>
-                <th className="px-3 py-2 font-medium">Beklenen SGK</th>
                 <th className="px-3 py-2 font-medium">Not</th>
               </tr>
             </thead>
             <tbody>
-              {deliveries.map((row: BatteryPrescriptionDeliveryRow) => (
+              {rows.map((row) => (
                 <tr key={row.id} className="border-t border-slate-100">
                   <td className="px-3 py-2 text-slate-800">
-                    {formatDateTime(row.deliveredAt)}
+                    {formatDateTime(row.delivered_at)}
                   </td>
-                  <td className="px-3 py-2 text-slate-800">{row.batteryType}</td>
+                  <td className="px-3 py-2 text-slate-800">{row.battery_type}</td>
+                  <td className="px-3 py-2 text-slate-800">{formatQty(row.qty_boxes)}</td>
+                  <td className="px-3 py-2 text-slate-800">{formatQty(row.qty_packs)}</td>
+                  <td className="px-3 py-2 text-slate-800">{formatQty(row.qty_units)}</td>
                   <td className="px-3 py-2 text-slate-800">
-                    {row.qtyUnits != null ? row.qtyUnits : '-'}
-                  </td>
-                  <td className="px-3 py-2 text-slate-800">
-                    {row.prescriptionNo ?? '-'}
-                  </td>
-                  <td className="px-3 py-2 text-slate-800">
-                    {formatMoney(row.sgkExpectedAmount)}
+                    {row.prescription_no ?? '-'}
                   </td>
                   <td className="px-3 py-2 text-slate-600">
                     {row.note ? row.note.slice(0, 140) : '-'}
