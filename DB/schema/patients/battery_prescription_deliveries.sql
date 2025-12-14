@@ -1,7 +1,7 @@
--- DB/schema/patients/battery_prescription_deliveries.sql
+-- db/schema/patients/battery_prescription_deliveries.sql
 -- Purpose: Track SGK battery prescription deliveries per patient.
 -- This is NOT an accessory sale; it's an SGK reimbursement event.
--- Includes: CREATE TABLE, indexes, RLS policies, and battery-patient flag trigger.
+-- Includes: CREATE TABLE, indexes, RLS policies + trigger to mark patient as battery patient.
 -- Source of truth: Supabase table editor / migrations.
 
 CREATE TABLE public.battery_prescription_deliveries (
@@ -133,17 +133,15 @@ USING (
 );
 
 -- ============================================================
--- Battery patient flag trigger (patients.is_battery_patient)
+-- TRIGGER: mark patients.is_battery_patient = true on delivery
 -- ============================================================
--- Behavior:
--- - On INSERT/UPDATE of a delivery row, set patients.is_battery_patient = true.
--- - We DO NOT auto-unset on delete (ever-received semantics).
+-- Notes:
+-- - We only ever set true here (no auto-unset).
+-- - We also backfill existing rows.
 
 CREATE OR REPLACE FUNCTION public.mark_patient_as_battery_patient()
 RETURNS trigger
 LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
 AS $$
 BEGIN
   UPDATE public.patients p
@@ -165,7 +163,7 @@ ON public.battery_prescription_deliveries
 FOR EACH ROW
 EXECUTE FUNCTION public.mark_patient_as_battery_patient();
 
--- Backfill: if there are existing deliveries, set flag true
+-- Backfill: if any existing deliveries, set patient flag true
 UPDATE public.patients p
 SET is_battery_patient = TRUE
 WHERE p.is_battery_patient IS DISTINCT FROM TRUE
