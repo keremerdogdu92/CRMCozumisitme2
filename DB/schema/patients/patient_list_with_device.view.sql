@@ -31,6 +31,7 @@ WITH device_agg AS (
     public.inventory_items AS i
   WHERE
     i.status = 'sold'::text
+    AND i.sold_patient_id IS NOT NULL
   GROUP BY
     i.org_id,
     i.sold_patient_id
@@ -46,6 +47,7 @@ SELECT
   p.sgk_prescription_no,
   p.sgk_docs_received,
   p.sgk_processed,
+  p.satisfaction_10,
   p.sgk_prescription_received,
   p.sgk_recorded_to_system,
   p.is_battery_patient,
@@ -82,3 +84,8 @@ WHERE
 -- NOTE:
 -- - RLS is enforced on the underlying tables (patients, inventory_items, references),
 --   not on the view itself. This view should not have its own RLS policies.
+--
+-- Migration note:
+-- - If you ever change the view column order/names, prefer:
+--   DROP VIEW ...; then CREATE VIEW ...;
+--   to avoid Postgres 42P16 errors.
