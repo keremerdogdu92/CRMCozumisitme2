@@ -1,4 +1,4 @@
-// src/features/patients/new/NewPatientPaymentSection.tsx
+// src/features/patients/components/new/NewPatientPaymentSection.tsx
 // Payment method selector and sale total + optional card details for new patient form.
 //
 // v2 kuralları:
@@ -7,6 +7,9 @@
 //   * Taksit (Fiziki POS) seçilir.
 //   * Komisyon oranı tabloya göre otomatik dolar, input readOnly'dir.
 //   * Toplam satış + komisyon oranından komisyon tutarı ve net tutar hesaplanır ve gösterilir.
+//
+// Patch v2.1:
+// - Adds allowEmpty: when true, payment method + sale total are not required (used for battery_only flow).
 
 import { useMemo, useState } from 'react';
 import type { PatientPaymentMethodFormValue } from '../../types';
@@ -48,9 +51,7 @@ const COMMISSION_RATE_SWITCH_DATE_ISO = '2026-03-01';
 
 function shouldUseFinalRates(): boolean {
   const now = new Date();
-  const switchDate = new Date(
-    `${COMMISSION_RATE_SWITCH_DATE_ISO}T00:00:00`,
-  );
+  const switchDate = new Date(`${COMMISSION_RATE_SWITCH_DATE_ISO}T00:00:00`);
   return now >= switchDate;
 }
 
@@ -96,6 +97,7 @@ function formatCurrencyTry(amount: number | null): string {
 }
 
 type NewPatientPaymentSectionProps = {
+  allowEmpty?: boolean;
   paymentMethod: PatientPaymentMethodFormValue;
   saleTotal: string;
   cardFeeRate: string;
@@ -105,6 +107,7 @@ type NewPatientPaymentSectionProps = {
 };
 
 export function NewPatientPaymentSection({
+  allowEmpty = false,
   paymentMethod,
   saleTotal,
   cardFeeRate,
@@ -112,14 +115,11 @@ export function NewPatientPaymentSection({
   onChangeSaleTotal,
   onChangeCardFeeRate,
 }: NewPatientPaymentSectionProps) {
-  const [selectedInstallment, setSelectedInstallment] =
-    useState<string>('');
+  const [selectedInstallment, setSelectedInstallment] = useState<string>('');
 
   const isCard = paymentMethod === 'Kredi_Kartı';
 
-  const handlePaymentMethodChange = (
-    value: PatientPaymentMethodFormValue,
-  ) => {
+  const handlePaymentMethodChange = (value: PatientPaymentMethodFormValue) => {
     onChangePaymentMethod(value);
     if (value !== 'Kredi_Kartı') {
       setSelectedInstallment('');
@@ -130,9 +130,7 @@ export function NewPatientPaymentSection({
   const handleInstallmentChange = (value: string) => {
     setSelectedInstallment(value);
     const count = Number(value);
-    const rate = Number.isFinite(count)
-      ? getRateForInstallments(count)
-      : null;
+    const rate = Number.isFinite(count) ? getRateForInstallments(count) : null;
 
     if (rate != null) {
       onChangeCardFeeRate(rate.toString().replace('.', ','));
@@ -166,11 +164,9 @@ export function NewPatientPaymentSection({
             className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             value={paymentMethod}
             onChange={(e) =>
-              handlePaymentMethodChange(
-                e.target.value as PatientPaymentMethodFormValue,
-              )
+              handlePaymentMethodChange(e.target.value as PatientPaymentMethodFormValue)
             }
-            required
+            required={!allowEmpty}
           >
             {PAYMENT_METHOD_OPTIONS.map((opt) => (
               <option key={opt.value || 'none'} value={opt.value}>
@@ -195,7 +191,7 @@ export function NewPatientPaymentSection({
             onChange={(e) => onChangeSaleTotal(e.target.value)}
             className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             placeholder="Örn. 80.000"
-            required
+            required={!allowEmpty}
           />
         </div>
 
@@ -208,9 +204,7 @@ export function NewPatientPaymentSection({
               </label>
               <select
                 value={selectedInstallment}
-                onChange={(e) =>
-                  handleInstallmentChange(e.target.value)
-                }
+                onChange={(e) => handleInstallmentChange(e.target.value)}
                 className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               >
                 <option value="">Seçilmedi</option>
@@ -244,13 +238,9 @@ export function NewPatientPaymentSection({
             <div className="md:col-span-4 mt-2">
               <p className="text-[11px] text-slate-600">
                 Komisyon:{' '}
-                <span className="font-semibold">
-                  {formatCurrencyTry(feeAmount)}
-                </span>{' '}
+                <span className="font-semibold">{formatCurrencyTry(feeAmount)}</span>{' '}
                 – Komisyon sonrası net:{' '}
-                <span className="font-semibold">
-                  {formatCurrencyTry(netAmount)}
-                </span>
+                <span className="font-semibold">{formatCurrencyTry(netAmount)}</span>
               </p>
             </div>
           </>
