@@ -1,12 +1,9 @@
 // src/features/patients/types.ts
-// Shared TypeScript types for the Patients feature.
+// Summary: Shared TypeScript types for the Patients feature (patients, devices, payments, SGK, battery flows).
 //
-// v2.8:
-// - Adds device flow typing for new patient form:
-//   rechargeable device / battery device / battery-only
-// - Adds battery (pil) draft types (single-line with box/pack/unit quantities)
-// - Adds optional charger inventory selection for rechargeable devices
-// - Adds optional SGK "pill prescription" flag to support extra reimbursement logic later
+// v2.9:
+// - Adds BatteryPrescriptionDeliveries types to support "pil reçetesi teslimi" records.
+// - Keeps BatteryLineDraft as UI draft; API will map it to battery_prescription_deliveries rows.
 
 export type PatientPaymentMethod =
   | 'Tim'
@@ -313,4 +310,60 @@ export type NewPatientForm = {
   installmentPlanDraft?: UpsertPatientInstallmentPlanInput | null;
 
   deviceDrafts?: NewPatientDeviceDraft[];
+};
+
+/**
+ * Battery prescription deliveries (pil reçetesi teslimleri).
+ * Backed by battery_prescription_deliveries table (DB source of truth).
+ *
+ * IMPORTANT:
+ * - These rows are used for reporting and to auto-mark is_battery_patient on patient row (trigger).
+ * - This is NOT a "sale item" and should not live in meeting_accessories.
+ */
+export type BatteryPrescriptionDeliveryRow = {
+  id: string;
+  org_id: string;
+  patient_id: string;
+
+  // Battery meta
+  battery_type: BatteryType | string;
+  brand: string | null;
+
+  // Quantities (semantic)
+  qty_box: number;
+  qty_pack: number;
+  qty_unit: number;
+
+  // Delivery meta
+  delivered_at: string; // timestamptz ISO
+  prescription_no: string | null;
+  note: string | null;
+
+  created_at: string;
+  created_by: string | null;
+};
+
+export type CreateBatteryPrescriptionDeliveryInput = {
+  patientId: string;
+
+  /**
+   * Optional: pass through SGK prescription number typed in SGK section.
+   * If empty, DB will store NULL.
+   */
+  prescriptionNo?: string | null;
+
+  /**
+   * Optional: free text note for auditing.
+   */
+  note?: string | null;
+
+  /**
+   * Optional override for delivered_at. Default: now.
+   */
+  deliveredAt?: string | null;
+
+  /**
+   * Lines from UI draft. Caller is responsible for filtering out empty lines.
+   */
+  lines: BatteryLineDraft[];
 };
