@@ -2,9 +2,13 @@
 // Summary: Patient detail tab for battery prescription deliveries (SGK reimbursement events).
 // Includes: listing + inline "New Delivery" form.
 //
-// Patch v2.3:
-// - FIX (build): Makes FormState.batteryType a BatteryType (not string) to satisfy TS2322.
-// - FIX (safety): Adds runtime guard when reading org_id from profile (org_id/orgId).
+// Patch v2.4:
+// - Adds patient-level summaries:
+//   * Total deliveries count
+//   * Total quantities (box/pack/unit)
+//   * Total expected SGK amount (sum of sgk_expected_amount)
+//   * Breakdown by battery type
+//   * Prescription-level totals (group by prescription_no) for quick auditing
 // - Keeps UI/DB schema alignment (qty_boxes/qty_packs/qty_units, delivered_at, prescription_no, sgk_expected_amount).
 //
 // Notes:
@@ -157,6 +161,28 @@ function readOrgId(profile: unknown): string | null {
   return orgId || null;
 }
 
+function safeNumber(v: unknown): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+type PrescriptionSummaryRow = {
+  key: string; // prescriptionNo (or '—')
+  deliveriesCount: number;
+  lastDeliveredAt: string | null;
+  batteryTypeCounts: Record<string, number>;
+  qtyBoxes: number;
+  qtyPacks: number;
+  qtyUnits: number;
+  expectedTotal: number;
+};
+
+function compareDateDesc(a: string | null, b: string | null): number {
+  const ta = a ? new Date(a).getTime() : 0;
+  const tb = b ? new Date(b).getTime() : 0;
+  return tb - ta;
+}
+
 export function PatientDetailBatteryPrescriptionsTab({
   patientId,
   open,
@@ -286,6 +312,113 @@ export function PatientDetailBatteryPrescriptionsTab({
 
   const deliveries = (deliveriesQuery.data ?? []).map(toDeliveryRowView);
 
+  const summary = useMemo(() => {
+    const totalDeliveries = deliveries.length;
+
+    let totalBoxes = 0;
+    let totalPacks = 0;
+    let totalUnits = 0;
+
+    let expectedTotal = 0;
+
+    const byBatteryType: Record<
+      string,
+      { deliveriesCount: number; expectedTotal: number; qtyBoxes: number; qtyPacks: number; qtyUnits: number }
+    > = {};
+
+    const byPrescription = new Map<string, PrescriptionSummaryRow>();
+
+    for (const r of deliveries) {
+      const bt = safeTrim(r.batteryType) || '—';
+      const boxes = safeNumber(r.qtyBoxes);
+      const packs = safeNumber(r.qtyPacks);
+      const units = safeNumber(r.qtyUnits);
+
+      totalBoxes += boxes;
+      totalPacks += packs;
+      totalUnits += units;
+
+      const expected = r.sgkExpectedAmount != null && Number.isFinite(r.sgkExpectedAmount)
+        ? r.sgkExpectedAmount
+        : 0;
+      expectedTotal += expected;
+
+      if (!byBatteryType[bt]) {
+        byBatteryType[bt] = {
+          deliveriesCount: 0,
+          expectedTotal: 0,
+          qtyBoxes: 0,
+          qtyPacks: 0,
+          qtyUnits: 0,
+        };
+      }
+      byBatteryType[bt].deliveriesCount += 1;
+      byBatteryType[bt].expectedTotal += expected;
+      byBatteryType[bt].qtyBoxes += boxes;
+      byBatteryType[bt].qtyPacks += packs;
+      byBatteryType[bt].qtyUnits += units;
+
+      const key = safeTrim(r.prescriptionNo) || '—';
+      const existing = byPrescription.get(key);
+      if (!existing) {
+        byPrescription.set(key, {
+          key,
+          deliveriesCount: 1,
+          lastDeliveredAt: r.deliveredAt ?? null,
+          batteryTypeCounts: { [bt]: 1 },
+          qtyBoxes: boxes,
+          qtyPacks: packs,
+          qtyUnits: units,
+          expectedTotal: expected,
+        });
+      } else {
+        existing.deliveriesCount += 1;
+        existing.lastDeliveredAt =
+          compareDateDesc(existing.lastDeliveredAt, r.deliveredAt ?? null) <= 0
+            ? existing.lastDeliveredAt
+            : (r.deliveredAt ?? existing.lastDeliveredAt);
+
+        existing.batteryTypeCounts[bt] = (existing.batteryTypeCounts[bt] ?? 0) + 1;
+        existing.qtyBoxes += boxes;
+        existing.qtyPacks += packs;
+        existing.qtyUnits += units;
+        existing.expectedTotal += expected;
+      }
+    }
+
+    const batteryTypeRows = Object.entries(byBatteryType)
+      .map(([batteryType, v]) => ({
+        batteryType,
+        deliveriesCount: v.deliveriesCount,
+        expectedTotal: Number(v.expectedTotal.toFixed(2)),
+        qtyBoxes: v.qtyBoxes,
+        qtyPacks: v.qtyPacks,
+        qtyUnits: v.qtyUnits,
+      }))
+      .sort((a, b) => b.deliveriesCount - a.deliveriesCount);
+
+    const prescriptionRows = Array.from(byPrescription.values())
+      .map((r) => ({
+        ...r,
+        expectedTotal: Number(r.expectedTotal.toFixed(2)),
+      }))
+      .sort((a, b) => {
+        const c = compareDateDesc(a.lastDeliveredAt, b.lastDeliveredAt);
+        if (c !== 0) return c;
+        return b.expectedTotal - a.expectedTotal;
+      });
+
+    return {
+      totalDeliveries,
+      totalBoxes,
+      totalPacks,
+      totalUnits,
+      expectedTotal: Number(expectedTotal.toFixed(2)),
+      batteryTypeRows,
+      prescriptionRows,
+    };
+  }, [deliveries]);
+
   const handleToggleNew = () => {
     setLocalError('');
     setShowNewForm((p) => !p);
@@ -322,6 +455,72 @@ export function PatientDetailBatteryPrescriptionsTab({
           {showNewForm ? 'Formu Kapat' : 'Yeni Teslimat'}
         </button>
       </div>
+
+      {/* Summary */}
+      {!deliveriesQuery.isLoading && !deliveriesQuery.isError && (
+        <div className="grid grid-cols-1 gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-3">
+          <div className="rounded-md bg-slate-50 px-3 py-2">
+            <p className="text-[11px] text-slate-500">Toplam Teslimat</p>
+            <p className="text-sm font-semibold text-slate-900">
+              {summary.totalDeliveries}
+            </p>
+          </div>
+          <div className="rounded-md bg-slate-50 px-3 py-2">
+            <p className="text-[11px] text-slate-500">Toplam Miktar</p>
+            <p className="text-sm font-semibold text-slate-900">
+              {summary.totalBoxes} kutu · {summary.totalPacks} paket · {summary.totalUnits} adet
+            </p>
+          </div>
+          <div className="rounded-md bg-slate-50 px-3 py-2">
+            <p className="text-[11px] text-slate-500">Beklenen SGK (Toplam)</p>
+            <p className="text-sm font-semibold text-slate-900">
+              {formatMoney(summary.expectedTotal)}
+            </p>
+          </div>
+
+          {summary.batteryTypeRows.length > 0 && (
+            <div className="sm:col-span-3">
+              <p className="mb-2 text-[11px] font-medium text-slate-600">
+                Pil Tipine Göre Özet
+              </p>
+              <div className="overflow-x-auto rounded-md border border-slate-200">
+                <table className="min-w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">Pil</th>
+                      <th className="px-3 py-2 font-medium">Teslimat</th>
+                      <th className="px-3 py-2 font-medium">Kutu</th>
+                      <th className="px-3 py-2 font-medium">Paket</th>
+                      <th className="px-3 py-2 font-medium">Adet</th>
+                      <th className="px-3 py-2 font-medium">Beklenen SGK</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.batteryTypeRows.map((r) => (
+                      <tr key={r.batteryType} className="border-t border-slate-100">
+                        <td className="px-3 py-2 text-slate-800">{r.batteryType}</td>
+                        <td className="px-3 py-2 text-slate-800">{r.deliveriesCount}</td>
+                        <td className="px-3 py-2 text-slate-800">{r.qtyBoxes}</td>
+                        <td className="px-3 py-2 text-slate-800">{r.qtyPacks}</td>
+                        <td className="px-3 py-2 text-slate-800">{r.qtyUnits}</td>
+                        <td className="px-3 py-2 text-slate-800">{formatMoney(r.expectedTotal)}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t border-slate-200 bg-slate-50">
+                      <td className="px-3 py-2 font-medium text-slate-700">Toplam</td>
+                      <td className="px-3 py-2 font-medium text-slate-700">{summary.totalDeliveries}</td>
+                      <td className="px-3 py-2 font-medium text-slate-700">{summary.totalBoxes}</td>
+                      <td className="px-3 py-2 font-medium text-slate-700">{summary.totalPacks}</td>
+                      <td className="px-3 py-2 font-medium text-slate-700">{summary.totalUnits}</td>
+                      <td className="px-3 py-2 font-medium text-slate-700">{formatMoney(summary.expectedTotal)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {showNewForm && (
         <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
@@ -506,53 +705,122 @@ export function PatientDetailBatteryPrescriptionsTab({
       {!deliveriesQuery.isLoading &&
         !deliveriesQuery.isError &&
         deliveries.length > 0 && (
-          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table className="min-w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Tarih</th>
-                  <th className="px-3 py-2 font-medium">Pil</th>
-                  <th className="px-3 py-2 font-medium">Kutu</th>
-                  <th className="px-3 py-2 font-medium">Paket</th>
-                  <th className="px-3 py-2 font-medium">Adet</th>
-                  <th className="px-3 py-2 font-medium">Reçete No</th>
-                  <th className="px-3 py-2 font-medium">Beklenen SGK</th>
-                  <th className="px-3 py-2 font-medium">Not</th>
-                </tr>
-              </thead>
-              <tbody>
-                {deliveries.map((row) => (
-                  <tr key={row.id} className="border-t border-slate-100">
-                    <td className="px-3 py-2 text-slate-800">
-                      {formatDateTime(row.deliveredAt)}
-                    </td>
-                    <td className="px-3 py-2 text-slate-800">
-                      {row.batteryType}
-                    </td>
-                    <td className="px-3 py-2 text-slate-800">
-                      {row.qtyBoxes != null ? row.qtyBoxes : '-'}
-                    </td>
-                    <td className="px-3 py-2 text-slate-800">
-                      {row.qtyPacks != null ? row.qtyPacks : '-'}
-                    </td>
-                    <td className="px-3 py-2 text-slate-800">
-                      {row.qtyUnits != null ? row.qtyUnits : '-'}
-                    </td>
-                    <td className="px-3 py-2 text-slate-800">
-                      {row.prescriptionNo ?? '-'}
-                    </td>
-                    <td className="px-3 py-2 text-slate-800">
-                      {formatMoney(row.sgkExpectedAmount)}
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">
-                      {row.note ? row.note.slice(0, 140) : '-'}
-                      {row.note && row.note.length > 140 ? '…' : ''}
-                    </td>
+          <>
+            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <table className="min-w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Tarih</th>
+                    <th className="px-3 py-2 font-medium">Pil</th>
+                    <th className="px-3 py-2 font-medium">Kutu</th>
+                    <th className="px-3 py-2 font-medium">Paket</th>
+                    <th className="px-3 py-2 font-medium">Adet</th>
+                    <th className="px-3 py-2 font-medium">Reçete No</th>
+                    <th className="px-3 py-2 font-medium">Beklenen SGK</th>
+                    <th className="px-3 py-2 font-medium">Not</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {deliveries.map((row) => (
+                    <tr key={row.id} className="border-t border-slate-100">
+                      <td className="px-3 py-2 text-slate-800">
+                        {formatDateTime(row.deliveredAt)}
+                      </td>
+                      <td className="px-3 py-2 text-slate-800">
+                        {row.batteryType}
+                      </td>
+                      <td className="px-3 py-2 text-slate-800">
+                        {row.qtyBoxes != null ? row.qtyBoxes : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-slate-800">
+                        {row.qtyPacks != null ? row.qtyPacks : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-slate-800">
+                        {row.qtyUnits != null ? row.qtyUnits : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-slate-800">
+                        {row.prescriptionNo ?? '-'}
+                      </td>
+                      <td className="px-3 py-2 text-slate-800">
+                        {formatMoney(row.sgkExpectedAmount)}
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">
+                        {row.note ? row.note.slice(0, 140) : '-'}
+                        {row.note && row.note.length > 140 ? '…' : ''}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="border-t border-slate-200 bg-slate-50">
+                    <td className="px-3 py-2 font-medium text-slate-700" colSpan={2}>
+                      Toplam
+                    </td>
+                    <td className="px-3 py-2 font-medium text-slate-700">{summary.totalBoxes}</td>
+                    <td className="px-3 py-2 font-medium text-slate-700">{summary.totalPacks}</td>
+                    <td className="px-3 py-2 font-medium text-slate-700">{summary.totalUnits}</td>
+                    <td className="px-3 py-2 font-medium text-slate-700">—</td>
+                    <td className="px-3 py-2 font-medium text-slate-700">
+                      {formatMoney(summary.expectedTotal)}
+                    </td>
+                    <td className="px-3 py-2 font-medium text-slate-700">—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Prescription-level summary */}
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase text-slate-500">
+                  Reçete Bazlı Özet
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Reçete No boş bırakılanlar “—” altında toplanır.
+                </p>
+              </div>
+
+              {summary.prescriptionRows.length === 0 ? (
+                <p className="text-xs text-slate-500">Özet için yeterli veri yok.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-md border border-slate-200">
+                  <table className="min-w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Reçete No</th>
+                        <th className="px-3 py-2 font-medium">Teslimat</th>
+                        <th className="px-3 py-2 font-medium">Son Tarih</th>
+                        <th className="px-3 py-2 font-medium">Kutu</th>
+                        <th className="px-3 py-2 font-medium">Paket</th>
+                        <th className="px-3 py-2 font-medium">Adet</th>
+                        <th className="px-3 py-2 font-medium">Beklenen SGK</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summary.prescriptionRows.map((r) => (
+                        <tr key={r.key} className="border-t border-slate-100">
+                          <td className="px-3 py-2 text-slate-800">{r.key}</td>
+                          <td className="px-3 py-2 text-slate-800">{r.deliveriesCount}</td>
+                          <td className="px-3 py-2 text-slate-800">{formatDateTime(r.lastDeliveredAt)}</td>
+                          <td className="px-3 py-2 text-slate-800">{r.qtyBoxes}</td>
+                          <td className="px-3 py-2 text-slate-800">{r.qtyPacks}</td>
+                          <td className="px-3 py-2 text-slate-800">{r.qtyUnits}</td>
+                          <td className="px-3 py-2 text-slate-800">{formatMoney(r.expectedTotal)}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t border-slate-200 bg-slate-50">
+                        <td className="px-3 py-2 font-medium text-slate-700">Toplam</td>
+                        <td className="px-3 py-2 font-medium text-slate-700">{summary.totalDeliveries}</td>
+                        <td className="px-3 py-2 font-medium text-slate-700">—</td>
+                        <td className="px-3 py-2 font-medium text-slate-700">{summary.totalBoxes}</td>
+                        <td className="px-3 py-2 font-medium text-slate-700">{summary.totalPacks}</td>
+                        <td className="px-3 py-2 font-medium text-slate-700">{summary.totalUnits}</td>
+                        <td className="px-3 py-2 font-medium text-slate-700">{formatMoney(summary.expectedTotal)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
         )}
     </section>
   );
