@@ -43,6 +43,10 @@ CREATE TABLE public.battery_prescription_deliveries (
     (qty_boxes IS NULL OR qty_boxes >= 0)
     AND (qty_packs IS NULL OR qty_packs >= 0)
     AND (qty_units IS NULL OR qty_units >= 0)
+  ),
+
+  CONSTRAINT battery_prescription_battery_type_not_blank CHECK (
+    length(trim(battery_type)) > 0
   )
 ) TABLESPACE pg_default;
 
@@ -51,6 +55,10 @@ ON public.battery_prescription_deliveries (patient_id, delivered_at DESC);
 
 CREATE INDEX IF NOT EXISTS battery_prescription_deliveries_by_org
 ON public.battery_prescription_deliveries (org_id, delivered_at DESC);
+
+-- Useful for common filters: org + patient timeline
+CREATE INDEX IF NOT EXISTS battery_prescription_deliveries_by_org_patient
+ON public.battery_prescription_deliveries (org_id, patient_id, delivered_at DESC);
 
 -- ============================================================
 -- RLS
