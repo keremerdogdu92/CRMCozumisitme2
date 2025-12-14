@@ -1,14 +1,15 @@
 // src/features/patients/api/api.batteryPrescriptionDeliveries.ts
 // Summary: CRUD helpers for battery_prescription_deliveries.
-// v1.1:
-// - Aligns column names with DB schema (qty_boxes/qty_packs/qty_units).
-// - Allows battery_type to be stored as text (required by DB); normalizes/validates it.
-// - Uses explicit Return=representation to keep types accurate.
-// - Actionable error payloads; no unsafe casts from error arrays.
+// v1.2:
+// - Selects sgk_expected_amount (exists in DB schema) to match BatteryPrescriptionDeliveryRow.
+// - Supports optional sgkExpectedAmount from CreateBatteryPrescriptionDeliveryInput (if provided in types).
+// - Uses `returns()` for typed responses (avoids unsafe casts that caused TS2352).
+// - Keeps payload aligned with DB schema (no brand/created_by).
 //
 // NOTE:
 // - DB schema (per your SQL):
-//   battery_type (text, NOT NULL), qty_boxes, qty_packs, qty_units, delivered_at, prescription_no, note, created_at
+//   battery_type (text, NOT NULL), qty_boxes, qty_packs, qty_units, delivered_at, prescription_no,
+//   sgk_expected_amount, note, created_at
 // - created_by / brand are NOT present in the SQL you posted. If you need them, add columns in DB.
 // - This file assumes RLS requires org_id to be provided.
 
@@ -24,7 +25,8 @@ function safeTrim(value: unknown): string {
 }
 
 function clampInt(v: unknown, min: number, max: number): number {
-  const n = typeof v === 'number' ? v : Number(String(v ?? '').replace(/\D/g, ''));
+  const n =
+    typeof v === 'number' ? v : Number(String(v ?? '').replace(/\D/g, ''));
   if (!Number.isFinite(n)) return min;
   return Math.max(min, Math.min(max, Math.trunc(n)));
 }
@@ -79,6 +81,15 @@ export async function createBatteryPrescriptionDeliveries(params: {
   const prescription_no = safeTrim(input.prescriptionNo) || null;
   const note = safeTrim(input.note) || null;
 
+  // Optional; only sent if provided.
+  // Keep as unknown->number safe conversion.
+  const sgk_expected_amount =
+    input.sgkExpectedAmount == null
+      ? null
+      : Number.isFinite(Number(input.sgkExpectedAmount))
+        ? Number(input.sgkExpectedAmount)
+        : null;
+
   const lines = (input.lines ?? []).filter((l) => qtyTotal(l) > 0);
   if (lines.length === 0) return;
 
@@ -86,7 +97,9 @@ export async function createBatteryPrescriptionDeliveries(params: {
     const n = normalizeLine(line);
 
     if (!n.battery_type) {
-      throw new Error('BATTERY_DELIVERY_BATTERY_TYPE: batteryType cannot be empty.');
+      throw new Error(
+        'BATTERY_DELIVERY_BATTERY_TYPE: batteryType cannot be empty.',
+      );
     }
 
     return {
@@ -98,6 +111,7 @@ export async function createBatteryPrescriptionDeliveries(params: {
       qty_units: n.qty_units,
       delivered_at,
       prescription_no,
+      sgk_expected_amount,
       note,
       // IMPORTANT: Do NOT send brand/created_by unless DB has those columns.
     };
@@ -128,7 +142,7 @@ export async function fetchBatteryPrescriptionDeliveriesByPatient(
   const patient_id = safeTrim(patientId);
   if (!patient_id) return [];
 
-  const { data, error } = await supabaseClient
+  const query = supabaseClient
     .from('battery_prescription_deliveries')
     .select(
       [
@@ -141,18 +155,21 @@ export async function fetchBatteryPrescriptionDeliveriesByPatient(
         'qty_units',
         'delivered_at',
         'prescription_no',
+        'sgk_expected_amount',
         'note',
         'created_at',
-        // NOTE: brand/created_by are not selected because they are not in your SQL schema.
       ].join(', '),
     )
     .eq('patient_id', patient_id)
     .order('delivered_at', { ascending: false });
+
+  // `returns()` prevents TS from treating `data` as "unknown | error array" shape.
+  const { data, error } = await query.returns<BatteryPrescriptionDeliveryRow[]>();
 
   if (error) {
     console.error('BATTERY_DELIVERIES_FETCH_FAILED:', { patient_id, error });
     throw error;
   }
 
-  return (data ?? []) as BatteryPrescriptionDeliveryRow[];
+  return data ?? [];
 }
