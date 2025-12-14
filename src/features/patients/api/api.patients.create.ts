@@ -1,12 +1,18 @@
 // src/features/patients/api/api.patients.create.ts
 // Summary: Create patient rows and attach optional financial/device drafts.
 //
-// Patch v2.10:
+// Patch v2.11:
+// - CHANGE: Auto-create battery_prescription_deliveries when deviceFlowType is
+//   'battery_device' or 'battery_only' AND SGK is enabled AND at least one battery line has qty > 0.
+//   (Removed dependency on sgkPillPrescription checkbox to match the requested behavior.)
+// - CLEANUP: recordBatteryPrescriptionDeliveries no longer accepts createdBy (DB schema has no created_by).
+// - Keeps best-effort behavior (delivery insert failure does not fail patient creation).
+//
+// v2.10 notes (kept):
 // - FIX (critical): Device attach honors draft.inventoryItemId (kept from v2.9).
 // - CHANGE (critical): batteryLines are no longer recorded as meeting_accessories.
 //   Instead, "pil reçetesi teslimi" is recorded in battery_prescription_deliveries.
 //   This is the reporting source of truth and triggers is_battery_patient via DB trigger.
-// - Uses sgkPillPrescription + batteryLines (qty>0) as the condition for delivery insert.
 // - Uses sgkPrescriptionNo as prescription_no for battery delivery (best-effort).
 
 import { supabaseClient } from '../../../utils/supabaseClient';
@@ -263,11 +269,10 @@ async function attachChargerToPatient(params: {
 async function recordBatteryPrescriptionDeliveries(params: {
   orgId: string;
   patientId: string;
-  createdBy: string;
   batteryLines: BatteryLineDraft[];
   prescriptionNo: string | null;
 }): Promise<void> {
-  const { orgId, patientId, createdBy, batteryLines, prescriptionNo } = params;
+  const { orgId, patientId, batteryLines, prescriptionNo } = params;
   const lines = (batteryLines ?? []).filter((l) => qtyTotal(l) > 0);
   if (lines.length === 0) return;
 
@@ -581,17 +586,16 @@ export async function createPatient(
 
   // Battery prescription deliveries (source of truth)
   // Condition:
-  // - SGK is enabled AND pill prescription checkbox is enabled.
-  // - At least one battery line has qty > 0.
-  if (
-    input.sgkFlag &&
-    !!input.sgkPillPrescription &&
-    (batteryLines ?? []).some((l) => qtyTotal(l) > 0)
-  ) {
+  // - Device flow is 'battery_device' or 'battery_only'
+  // - SGK is enabled (this table is for SGK reimbursement events)
+  // - At least one battery line has qty > 0
+  const deviceFlowType = input.deviceFlowType ?? 'rechargeable_device';
+  const isBatteryFlow = deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
+
+  if (input.sgkFlag && isBatteryFlow && (batteryLines ?? []).some((l) => qtyTotal(l) > 0)) {
     await recordBatteryPrescriptionDeliveries({
       orgId,
       patientId: inserted.id,
-      createdBy: user.id,
       batteryLines,
       prescriptionNo: input.sgkPrescriptionNo ? input.sgkPrescriptionNo.trim() : null,
     });
