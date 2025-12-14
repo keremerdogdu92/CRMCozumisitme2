@@ -1,9 +1,12 @@
 // src/features/patients/types.ts
 // Summary: Shared TypeScript types for the Patients feature (patients, devices, payments, SGK, battery flows).
 //
-// v2.9:
-// - Adds BatteryPrescriptionDeliveries types to support "pil reçetesi teslimi" records.
-// - Keeps BatteryLineDraft as UI draft; API will map it to battery_prescription_deliveries rows.
+// v2.10:
+// - Aligns BatteryPrescriptionDelivery* types with DB schema for battery_prescription_deliveries:
+//   - qty_boxes/qty_packs/qty_units (DB) instead of qty_box/qty_pack/qty_unit (old).
+//   - Removes non-existent DB columns: brand, created_by (unless you add them to DB).
+//   - Adds sgk_expected_amount (nullable) per DB.
+// - Keeps BatteryLineDraft as UI draft; API maps it to DB rows.
 
 export type PatientPaymentMethod =
   | 'Tim'
@@ -198,6 +201,7 @@ export type DeviceRepairRow = {
   cargo_tracking_no: string | null;
   shipped_at: string | null;
   returned_to_clinic_at: string | null;
+  delivered_to_clinic_at?: string | null; // optional; keep compatibility if used elsewhere
   delivered_to_patient_at: string | null;
   expected_delivery_meeting_id: string | null;
   last_status_changed: string;
@@ -325,24 +329,32 @@ export type BatteryPrescriptionDeliveryRow = {
   org_id: string;
   patient_id: string;
 
-  // Battery meta
-  battery_type: BatteryType | string;
-  brand: string | null;
-
-  // Quantities (semantic)
-  qty_box: number;
-  qty_pack: number;
-  qty_unit: number;
-
-  // Delivery meta
   delivered_at: string; // timestamptz ISO
   prescription_no: string | null;
-  note: string | null;
 
+  // Keep as string; DB is text and UI validates known sizes.
+  battery_type: string;
+
+  // Quantities (DB schema)
+  qty_boxes: number | null;
+  qty_packs: number | null;
+  qty_units: number | null;
+
+  // Expected SGK reimbursement for this delivery (TRY)
+  sgk_expected_amount: number | null;
+
+  note: string | null;
   created_at: string;
-  created_by: string | null;
 };
 
+/**
+ * Create input for inserting battery prescription delivery rows.
+ * API maps BatteryLineDraft to 1 row per line (when qty > 0).
+ *
+ * NOTE:
+ * - This input intentionally does not include org_id; caller passes orgId separately.
+ * - deliveredAt is optional; default is now.
+ */
 export type CreateBatteryPrescriptionDeliveryInput = {
   patientId: string;
 
@@ -361,6 +373,12 @@ export type CreateBatteryPrescriptionDeliveryInput = {
    * Optional override for delivered_at. Default: now.
    */
   deliveredAt?: string | null;
+
+  /**
+   * Optional: expected SGK reimbursement for this delivery (TRY).
+   * If omitted, DB stores NULL. (You can compute this later if needed.)
+   */
+  sgkExpectedAmount?: number | null;
 
   /**
    * Lines from UI draft. Caller is responsible for filtering out empty lines.
