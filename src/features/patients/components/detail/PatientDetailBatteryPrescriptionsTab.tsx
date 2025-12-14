@@ -2,25 +2,25 @@
 // Summary: Patient detail tab for battery prescription deliveries (SGK reimbursement events).
 // Includes: listing + inline "New Delivery" form.
 //
-// Patch v2.1:
-// - FIX (critical): Uses battery_prescription_deliveries schema (qty_boxes/qty_packs/qty_units, delivered_at, prescription_no).
-// - FIX: Imports hooks from api.batteryPrescriptionDeliveries (was api.batteryPrescriptions; wrong module).
-// - CHANGE: Form now captures box/pack/unit quantities (not single qtyUnits) to match DB + createPatient flow.
-// - FIX: Uses delivered_at + created_at field names and resilient row mapping for UI.
-// - PERF: Keeps derived values memoized; avoids heavy work when tab is closed.
-// - Keeps UI/UX: inline form, actionable errors, best-effort formatting.
+// Patch v2.2:
+// - FIX (critical): Aligns UI + create flow with DB schema (qty_boxes/qty_packs/qty_units, delivered_at, prescription_no, sgk_expected_amount).
+// - FIX (critical): Removes dependency on non-existent/incorrect hooks module (api.batteryPrescriptions).
+// - Adds React Query usage locally (query + mutation) using api.batteryPrescriptionDeliveries helpers.
+// - Loads org_id via useCurrentProfile to satisfy RLS (org_id required for insert).
+// - Keeps listing resilient to snake_case vs camelCase response shapes.
+// - Actionable errors; no hard dependency on meetings.
 //
 // Notes:
-// - This is intentionally not tied to meetings or meeting_accessories.
+// - This tab is intentionally not tied to meetings or meeting_accessories.
 // - For "walk-in battery sales" without patient identity: handle via stock adjustment only (separate flow).
 
 import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCurrentProfile } from '../../../auth/useCurrentProfile';
+import type { BatteryLineDraft, BatteryPrescriptionDeliveryRow } from '../../types';
 import {
-  // NOTE: this must come from the deliveries API (DB source of truth)
-  // If you don't have hooks yet in this file, I need that file next.
-  useCreateBatteryPrescriptionDeliveryMutation,
-  usePatientBatteryPrescriptionDeliveries,
-  type BatteryPrescriptionDeliveryRow,
+  createBatteryPrescriptionDeliveries,
+  fetchBatteryPrescriptionDeliveriesByPatient,
 } from '../../api/api.batteryPrescriptionDeliveries';
 import { formatDateTime } from '../../patientFormatUtils';
 
@@ -36,8 +36,12 @@ type FormState = {
   qtyBoxes: string;
   qtyPacks: string;
   qtyUnits: string;
+  sgkExpectedAmount: string;
   note: string;
 };
+
+const DELIVERIES_QUERY_KEY = (patientId: string) =>
+  ['battery-prescription-deliveries', patientId] as const;
 
 function toLocalDateTimeInputValue(d: Date): string {
   const pad = (n: number) => `${n}`.padStart(2, '0');
@@ -49,6 +53,10 @@ function toLocalDateTimeInputValue(d: Date): string {
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
+function safeTrim(v: unknown): string {
+  return typeof v === 'string' ? v.trim() : '';
+}
+
 function parseOptionalInt(raw: string): number | null {
   const t = raw.trim();
   if (!t) return null;
@@ -57,33 +65,83 @@ function parseOptionalInt(raw: string): number | null {
   return Math.floor(n);
 }
 
-function safeTrim(v: unknown): string {
-  return typeof v === 'string' ? v.trim() : '';
+function parseOptionalMoney(raw: string): number | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const normalized = t.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+  const n = Number(normalized);
+  if (!Number.isFinite(n) || n < 0) return NaN;
+  return Number(n.toFixed(2));
 }
 
-function formatQty(qty: number | null | undefined): string {
-  if (qty == null || Number.isNaN(qty)) return '-';
-  return `${qty}`;
+function formatMoney(amount: number | null): string {
+  if (amount == null || Number.isNaN(amount)) return '-';
+  try {
+    return amount.toLocaleString('tr-TR', {
+      style: 'currency',
+      currency: 'TRY',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  } catch {
+    return `${amount}`;
+  }
 }
 
-function normalizeBatteryType(v: string): string {
-  const t = v.trim();
-  // UI options restrict to these, but keep resilience.
-  return t;
+function qtyTotal(line: BatteryLineDraft): number {
+  const q = line.quantity ?? { box: 0, pack: 0, unit: 0 };
+  const box = Number.isFinite(q.box) ? q.box : 0;
+  const pack = Number.isFinite(q.pack) ? q.pack : 0;
+  const unit = Number.isFinite(q.unit) ? q.unit : 0;
+  return box + pack + unit;
 }
 
-function hasAnyQty(boxes: number | null, packs: number | null, units: number | null): boolean {
-  return (boxes != null && boxes > 0) || (packs != null && packs > 0) || (units != null && units > 0);
-}
+type DeliveryRowView = {
+  id: string;
+  deliveredAt: string | null;
+  batteryType: string;
+  qtyBoxes: number | null;
+  qtyPacks: number | null;
+  qtyUnits: number | null;
+  prescriptionNo: string | null;
+  sgkExpectedAmount: number | null;
+  note: string | null;
+};
 
-function totalQty(boxes: number | null, packs: number | null, units: number | null): number {
-  return (boxes ?? 0) + (packs ?? 0) + (units ?? 0);
+function toDeliveryRowView(r: BatteryPrescriptionDeliveryRow): DeliveryRowView {
+  // Keep resilient against snake_case vs camelCase.
+  const anyRow = r as any;
+
+  const id = String(anyRow.id ?? '');
+  const deliveredAt = (anyRow.delivered_at ?? anyRow.deliveredAt ?? null) as string | null;
+  const batteryType = String(anyRow.battery_type ?? anyRow.batteryType ?? '');
+  const qtyBoxes = (anyRow.qty_boxes ?? anyRow.qtyBoxes ?? null) as number | null;
+  const qtyPacks = (anyRow.qty_packs ?? anyRow.qtyPacks ?? null) as number | null;
+  const qtyUnits = (anyRow.qty_units ?? anyRow.qtyUnits ?? null) as number | null;
+  const prescriptionNo = (anyRow.prescription_no ?? anyRow.prescriptionNo ?? null) as string | null;
+  const sgkExpectedAmount = (anyRow.sgk_expected_amount ?? anyRow.sgkExpectedAmount ?? null) as number | null;
+  const note = (anyRow.note ?? null) as string | null;
+
+  return {
+    id,
+    deliveredAt,
+    batteryType,
+    qtyBoxes,
+    qtyPacks,
+    qtyUnits,
+    prescriptionNo,
+    sgkExpectedAmount,
+    note,
+  };
 }
 
 export function PatientDetailBatteryPrescriptionsTab({
   patientId,
   open,
 }: PatientDetailBatteryPrescriptionsTabProps) {
+  const queryClient = useQueryClient();
+  const { data: profile } = useCurrentProfile();
+
   const [showNewForm, setShowNewForm] = useState(false);
 
   const initialForm: FormState = useMemo(() => {
@@ -94,6 +152,7 @@ export function PatientDetailBatteryPrescriptionsTab({
       qtyBoxes: '',
       qtyPacks: '',
       qtyUnits: '',
+      sgkExpectedAmount: '',
       note: '',
     };
   }, []);
@@ -101,16 +160,101 @@ export function PatientDetailBatteryPrescriptionsTab({
   const [form, setForm] = useState<FormState>(initialForm);
   const [localError, setLocalError] = useState<string>('');
 
-  const {
-    data: deliveries = [],
-    isLoading,
-    isError,
-    error,
-  } = usePatientBatteryPrescriptionDeliveries(open ? patientId : null);
+  const deliveriesQuery = useQuery({
+    queryKey: open ? DELIVERIES_QUERY_KEY(patientId) : ['battery-prescription-deliveries', 'closed'],
+    enabled: open && !!patientId,
+    queryFn: async () => {
+      return await fetchBatteryPrescriptionDeliveriesByPatient(patientId);
+    },
+  });
 
-  const createMutation = useCreateBatteryPrescriptionDeliveryMutation(patientId);
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const orgId = (profile as any)?.org_id as string | undefined;
+      if (!orgId) {
+        throw new Error('ORG_ID_MISSING: Profil org_id bulunamadı. Lütfen tekrar giriş yapın.');
+      }
+
+      const dt = form.deliveredAt.trim();
+      if (!dt) {
+        throw new Error('Teslim tarihi boş olamaz.');
+      }
+
+      const deliveredAtIso = new Date(dt).toISOString();
+      if (!deliveredAtIso || deliveredAtIso === 'Invalid Date') {
+        throw new Error('Teslim tarihi geçersiz. Lütfen tekrar seçin.');
+      }
+
+      const batteryType = form.batteryType.trim();
+      if (!batteryType) {
+        throw new Error('Pil tipi boş olamaz.');
+      }
+
+      const qtyBoxesParsed = parseOptionalInt(form.qtyBoxes);
+      if (Number.isNaN(qtyBoxesParsed)) {
+        throw new Error('Kutu alanı sayı olmalı ve 0 veya daha büyük olmalı.');
+      }
+
+      const qtyPacksParsed = parseOptionalInt(form.qtyPacks);
+      if (Number.isNaN(qtyPacksParsed)) {
+        throw new Error('Paket alanı sayı olmalı ve 0 veya daha büyük olmalı.');
+      }
+
+      const qtyUnitsParsed = parseOptionalInt(form.qtyUnits);
+      if (Number.isNaN(qtyUnitsParsed)) {
+        throw new Error('Adet alanı sayı olmalı ve 0 veya daha büyük olmalı.');
+      }
+
+      const hasAnyQty =
+        (qtyBoxesParsed != null && qtyBoxesParsed > 0) ||
+        (qtyPacksParsed != null && qtyPacksParsed > 0) ||
+        (qtyUnitsParsed != null && qtyUnitsParsed > 0);
+
+      if (!hasAnyQty) {
+        throw new Error('En az bir miktar girin (kutu / paket / adet).');
+      }
+
+      const expectedAmountParsed = parseOptionalMoney(form.sgkExpectedAmount);
+      if (Number.isNaN(expectedAmountParsed)) {
+        throw new Error('Beklenen SGK tutarı geçersiz. Örnek: 250 veya 250,50');
+      }
+
+      const line: BatteryLineDraft = {
+        batteryType,
+        brand: '',
+        quantity: {
+          box: qtyBoxesParsed ?? 0,
+          pack: qtyPacksParsed ?? 0,
+          unit: qtyUnitsParsed ?? 0,
+        },
+      };
+
+      if (qtyTotal(line) <= 0) {
+        throw new Error('En az bir miktar girin (kutu / paket / adet).');
+      }
+
+      await createBatteryPrescriptionDeliveries({
+        orgId,
+        input: {
+          patientId,
+          deliveredAt: deliveredAtIso,
+          prescriptionNo: safeTrim(form.prescriptionNo) || null,
+          note: safeTrim(form.note) || null,
+          sgkExpectedAmount: expectedAmountParsed,
+          lines: [line],
+        } as any,
+      });
+    },
+    onSuccess: async () => {
+      setShowNewForm(false);
+      setForm(initialForm);
+      await queryClient.invalidateQueries({ queryKey: DELIVERIES_QUERY_KEY(patientId) });
+    },
+  });
 
   if (!open) return null;
+
+  const deliveries = (deliveriesQuery.data ?? []).map(toDeliveryRowView);
 
   const handleToggleNew = () => {
     setLocalError('');
@@ -122,122 +266,18 @@ export function PatientDetailBatteryPrescriptionsTab({
 
   const handleSubmit = () => {
     setLocalError('');
-
-    const dt = form.deliveredAt.trim();
-    if (!dt) {
-      setLocalError('Teslim tarihi boş olamaz.');
-      return;
-    }
-
-    const deliveredAtIso = new Date(dt).toISOString();
-    if (!deliveredAtIso || deliveredAtIso === 'Invalid Date') {
-      setLocalError('Teslim tarihi geçersiz. Lütfen tekrar seçin.');
-      return;
-    }
-
-    const batteryType = normalizeBatteryType(form.batteryType);
-    if (!batteryType) {
-      setLocalError('Pil tipi boş olamaz.');
-      return;
-    }
-
-    const qtyBoxesParsed = parseOptionalInt(form.qtyBoxes);
-    if (Number.isNaN(qtyBoxesParsed)) {
-      setLocalError('Kutu alanı sayı olmalı ve 0 veya daha büyük olmalı.');
-      return;
-    }
-
-    const qtyPacksParsed = parseOptionalInt(form.qtyPacks);
-    if (Number.isNaN(qtyPacksParsed)) {
-      setLocalError('Paket alanı sayı olmalı ve 0 veya daha büyük olmalı.');
-      return;
-    }
-
-    const qtyUnitsParsed = parseOptionalInt(form.qtyUnits);
-    if (Number.isNaN(qtyUnitsParsed)) {
-      setLocalError('Adet alanı sayı olmalı ve 0 veya daha büyük olmalı.');
-      return;
-    }
-
-    // Require at least one meaningful field (qty OR prescription no OR note)
-    const hasAnyValue =
-      hasAnyQty(qtyBoxesParsed, qtyPacksParsed, qtyUnitsParsed) ||
-      safeTrim(form.prescriptionNo).length > 0 ||
-      safeTrim(form.note).length > 0;
-
-    if (!hasAnyValue) {
-      setLocalError('En az bir alan doldurun (kutu/paket/adet / reçete no / not).');
-      return;
-    }
-
-    if (!hasAnyQty(qtyBoxesParsed, qtyPacksParsed, qtyUnitsParsed)) {
-      setLocalError('Bu ekran SGK “teslim” kaydı için. En az bir miktar (kutu/paket/adet) girin.');
-      return;
-    }
-
-    createMutation.mutate(
-      {
-        // NOTE: this payload must match your mutation input type (in api.batteryPrescriptionDeliveries.ts)
-        orgId: '', // likely derived in the mutation via profile; if your mutation requires it here, we need to pass it.
-        input: {
-          patientId,
-          deliveredAt: deliveredAtIso,
-          prescriptionNo: safeTrim(form.prescriptionNo) || null,
-          note: safeTrim(form.note) || null,
-          lines: [
-            {
-              batteryType,
-              brand: '',
-              quantity: {
-                box: qtyBoxesParsed ?? 0,
-                pack: qtyPacksParsed ?? 0,
-                unit: qtyUnitsParsed ?? 0,
-              },
-            },
-          ],
-        },
-      } as any,
-      {
-        onSuccess: () => {
-          setShowNewForm(false);
-          setForm(initialForm);
-        },
-        onError: (e) => {
-          const msg =
-            e instanceof Error
-              ? e.message
-              : 'Teslimat kaydedilirken beklenmeyen bir hata oluştu.';
-          setLocalError(msg);
-        },
+    createMutation.mutate(undefined, {
+      onError: (e) => {
+        const msg = e instanceof Error ? e.message : 'Teslimat kaydedilirken beklenmeyen bir hata oluştu.';
+        setLocalError(msg);
       },
-    );
-  };
-
-  const rows = useMemo(() => {
-    // Normalize for both old/new shapes if needed.
-    // DB columns: delivered_at, prescription_no, qty_boxes, qty_packs, qty_units, battery_type, note, created_at
-    return (deliveries ?? []).map((r: BatteryPrescriptionDeliveryRow) => {
-      const anyRow: any = r;
-      return {
-        id: anyRow.id as string,
-        delivered_at: (anyRow.delivered_at ?? anyRow.deliveredAt) as string | null,
-        battery_type: (anyRow.battery_type ?? anyRow.batteryType) as string,
-        qty_boxes: (anyRow.qty_boxes ?? anyRow.qtyBoxes ?? null) as number | null,
-        qty_packs: (anyRow.qty_packs ?? anyRow.qtyPacks ?? null) as number | null,
-        qty_units: (anyRow.qty_units ?? anyRow.qtyUnits ?? null) as number | null,
-        prescription_no: (anyRow.prescription_no ?? anyRow.prescriptionNo ?? null) as string | null,
-        note: (anyRow.note ?? null) as string | null,
-        created_at: (anyRow.created_at ?? anyRow.createdAt ?? null) as string | null,
-      };
     });
-  }, [deliveries]);
+  };
 
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h4 className="text-xs font-semibold uppercase text-slate-500">
-          Pil Teslimleri (SGK)
-        </h4>
+        <h4 className="text-xs font-semibold uppercase text-slate-500">Pil Teslimleri</h4>
 
         <button
           type="button"
@@ -252,43 +292,31 @@ export function PatientDetailBatteryPrescriptionsTab({
         <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="space-y-1">
-              <span className="block text-[11px] font-medium text-slate-600">
-                Teslim Tarihi
-              </span>
+              <span className="block text-[11px] font-medium text-slate-600">Teslim Tarihi</span>
               <input
                 type="datetime-local"
                 value={form.deliveredAt}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, deliveredAt: e.target.value }))
-                }
+                onChange={(e) => setForm((p) => ({ ...p, deliveredAt: e.target.value }))}
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </label>
 
             <label className="space-y-1">
-              <span className="block text-[11px] font-medium text-slate-600">
-                Reçete No (opsiyonel)
-              </span>
+              <span className="block text-[11px] font-medium text-slate-600">Reçete No (opsiyonel)</span>
               <input
                 type="text"
                 value={form.prescriptionNo}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, prescriptionNo: e.target.value }))
-                }
+                onChange={(e) => setForm((p) => ({ ...p, prescriptionNo: e.target.value }))}
                 placeholder="Örn: 2025-..."
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </label>
 
             <label className="space-y-1">
-              <span className="block text-[11px] font-medium text-slate-600">
-                Pil Tipi
-              </span>
+              <span className="block text-[11px] font-medium text-slate-600">Pil Tipi</span>
               <select
                 value={form.batteryType}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, batteryType: e.target.value }))
-                }
+                onChange={(e) => setForm((p) => ({ ...p, batteryType: e.target.value }))}
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               >
                 <option value="10">10</option>
@@ -300,51 +328,39 @@ export function PatientDetailBatteryPrescriptionsTab({
 
             <div className="grid grid-cols-3 gap-2 sm:col-span-1">
               <label className="space-y-1">
-                <span className="block text-[11px] font-medium text-slate-600">
-                  Kutu
-                </span>
+                <span className="block text-[11px] font-medium text-slate-600">Kutu</span>
                 <input
                   type="number"
                   min={0}
                   step={1}
                   value={form.qtyBoxes}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, qtyBoxes: e.target.value }))
-                  }
+                  onChange={(e) => setForm((p) => ({ ...p, qtyBoxes: e.target.value }))}
                   placeholder="0"
                   className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </label>
 
               <label className="space-y-1">
-                <span className="block text-[11px] font-medium text-slate-600">
-                  Paket
-                </span>
+                <span className="block text-[11px] font-medium text-slate-600">Paket</span>
                 <input
                   type="number"
                   min={0}
                   step={1}
                   value={form.qtyPacks}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, qtyPacks: e.target.value }))
-                  }
+                  onChange={(e) => setForm((p) => ({ ...p, qtyPacks: e.target.value }))}
                   placeholder="0"
                   className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </label>
 
               <label className="space-y-1">
-                <span className="block text-[11px] font-medium text-slate-600">
-                  Adet
-                </span>
+                <span className="block text-[11px] font-medium text-slate-600">Adet</span>
                 <input
                   type="number"
                   min={0}
                   step={1}
                   value={form.qtyUnits}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, qtyUnits: e.target.value }))
-                  }
+                  onChange={(e) => setForm((p) => ({ ...p, qtyUnits: e.target.value }))}
                   placeholder="0"
                   className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
@@ -353,29 +369,30 @@ export function PatientDetailBatteryPrescriptionsTab({
 
             <label className="space-y-1 sm:col-span-2">
               <span className="block text-[11px] font-medium text-slate-600">
-                Not (opsiyonel)
+                Beklenen SGK Tutarı (TRY) (opsiyonel)
               </span>
+              <input
+                type="text"
+                value={form.sgkExpectedAmount}
+                onChange={(e) => setForm((p) => ({ ...p, sgkExpectedAmount: e.target.value }))}
+                placeholder="Örn: 250 veya 250,50"
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              />
+            </label>
+
+            <label className="space-y-1 sm:col-span-2">
+              <span className="block text-[11px] font-medium text-slate-600">Not (opsiyonel)</span>
               <textarea
                 value={form.note}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, note: e.target.value }))
-                }
+                onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))}
                 rows={3}
                 placeholder="Örn: 1 yıllık pil teslim edildi."
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </label>
-
-            <div className="sm:col-span-2">
-              <p className="text-[11px] text-slate-600">
-                Toplam miktar: <span className="font-semibold">{totalQty(parseOptionalInt(form.qtyBoxes), parseOptionalInt(form.qtyPacks), parseOptionalInt(form.qtyUnits))}</span>
-              </p>
-            </div>
           </div>
 
-          {localError && (
-            <p className="text-[11px] font-medium text-red-600">{localError}</p>
-          )}
+          {localError && <p className="text-[11px] font-medium text-red-600">{localError}</p>}
 
           <div className="flex items-center justify-end gap-2">
             <button
@@ -397,24 +414,20 @@ export function PatientDetailBatteryPrescriptionsTab({
         </div>
       )}
 
-      {isLoading && (
-        <p className="text-xs text-slate-500">Teslimatlar yükleniyor...</p>
-      )}
+      {deliveriesQuery.isLoading && <p className="text-xs text-slate-500">Teslimatlar yükleniyor...</p>}
 
-      {isError && (
+      {deliveriesQuery.isError && (
         <p className="text-xs text-red-600">
           Pil teslimatları alınırken bir hata oluştu:{' '}
-          {(error as Error)?.message ?? 'Bilinmeyen hata'}
+          {(deliveriesQuery.error as Error)?.message ?? 'Bilinmeyen hata'}
         </p>
       )}
 
-      {!isLoading && !isError && rows.length === 0 && (
-        <p className="text-xs text-slate-500">
-          Bu hasta için henüz pil teslimatı kaydı yok.
-        </p>
+      {!deliveriesQuery.isLoading && !deliveriesQuery.isError && deliveries.length === 0 && (
+        <p className="text-xs text-slate-500">Bu hasta için henüz pil teslimatı kaydı yok.</p>
       )}
 
-      {!isLoading && !isError && rows.length > 0 && (
+      {!deliveriesQuery.isLoading && !deliveriesQuery.isError && deliveries.length > 0 && (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="min-w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-600">
@@ -425,22 +438,20 @@ export function PatientDetailBatteryPrescriptionsTab({
                 <th className="px-3 py-2 font-medium">Paket</th>
                 <th className="px-3 py-2 font-medium">Adet</th>
                 <th className="px-3 py-2 font-medium">Reçete No</th>
+                <th className="px-3 py-2 font-medium">Beklenen SGK</th>
                 <th className="px-3 py-2 font-medium">Not</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {deliveries.map((row) => (
                 <tr key={row.id} className="border-t border-slate-100">
-                  <td className="px-3 py-2 text-slate-800">
-                    {formatDateTime(row.delivered_at)}
-                  </td>
-                  <td className="px-3 py-2 text-slate-800">{row.battery_type}</td>
-                  <td className="px-3 py-2 text-slate-800">{formatQty(row.qty_boxes)}</td>
-                  <td className="px-3 py-2 text-slate-800">{formatQty(row.qty_packs)}</td>
-                  <td className="px-3 py-2 text-slate-800">{formatQty(row.qty_units)}</td>
-                  <td className="px-3 py-2 text-slate-800">
-                    {row.prescription_no ?? '-'}
-                  </td>
+                  <td className="px-3 py-2 text-slate-800">{formatDateTime(row.deliveredAt)}</td>
+                  <td className="px-3 py-2 text-slate-800">{row.batteryType}</td>
+                  <td className="px-3 py-2 text-slate-800">{row.qtyBoxes != null ? row.qtyBoxes : '-'}</td>
+                  <td className="px-3 py-2 text-slate-800">{row.qtyPacks != null ? row.qtyPacks : '-'}</td>
+                  <td className="px-3 py-2 text-slate-800">{row.qtyUnits != null ? row.qtyUnits : '-'}</td>
+                  <td className="px-3 py-2 text-slate-800">{row.prescriptionNo ?? '-'}</td>
+                  <td className="px-3 py-2 text-slate-800">{formatMoney(row.sgkExpectedAmount)}</td>
                   <td className="px-3 py-2 text-slate-600">
                     {row.note ? row.note.slice(0, 140) : '-'}
                     {row.note && row.note.length > 140 ? '…' : ''}
