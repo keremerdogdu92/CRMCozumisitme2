@@ -1,14 +1,13 @@
 // src/features/patients/api/api.patients.create.ts
-// Create patient rows and attach optional financial/device drafts.
+// Summary: Create patient rows and attach optional financial/device drafts.
 //
-// Patch v2.9:
-// - FIX (critical): attachDevicesToPatientFromDrafts now honors draft.inventoryItemId.
-//   * If inventoryItemId is provided, ONLY that row is updated (org_id + status=in_stock + deleted_at IS NULL guards).
-//   * If missing, falls back to brand/model lookup (in_stock) and logs a WARN.
-// - ADD: chargerInventoryItemId is now also marked as sold (best-effort).
-// - ADD (best-effort): batteryLines are recorded as meeting_accessories by creating a patient meeting first.
-//   * Uses cost_price/sale_price = 0 for now (no pricing fields exist on BatteryLineDraft).
-//   * Logged as WARN so it can be extended later without silently hiding missing pricing.
+// Patch v2.10:
+// - FIX (critical): Device attach honors draft.inventoryItemId (kept from v2.9).
+// - CHANGE (critical): batteryLines are no longer recorded as meeting_accessories.
+//   Instead, "pil reçetesi teslimi" is recorded in battery_prescription_deliveries.
+//   This is the reporting source of truth and triggers is_battery_patient via DB trigger.
+// - Uses sgkPillPrescription + batteryLines (qty>0) as the condition for delivery insert.
+// - Uses sgkPrescriptionNo as prescription_no for battery delivery (best-effort).
 
 import { supabaseClient } from '../../../utils/supabaseClient';
 import type {
@@ -21,6 +20,7 @@ import type {
 import { parseMoneyToNumber } from './api.core';
 import { savePatientSaleBreakdown } from './api.saleBreakdown';
 import { upsertPatientInstallmentPlan } from './api.payments';
+import { createBatteryPrescriptionDeliveries } from './api.batteryPrescriptionDeliveries';
 
 export type CreatePatientOptions = {
   /**
@@ -43,18 +43,12 @@ function safeTrim(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function formatBatteryLineName(line: BatteryLineDraft): string {
-  const type = safeTrim(line.batteryType);
-  const brand = safeTrim(line.brand);
+function qtyTotal(line: BatteryLineDraft): number {
   const q = line.quantity ?? { box: 0, pack: 0, unit: 0 };
   const box = Number.isFinite(q.box) ? q.box : 0;
   const pack = Number.isFinite(q.pack) ? q.pack : 0;
   const unit = Number.isFinite(q.unit) ? q.unit : 0;
-
-  // Keep this human-readable and stable for future parsing/reporting.
-  // Example: "Battery 10 - Rayovac (box:1 pack:0 unit:0)"
-  const labelBrand = brand ? ` - ${brand}` : '';
-  return `Battery ${type}${labelBrand} (box:${box} pack:${pack} unit:${unit})`;
+  return box + pack + unit;
 }
 
 /**
@@ -263,83 +257,35 @@ async function attachChargerToPatient(params: {
 }
 
 /**
- * Record battery sales as meeting_accessories.
- * Requires meeting_id, so we create a minimal patient meeting first.
- * Best-effort only.
+ * Record "pil reçetesi teslimi" rows in battery_prescription_deliveries.
+ * Best-effort: errors are logged but do not fail patient creation.
  */
-async function recordBatteryLinesAsAccessories(params: {
+async function recordBatteryPrescriptionDeliveries(params: {
   orgId: string;
   patientId: string;
-  patientName: string;
   createdBy: string;
   batteryLines: BatteryLineDraft[];
+  prescriptionNo: string | null;
 }): Promise<void> {
-  const { orgId, patientId, patientName, createdBy, batteryLines } = params;
-  if (!batteryLines || batteryLines.length === 0) return;
-
-  // NOTE: BatteryLineDraft currently has no pricing → record 0 for now.
-  console.warn(
-    'STEP_BATTERY_ACCESSORIES_PRICING_MISSING: Recording battery lines with cost_price/sale_price = 0 (extend later if pricing is added to BatteryLineDraft)',
-    { orgId, patientId },
-  );
-
-  const meetingAtIso = new Date().toISOString();
+  const { orgId, patientId, createdBy, batteryLines, prescriptionNo } = params;
+  const lines = (batteryLines ?? []).filter((l) => qtyTotal(l) > 0);
+  if (lines.length === 0) return;
 
   try {
-    const { data: meetingRow, error: meetingError } = await supabaseClient
-      .from('meetings')
-      .insert({
-        org_id: orgId,
-        meeting_type: 'patient',
-        patient_id: patientId,
-        subject: 'Accessory Sale',
-        subject_name: safeTrim(patientName) || null,
-        at: meetingAtIso,
-        created_by: createdBy,
-      })
-      .select('id')
-      .single();
-
-    if (meetingError) {
-      console.error(
-        'STEP_BATTERY_ACCESSORIES_MEETING_INSERT: Failed to create meeting for accessories',
-        { orgId, patientId, meetingError },
-      );
-      return;
-    }
-
-    const meetingId = (meetingRow as any)?.id as string | undefined;
-    if (!meetingId) {
-      console.error(
-        'STEP_BATTERY_ACCESSORIES_MEETING_ID_MISSING: Meeting insert returned no id',
-        { orgId, patientId },
-      );
-      return;
-    }
-
-    const accessoryRows = batteryLines.map((line) => ({
-      org_id: orgId,
-      meeting_id: meetingId,
-      patient_id: patientId,
-      name: formatBatteryLineName(line),
-      cost_price: 0,
-      sale_price: 0,
-    }));
-
-    const { error: accessoriesError } = await supabaseClient
-      .from('meeting_accessories')
-      .insert(accessoryRows);
-
-    if (accessoriesError) {
-      console.error(
-        'STEP_BATTERY_ACCESSORIES_INSERT: Failed to insert meeting_accessories rows for battery lines',
-        { orgId, patientId, meetingId, accessoriesError },
-      );
-      return;
-    }
+    await createBatteryPrescriptionDeliveries({
+      orgId,
+      createdBy,
+      input: {
+        patientId,
+        lines,
+        prescriptionNo: prescriptionNo ? prescriptionNo.trim() : null,
+        deliveredAt: null, // default now
+        note: null,
+      },
+    });
   } catch (err) {
     console.error(
-      'STEP_BATTERY_ACCESSORIES_UNEXPECTED: Unexpected error while recording battery accessories',
+      'STEP_BATTERY_DELIVERY_CHAIN_FAILED: Failed to insert battery_prescription_deliveries rows (best-effort)',
       { orgId, patientId, err },
     );
   }
@@ -353,8 +299,7 @@ export async function createPatient(
   input: NewPatientForm,
   options?: CreatePatientOptions,
 ): Promise<PatientRow> {
-  const { data: userData, error: userError } =
-    await supabaseClient.auth.getUser();
+  const { data: userData, error: userError } = await supabaseClient.auth.getUser();
 
   if (userError) {
     console.error('Failed to get current user (STEP_USER):', userError);
@@ -373,10 +318,7 @@ export async function createPatient(
     .single();
 
   if (profileError) {
-    console.error(
-      'Failed to load profile for org_id (STEP_PROFILE):',
-      profileError,
-    );
+    console.error('Failed to load profile for org_id (STEP_PROFILE):', profileError);
     throw new Error('STEP_PROFILE: ' + profileError.message);
   }
 
@@ -400,10 +342,7 @@ export async function createPatient(
         legacyCreatedAt = iso;
         legacyInvoiceIssuedAt = iso;
       } else {
-        console.warn(
-          'LEGACY_SALE_DATE_INVALID: Unable to parse legacy sale date on createPatient',
-          { raw },
-        );
+        console.warn('LEGACY_SALE_DATE_INVALID: Unable to parse legacy sale date on createPatient', { raw });
       }
     }
   }
@@ -433,17 +372,13 @@ export async function createPatient(
       const feeRateNum = Number(feeRateRaw);
 
       if (!Number.isFinite(feeRateNum) || feeRateNum <= 0) {
-        throw new Error(
-          "CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0'dan büyük).",
-        );
+        throw new Error("CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0'dan büyük).");
       }
 
       card_fee_rate = Number(feeRateNum.toFixed(2));
 
       if (sale_total_amount != null) {
-        card_fee_amount = Number(
-          (sale_total_amount * (feeRateNum / 100)).toFixed(2),
-        );
+        card_fee_amount = Number((sale_total_amount * (feeRateNum / 100)).toFixed(2));
       }
     }
   }
@@ -470,12 +405,7 @@ export async function createPatient(
       const year = Number(yearStr);
       const month = Number(monthStr);
 
-      if (
-        !Number.isFinite(year) ||
-        !Number.isFinite(month) ||
-        month < 1 ||
-        month > 12
-      ) {
+      if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
         throw new Error('SGK_EXPECTED_MONTH: Geçerli bir ay seçin (yyyy-AA).');
       }
 
@@ -486,18 +416,14 @@ export async function createPatient(
 
   const shouldMarkInvoiceIssued = options?.setInvoiceIssuedTrue === true;
   const nowIso = new Date().toISOString();
-  const invoiceIssuedAt = shouldMarkInvoiceIssued
-    ? legacyInvoiceIssuedAt ?? nowIso
-    : null;
+  const invoiceIssuedAt = shouldMarkInvoiceIssued ? legacyInvoiceIssuedAt ?? nowIso : null;
 
   const insertPayload: Record<string, any> = {
     org_id: orgId,
     full_name: input.fullName.trim(),
     phone: input.phone.trim() || null,
     sgk_flag: input.sgkFlag,
-    sgk_prescription_received: input.sgkFlag
-      ? input.sgkPrescriptionReceived
-      : false,
+    sgk_prescription_received: input.sgkFlag ? input.sgkPrescriptionReceived : false,
     sgk_recorded_to_system: input.sgkFlag ? input.sgkRecordedToSystem : false,
     reference_id: input.referenceId,
     payment_method,
@@ -571,18 +497,12 @@ export async function createPatient(
     created_at: row.created_at as string,
     last_visit_at: (row.last_visit_at as string | null) ?? null,
     sgk_flag: (row.sgk_flag as boolean | null) ?? null,
-    sgk_prescription_no:
-      (row.sgk_prescription_no as string | null | undefined) ?? null,
-    sgk_docs_received:
-      (row.sgk_docs_received as boolean | null | undefined) ?? null,
-    sgk_processed:
-      (row.sgk_processed as boolean | null | undefined) ?? null,
-    satisfaction_10:
-      row.satisfaction_10 != null ? Number(row.satisfaction_10) : null,
-    sgk_prescription_received:
-      (row.sgk_prescription_received as boolean | null | undefined) ?? null,
-    sgk_recorded_to_system:
-      (row.sgk_recorded_to_system as boolean | null | undefined) ?? null,
+    sgk_prescription_no: (row.sgk_prescription_no as string | null | undefined) ?? null,
+    sgk_docs_received: (row.sgk_docs_received as boolean | null | undefined) ?? null,
+    sgk_processed: (row.sgk_processed as boolean | null | undefined) ?? null,
+    satisfaction_10: row.satisfaction_10 != null ? Number(row.satisfaction_10) : null,
+    sgk_prescription_received: (row.sgk_prescription_received as boolean | null | undefined) ?? null,
+    sgk_recorded_to_system: (row.sgk_recorded_to_system as boolean | null | undefined) ?? null,
     national_id: (row.national_id as string | null | undefined) ?? null,
     address: (row.address as string | null | undefined) ?? null,
     kin_phone: (row.kin_phone as string | null | undefined) ?? null,
@@ -592,12 +512,9 @@ export async function createPatient(
     archive_code: (row.archive_code as string | null | undefined) ?? null,
     sgk_profile: (row.sgk_profile as string | null | undefined) ?? null,
     sgk_expected_reimbursement:
-      row.sgk_expected_reimbursement != null
-        ? Number(row.sgk_expected_reimbursement)
-        : null,
+      row.sgk_expected_reimbursement != null ? Number(row.sgk_expected_reimbursement) : null,
     sgk_expected_reimbursement_month:
-      (row.sgk_expected_reimbursement_month as string | null | undefined) ??
-      null,
+      (row.sgk_expected_reimbursement_month as string | null | undefined) ?? null,
     device_brand: null,
     device_model: null,
     device_total_price: null,
@@ -624,10 +541,7 @@ export async function createPatient(
         items: saleBreakdownDraft,
       });
     } catch (err) {
-      console.error(
-        'STEP_CHAIN_BREAKDOWN: Failed to save sale breakdown draft after patient insert',
-        err,
-      );
+      console.error('STEP_CHAIN_BREAKDOWN: Failed to save sale breakdown draft after patient insert', err);
     }
   }
 
@@ -638,10 +552,7 @@ export async function createPatient(
         patientId: inserted.id,
       });
     } catch (err) {
-      console.error(
-        'STEP_CHAIN_PLAN: Failed to save installment plan draft after patient insert',
-        err,
-      );
+      console.error('STEP_CHAIN_PLAN: Failed to save installment plan draft after patient insert', err);
     }
   }
 
@@ -653,10 +564,7 @@ export async function createPatient(
         drafts: deviceDrafts,
       });
     } catch (err) {
-      console.error(
-        'STEP_CHAIN_DEVICE: Unexpected error while attaching device drafts after patient insert',
-        err,
-      );
+      console.error('STEP_CHAIN_DEVICE: Unexpected error while attaching device drafts after patient insert', err);
     }
   }
 
@@ -668,28 +576,26 @@ export async function createPatient(
         chargerInventoryItemId,
       });
     } catch (err) {
-      console.error(
-        'STEP_CHAIN_CHARGER: Unexpected error while attaching charger after patient insert',
-        err,
-      );
+      console.error('STEP_CHAIN_CHARGER: Unexpected error while attaching charger after patient insert', err);
     }
   }
 
-  if (batteryLines.length > 0) {
-    try {
-      await recordBatteryLinesAsAccessories({
-        orgId,
-        patientId: inserted.id,
-        patientName: inserted.full_name,
-        createdBy: user.id,
-        batteryLines,
-      });
-    } catch (err) {
-      console.error(
-        'STEP_CHAIN_BATTERIES: Unexpected error while recording battery accessories after patient insert',
-        err,
-      );
-    }
+  // Battery prescription deliveries (source of truth)
+  // Condition:
+  // - SGK is enabled AND pill prescription checkbox is enabled.
+  // - At least one battery line has qty > 0.
+  if (
+    input.sgkFlag &&
+    !!input.sgkPillPrescription &&
+    (batteryLines ?? []).some((l) => qtyTotal(l) > 0)
+  ) {
+    await recordBatteryPrescriptionDeliveries({
+      orgId,
+      patientId: inserted.id,
+      createdBy: user.id,
+      batteryLines,
+      prescriptionNo: input.sgkPrescriptionNo ? input.sgkPrescriptionNo.trim() : null,
+    });
   }
 
   return inserted;
