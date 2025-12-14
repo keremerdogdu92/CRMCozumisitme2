@@ -4,6 +4,10 @@
 // - Removes UI-only local state for deviceFlowType + sgkPillPrescription.
 // - Persists deviceFlowType, chargerInventoryItemId, batteryLines, sgkPillPrescription in formState.
 // - Wires NewPatientDevicesSection + NewPatientSgkSection to formState.
+//
+// Patch v2.9:
+// - For deviceFlowType === 'battery_only': allow saving with empty payment rows (SGK-only battery patient).
+// - Payment UI stays visible, but required constraints are relaxed for battery_only.
 
 import type { NewPatientForm, BatteryLineDraft } from '../../types';
 import { InlineCreateCard } from '../../../../components/layout/InlineCreateCard';
@@ -60,6 +64,7 @@ export function NewPatientFormCard({
   });
 
   const deviceFlowType = formState.deviceFlowType ?? 'rechargeable_device';
+  const isBatteryOnly = deviceFlowType === 'battery_only';
 
   return (
     <InlineCreateCard
@@ -342,6 +347,7 @@ export function NewPatientFormCard({
                   </div>
 
                   <NewPatientPaymentSection
+                    allowEmpty={isBatteryOnly}
                     paymentMethod={row.paymentMethod}
                     saleTotal={row.amount}
                     cardFeeRate={row.cardFeeRate}
