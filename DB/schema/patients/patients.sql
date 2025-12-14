@@ -1,4 +1,4 @@
--- DB/schema/patients/patients.sql
+-- db/schema/patients/patients.sql
 -- Purpose: Supabase table definition for `patients`.
 -- Includes: CREATE TABLE, constraints, triggers, indexes and RLS policies.
 -- Source of truth: Supabase table editor / migrations.
