@@ -32,6 +32,11 @@ CREATE TABLE public.patients (
   sgk_expected_reimbursement numeric(10, 2) NULL,
   sgk_expected_reimbursement_month date NULL,
 
+  -- Battery patient marker:
+  -- True if patient ever received SGK battery prescription delivery.
+  -- This is used for reporting and UX (optional filters later).
+  is_battery_patient boolean NOT NULL DEFAULT false,
+
   -- Soft delete columns
   deleted_at timestamptz NULL,
   deleted_by uuid NULL,
