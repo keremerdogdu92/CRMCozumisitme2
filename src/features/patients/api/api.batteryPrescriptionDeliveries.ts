@@ -1,10 +1,10 @@
 // src/features/patients/api/api.batteryPrescriptionDeliveries.ts
 // Summary: CRUD helpers for battery_prescription_deliveries.
-// v1.2:
-// - Selects sgk_expected_amount (exists in DB schema) to match BatteryPrescriptionDeliveryRow.
-// - Supports optional sgkExpectedAmount from CreateBatteryPrescriptionDeliveryInput (if provided in types).
-// - Uses `returns()` for typed responses (avoids unsafe casts that caused TS2352).
-// - Keeps payload aligned with DB schema (no brand/created_by).
+// v1.3:
+// - Adds optional "org summary" helper for future reporting screens (no UI dependency).
+// - Keeps selects aligned with DB schema (battery_type, qty_boxes, qty_packs, qty_units, delivered_at, prescription_no,
+//   sgk_expected_amount, note, created_at).
+// - Uses `returns()` for typed responses.
 //
 // NOTE:
 // - DB schema (per your SQL):
@@ -163,11 +163,59 @@ export async function fetchBatteryPrescriptionDeliveriesByPatient(
     .eq('patient_id', patient_id)
     .order('delivered_at', { ascending: false });
 
-  // `returns()` prevents TS from treating `data` as "unknown | error array" shape.
   const { data, error } = await query.returns<BatteryPrescriptionDeliveryRow[]>();
 
   if (error) {
     console.error('BATTERY_DELIVERIES_FETCH_FAILED:', { patient_id, error });
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+/**
+ * List deliveries for the whole org, optionally within a date window (for reporting screens).
+ * NOTE: This is not used by the patient detail tab; intended for future "Reports" pages.
+ */
+export async function fetchBatteryPrescriptionDeliveriesByOrg(params: {
+  orgId: string;
+  dateFromIso?: string; // inclusive
+  dateToIso?: string; // inclusive
+}): Promise<BatteryPrescriptionDeliveryRow[]> {
+  const org_id = safeTrim(params.orgId);
+  if (!org_id) return [];
+
+  let query = supabaseClient
+    .from('battery_prescription_deliveries')
+    .select(
+      [
+        'id',
+        'org_id',
+        'patient_id',
+        'battery_type',
+        'qty_boxes',
+        'qty_packs',
+        'qty_units',
+        'delivered_at',
+        'prescription_no',
+        'sgk_expected_amount',
+        'note',
+        'created_at',
+      ].join(', '),
+    )
+    .eq('org_id', org_id)
+    .order('delivered_at', { ascending: false });
+
+  const from = safeTrim(params.dateFromIso);
+  const to = safeTrim(params.dateToIso);
+
+  if (from) query = query.gte('delivered_at', from);
+  if (to) query = query.lte('delivered_at', to);
+
+  const { data, error } = await query.returns<BatteryPrescriptionDeliveryRow[]>();
+
+  if (error) {
+    console.error('BATTERY_DELIVERIES_FETCH_ORG_FAILED:', { org_id, error });
     throw error;
   }
 
