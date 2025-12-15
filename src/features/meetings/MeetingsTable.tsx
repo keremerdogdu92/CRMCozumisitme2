@@ -1,6 +1,12 @@
 // src/features/meetings/MeetingsTable.tsx
 // Meetings list table with meeting_type + subject info, filters,
 // column visibility toggles and sorting.
+//
+// Patch v2.1:
+// - FIX (critical): Prevents React error #310 by ensuring hooks are called in a stable order.
+//   * `useMemo` (sortedRows) is now executed on every render (even while loading/error).
+//   * Avoids returning early before all hooks are called.
+// - No behavior change intended for normal UI flow.
 
 import { useMemo, useState } from 'react';
 import { useMeetingsQuery } from './api';
@@ -135,21 +141,11 @@ export function MeetingsTable() {
     isColumnVisible,
   } = useTablePreferences<MeetingRow>('meetings-table', MEETING_COLUMNS, userId);
 
-  if (isLoading) {
-    return <p className="text-xs text-slate-500">Görüşmeler yükleniyor...</p>;
-  }
-
-  if (isError) {
-    return (
-      <p className="text-xs text-red-600">
-        Görüşmeler yüklenirken hata oluştu:{' '}
-        {(error as Error)?.message ?? 'Bilinmeyen hata'}
-      </p>
-    );
-  }
+  // NOTE: Even during loading/error, we compute with safe defaults so hooks remain stable.
+  const safeData: MeetingRow[] = (data ?? []) as MeetingRow[];
 
   // Eski kayıtlar için default değerler atayıp MeetingRow tipine normalize et
-  const rows: MeetingRow[] = (data ?? []).map((m) => {
+  const rows: MeetingRow[] = safeData.map((m) => {
     const meeting_type = (m.meeting_type ?? 'patient') as MeetingType;
     const subject_name = (m.subject_name ?? null) as string | null;
     const subject_id = (m.subject_id ?? null) as string | null;
@@ -221,6 +217,20 @@ export function MeetingsTable() {
 
     return result;
   }, [filteredRows, prefsState.sortBy, prefsState.sortDir]);
+
+  // After all hooks are called, it is safe to early-return.
+  if (isLoading) {
+    return <p className="text-xs text-slate-500">Görüşmeler yükleniyor...</p>;
+  }
+
+  if (isError) {
+    return (
+      <p className="text-xs text-red-600">
+        Görüşmeler yüklenirken hata oluştu:{' '}
+        {(error as Error)?.message ?? 'Bilinmeyen hata'}
+      </p>
+    );
+  }
 
   if (visibleRows.length === 0) {
     return (
