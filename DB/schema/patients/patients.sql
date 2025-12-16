@@ -1,7 +1,8 @@
 -- db/schema/patients/patients.sql
--- Purpose: Supabase table definition for `patients`.
--- Includes: CREATE TABLE, constraints, triggers, indexes and RLS policies.
--- Source of truth: Supabase table editor / migrations.
+-- Summary: Supabase table definition for `patients`, updated to include `sgk_recorded_to_system_at` (timestamptz).
+-- Notes:
+-- - TODO: `sgk_recorded_to_system_at` should be set when `sgk_recorded_to_system` is toggled to true (not implemented here).
+-- - Source of truth: Supabase table editor / migrations.
 
 CREATE TABLE public.patients (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -20,6 +21,10 @@ CREATE TABLE public.patients (
   last_visit_at timestamptz NULL,
   sgk_prescription_received boolean NOT NULL DEFAULT false,
   sgk_recorded_to_system boolean NOT NULL DEFAULT false,
+
+  -- New: timestamp for when sgk_recorded_to_system was recorded as true.
+  sgk_recorded_to_system_at timestamptz NULL,
+
   payment_method text NULL,
   sale_total_amount numeric(12, 2) NULL,
   card_fee_rate numeric(5, 2) NULL,
