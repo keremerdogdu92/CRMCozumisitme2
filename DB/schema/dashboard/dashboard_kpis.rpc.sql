@@ -1,11 +1,11 @@
 -- db/schema/dashboard/dashboard_kpis.rpc.sql
 -- Purpose: Supabase RPC to aggregate dashboard KPIs (org-scoped, Europe/Istanbul month window).
 -- Scope: revenueTotal, sgkEnteredThisMonthTotal, sgkDueThisMonthTotal, devicesSoldCount,
---        devicePatientsCount, cardFeeTotal, referenceCommissionTotal.
+--        devicePatientsCount, cardFeeTotal, referenceCommissionTotal, unpaidInstallmentsDueThisMonth.
 -- Notes:
 --  - Month window: [monthStart 00:00, nextMonthStart 00:00) in Europe/Istanbul.
 --  - Excludes soft-deleted rows where deleted_at exists (patients, inventory_items).
---  - Uses explicit KPI sources per product spec; no installment FIFO/senet math here.
+--  - Uses explicit KPI sources per product spec; installment KPI is sprint-0 approximation (no full FIFO).
 --  - Org resolution:
 --      * service_role: may pass _org_id; if null, results are zeroed.
 --      * authenticated users: org_id is derived from profiles.id = auth.uid(); _org_id param is ignored.
@@ -21,7 +21,8 @@ create or replace function public.dashboard_kpis(
   devicesSoldCount bigint,
   devicePatientsCount bigint,
   cardFeeTotal numeric,
-  referenceCommissionTotal numeric
+  referenceCommissionTotal numeric,
+  unpaidInstallmentsDueThisMonth numeric
 ) language sql stable as $$
 with org_ctx as (
   select case
@@ -36,6 +37,48 @@ with org_ctx as (
     -- Date boundaries in Europe/Istanbul for date-only comparisons (e.g., sgk_expected_reimbursement_month).
     (date_trunc('month', timezone('Europe/Istanbul', coalesce(_month_start, now()))))::date as month_start_ist_date,
     (date_trunc('month', timezone('Europe/Istanbul', coalesce(_month_start, now())) + interval '1 month'))::date as month_end_ist_date
+), plan_schedules as (
+  -- Expand active installment plans into monthly due dates.
+  select
+    pip.org_id,
+    pip.patient_id,
+    pip.installment_amount,
+    gs.installment_index,
+    case
+      when gs.installment_index = 0 then pip.first_due_date
+      else
+        least(
+          (date_trunc('month', pip.first_due_date) + (gs.installment_index || ' month')::interval + ((pip.day_of_month - 1) || ' day')::interval)::date,
+          (date_trunc('month', pip.first_due_date) + (gs.installment_index || ' month')::interval + interval '1 month - 1 day')::date
+        )
+    end as due_date
+  from public.patient_installment_plans pip
+  join org_ctx o on o.org_id is not null and o.org_id = pip.org_id
+  join public.patients p on p.id = pip.patient_id and p.deleted_at is null
+  cross join generate_series(0, pip.installment_count - 1) as gs(installment_index)
+  where pip.status = 'active'
+), plan_due as (
+  -- Aggregate due amounts per patient and senet payments applied up to month end.
+  select
+    ps.org_id,
+    ps.patient_id,
+    sum(ps.installment_amount) filter (where ps.due_date < w.month_start_ist_date) as due_before_month,
+    sum(ps.installment_amount) filter (
+      where ps.due_date >= w.month_start_ist_date
+        and ps.due_date < w.month_end_ist_date
+    ) as due_this_month,
+    coalesce((
+      select sum(mp.amount)
+      from public.meeting_payments mp
+      where mp.org_id = ps.org_id
+        and mp.patient_id = ps.patient_id
+        and mp.created_at < w.month_end_utc
+        -- IMPORTANT: Do NOT treat NULL method as "senet". Only count explicit senet payments.
+        and lower(coalesce(mp.method, '')) = 'senet'
+    ), 0) as paid_to_month_end
+  from plan_schedules ps
+  cross join window_bounds w
+  group by ps.org_id, ps.patient_id
 )
 select
   -- revenueTotal: sum of patients.sale_total_amount for patients created in the month window.
@@ -140,7 +183,25 @@ select
       and p.deleted_at is null
       and p.created_at >= w.month_start_utc
       and p.created_at < w.month_end_utc
-  ), 0) as "referenceCommissionTotal";
+  ), 0) as "referenceCommissionTotal",
+
+  -- unpaidInstallmentsDueThisMonth: due this month minus payments allocated up to month end.
+  coalesce((
+    select sum(
+      greatest(
+        0,
+        pd.due_this_month
+          - greatest(
+              0,
+              least(
+                coalesce(pd.due_this_month, 0),
+                coalesce(pd.paid_to_month_end, 0) - coalesce(pd.due_before_month, 0)
+              )
+            )
+      )
+    )
+    from plan_due pd
+  ), 0) as "unpaidInstallmentsDueThisMonth";
 $$;
 
 -- Example usage:

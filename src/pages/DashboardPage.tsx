@@ -1,142 +1,115 @@
+// src/pages/DashboardPage.tsx
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { TrendingUp, Wallet, BellRing, CreditCard } from 'lucide-react';
-import { useCurrentProfile } from '../features/auth/useCurrentProfile';
-import { fetchActiveDeviceRepairsSummary } from '../features/patients/api/api.repairs';
+import { useDashboard } from '../features/dashboard/api';
 
-const DASHBOARD_METRICS = [
-  {
-    icon: <TrendingUp className="h-6 w-6 text-primary-500" />,
-    label: 'Aylık Gelir',
-    value: '?0',
-    description: 'Satış verileri henüz bağlanmadı.',
-  },
-  {
-    icon: <Wallet className="h-6 w-6 text-primary-500" />,
-    label: 'Alacaklar',
-    value: '?0',
-    description: 'Tahsilat bilgileri için Supabase entegrasyonu gerekli.',
-  },
-  {
-    icon: <CreditCard className="h-6 w-6 text-primary-500" />,
-    label: 'Kredi Kartı Komisyonları',
-    value: '?0',
-    description: 'Net gelir hesaplaması için yapılandırma bekleniyor.',
-  },
-  {
-    icon: <BellRing className="h-6 w-6 text-primary-500" />,
-    label: 'Bekleyen Görevler',
-    value: '0',
-    description: 'Hatırlatmalar rapor fonksiyonları ile beslenecek.',
-  },
-];
+function getIstanbulMonthStartIso(d: Date): string {
+  // Turkey is UTC+03:00 year-round (no DST). We still derive year/month in Europe/Istanbul
+  // to avoid edge cases around local vs UTC month boundaries.
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Istanbul',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(d);
 
-function useActiveRepairsSummary() {
-  const { data: profile } = useCurrentProfile();
-  const orgId = profile?.org_id;
+  const year = parts.find((p) => p.type === 'year')?.value ?? '1970';
+  const month = parts.find((p) => p.type === 'month')?.value ?? '01';
 
-  return useQuery({
-    queryKey: ['device-repairs-active-summary', orgId],
-    enabled: !!orgId,
-    queryFn: () => fetchActiveDeviceRepairsSummary(orgId as string),
-  });
+  // Month window start: 1st day 00:00 in Europe/Istanbul.
+  return `${year}-${month}-01T00:00:00+03:00`;
 }
 
 export default function DashboardPage() {
-  const metrics = useMemo(() => DASHBOARD_METRICS, []);
-  const { data: repairsSummary, isLoading: isRepairsLoading } =
-    useActiveRepairsSummary();
+  const monthStartIso = useMemo(() => getIstanbulMonthStartIso(new Date()), []);
 
-  const hasActiveRepairs = !!repairsSummary && repairsSummary.total > 0;
+  const { data, isLoading, isError, error } = useDashboard(monthStartIso);
+  const kpis = data?.kpis;
+  const upcoming = data?.upcomingMeetings ?? [];
+
+  const rows = [
+    { label: 'Aylık Gelir', value: kpis?.revenueTotal },
+    { label: 'Kart Komisyonu', value: kpis?.cardFeeTotal },
+    { label: 'Referans Komisyonu', value: kpis?.referenceCommissionTotal },
+    { label: 'SGK Sisteme Girilen', value: kpis?.sgkEnteredThisMonthTotal },
+    { label: 'SGK Beklenen', value: kpis?.sgkDueThisMonthTotal },
+    { label: 'Satılan Cihaz', value: kpis?.devicesSoldCount },
+    { label: 'Cihaz Alan Hasta', value: kpis?.devicePatientsCount },
+    {
+      label: 'Bekleyen Taksit',
+      value: kpis?.unpaidInstallmentsDueThisMonth,
+      hint: 'Sprint-0: senet taksit tahsilatı yaklaşık hesap.',
+    },
+  ];
 
   return (
     <div className="space-y-6">
       <section>
         <h2 className="text-xl font-semibold text-slate-900">Genel Bakış</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Supabase şeması tamamlandığında gerçek zamanlı hasta, ödeme ve stok verileri bu panelde
-          görüntülenecek.
+          Supabase dashboard_kpis RPC ile aylık KPI verileri çekiliyor.
         </p>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((metric) => (
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {rows.map((metric) => (
           <article
             key={metric.label}
             className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
           >
-            <div className="flex items-center justify-between">
-              <div className="rounded-lg bg-primary-50 p-3">{metric.icon}</div>
-            </div>
-            <p className="mt-4 text-sm font-medium text-slate-500">{metric.label}</p>
-            <p className="text-2xl font-semibold text-slate-900">{metric.value}</p>
-            <p className="mt-2 text-xs text-slate-500">{metric.description}</p>
+            <p className="text-sm font-medium text-slate-500">{metric.label}</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">
+              {isLoading ? '...' : metric.value ?? 0}
+            </p>
+            {metric.hint && (
+              <p className="mt-1 text-xs text-slate-500">{metric.hint}</p>
+            )}
           </article>
         ))}
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <article className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-          <h3 className="text-base font-semibold text-slate-900">Supabase Bağlantısı</h3>
-          <p className="mt-2">
-            Hasta kayıtları, görüşmeler ve stok durumları Supabase Postgres veritabanında tutulacak.
-            RLS kuralları ile Admin ve Personel rolleri ayrıştırılacak. Bu panel TanStack Query ile
-            gerçek zamanlı güncellenecek.
-          </p>
-        </article>
-        <article className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-          <h3 className="text-base font-semibold text-slate-900">Planlanan Özellikler</h3>
-          <ul className="mt-2 list-disc space-y-1 pl-5">
-            <li>Günlük e-posta raporları için Netlify fonksiyonu</li>
-            <li>SGK süreci ve memnuniyet takibi</li>
-            <li>Odyogram kaydı ve grafik görselleştirmesi</li>
-            <li>Kar hesaplayıcı ve referans bazlı komisyon</li>
-          </ul>
-        </article>
-      </section>
-
-      {hasActiveRepairs && (
-        <section className="grid gap-4 lg:grid-cols-3">
-          <article className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <h3 className="text-sm font-semibold">Tamirde Cihazlar</h3>
-            <p className="mt-1 text-xs">
-              Şu anda serviste veya teslim bekleyen {repairsSummary?.total ?? 0} cihaz var.
-            </p>
-            <ul className="mt-2 space-y-1 text-xs">
-              {(['created', 'shipped', 'returned_waiting_meeting', 'scheduled'] as const).map(
-                (status) => {
-                  const byStatus = repairsSummary?.byStatus ?? {};
-                  const count = byStatus[status] ?? 0;
-                  if (!count) return null;
-
-                  const labelMap: Record<string, string> = {
-                    created: 'Kayıt açıldı',
-                    shipped: 'Servise gönderildi',
-                    returned_waiting_meeting: 'Klinikte, teslim bekliyor',
-                    scheduled: 'Teslim için randevu ayarlandı',
-                  };
-
-                  return (
-                    <li key={status} className="flex justify-between">
-                      <span>{labelMap[status]}</span>
-                      <span className="font-semibold">{count}</span>
-                    </li>
-                  );
-                },
-              )}
-              {repairsSummary?.oldestOpen && (
-                <li className="flex justify-between text-[11px] text-amber-800">
-                  <span>En eski açık</span>
-                  <span>{new Date(repairsSummary.oldestOpen).toLocaleDateString('tr-TR')}</span>
-                </li>
-              )}
-            </ul>
-            {isRepairsLoading && (
-              <p className="mt-2 text-[11px] text-amber-800">Tamir verileri yükleniyor…</p>
-            )}
-          </article>
-        </section>
+      {isError && (
+        <p className="text-sm text-red-600">
+          {(error as Error)?.message ??
+            'DASHBOARD_KPIS_RPC_FAILED: Unknown error'}
+        </p>
       )}
+
+      <section className="space-y-3">
+        <h3 className="text-lg font-semibold text-slate-900">
+          Yaklaşan Görüşmeler
+        </h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          {isLoading && <p className="text-sm text-slate-500">Yükleniyor...</p>}
+          {!isLoading && upcoming.length === 0 && (
+            <p className="text-sm text-slate-500">Yaklaşan görüşme yok.</p>
+          )}
+          {!isLoading && upcoming.length > 0 && (
+            <ul className="space-y-2 text-sm">
+              {upcoming.map((item) => {
+                const dt = item.at ?? item.nextAt;
+                const displayDate = dt
+                  ? new Date(dt).toLocaleString('tr-TR', {
+                      timeZone: 'Europe/Istanbul',
+                      dateStyle: 'short',
+                      timeStyle: 'short',
+                    })
+                  : 'Tarih bekleniyor';
+                return (
+                  <li key={item.id} className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-slate-900">
+                        {item.subjectName || item.subject || 'Başlık yok'}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Tip: {item.meetingType} • {displayDate}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
