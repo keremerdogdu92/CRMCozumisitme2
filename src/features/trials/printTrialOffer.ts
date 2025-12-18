@@ -7,8 +7,6 @@ import type { OrgSettings } from '../settings/orgSettingsTypes';
 function formatPriceForPrint(amount: number | null | undefined): string {
   if (amount == null || Number.isNaN(amount as number)) return '-';
   try {
-    // toLocaleString string'e de çağrılabilir ama currency formatı için
-    // sayıya dönüştürmeyi tercih ediyoruz.
     const n = typeof amount === 'number' ? amount : Number(amount);
     if (!Number.isFinite(n)) return `${amount}`;
     return n.toLocaleString('tr-TR', {
@@ -35,6 +33,24 @@ function getInitials(name: string | null | undefined): string {
     parts[0].charAt(0).toUpperCase() +
     parts[parts.length - 1].charAt(0).toUpperCase()
   );
+}
+
+// Human-readable ear side for print
+function formatSideForPrint(side: string | null | undefined): string {
+  if (!side) return '-';
+  if (side === 'both') return 'Çift';
+  return side;
+}
+
+// List price is per device; for bilateral ("both") we print 2x
+function getTotalListPriceForSide(
+  listPrice: number | null | undefined,
+  side: string | null | undefined,
+): number | null {
+  if (listPrice == null || Number.isNaN(listPrice as number)) return null;
+  const n = typeof listPrice === 'number' ? listPrice : Number(listPrice);
+  if (!Number.isFinite(n)) return null;
+  return side === 'both' ? n * 2 : n;
 }
 
 type PrintOptions = {
@@ -67,18 +83,20 @@ export function openTrialOfferPrint(
 
   const deviceRowsHtml = devices
     .map((d, index) => {
+      const sideLabel = formatSideForPrint(d.side ?? null);
+      const totalListPrice = getTotalListPriceForSide(
+        (d as any).list_price ?? null,
+        d.side ?? null,
+      );
+
       return `
         <tr>
           <td>${index + 1}</td>
           <td>${d.brand ?? ''}</td>
           <td>${d.model ?? ''}</td>
-          <td>${d.side ?? ''}</td>
-          <td style="text-align:right;">${formatPriceForPrint(
-            d.list_price ?? null,
-          )}</td>
-          <td style="text-align:right;">${formatPriceForPrint(
-            d.quote_price,
-          )}</td>
+          <td>${sideLabel}</td>
+          <td style="text-align:right;">${formatPriceForPrint(totalListPrice)}</td>
+          <td style="text-align:right;">${formatPriceForPrint(d.quote_price)}</td>
         </tr>
       `;
     })
@@ -89,42 +107,17 @@ export function openTrialOfferPrint(
   if (includeDetails && devices.length > 0) {
     const detailBlocks = devices
       .map((d, idx) => {
-        const listPriceText = formatPriceForPrint(d.list_price ?? null);
+        const sideLabel = formatSideForPrint(d.side ?? null);
+        const totalListPrice = getTotalListPriceForSide(
+          (d as any).list_price ?? null,
+          d.side ?? null,
+        );
+        const listPriceText = formatPriceForPrint(totalListPrice);
         const quotePriceText = formatPriceForPrint(d.quote_price);
-
-        const extraLines: string[] = [];
-
-        if (d.item_type) {
-          extraLines.push(
-            `<div><span class="label">Tip:</span> ${d.item_type}</div>`,
-          );
-        }
-
-        if (d.battery_type) {
-          extraLines.push(
-            `<div><span class="label">Pil Tipi:</span> ${d.battery_type}</div>`,
-          );
-        }
-
-        if (d.details) {
-          const rawDetails = String(d.details);
-          const compactDetails = rawDetails
-            .split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean)
-            .join(' • ');
-          if (compactDetails) {
-            extraLines.push(
-              `<div><span class="label">Teknik Özellikler:</span> ${compactDetails}</div>`,
-            );
-          }
-        }
-
-        if (d.notes) {
-          extraLines.push(
-            `<div><span class="label">Not:</span> ${d.notes}</div>`,
-          );
-        }
+        const technicalDetails =
+          (d as any).details ?? (d as any).technical_details ?? null;
+        const itemType = (d as any).item_type ?? null;
+        const batteryType = (d as any).battery_type ?? null;
 
         return `
           <div class="device-detail-block">
@@ -135,12 +128,24 @@ export function openTrialOfferPrint(
               } ${d.model ?? ''}</span>
             </div>
             <div class="device-detail-body">
-              <div><span class="label">Kulak:</span> ${
-                d.side ?? '-'
-              }</div>
+              <div><span class="label">Kulak:</span> ${sideLabel}</div>
               <div><span class="label">Liste Fiyatı:</span> ${listPriceText}</div>
               <div><span class="label">Teklif Edilen Fiyat:</span> ${quotePriceText}</div>
-              ${extraLines.join('')}
+              ${
+                itemType
+                  ? `<div><span class="label">Tip:</span> ${itemType}</div>`
+                  : ''
+              }
+              ${
+                batteryType
+                  ? `<div><span class="label">Pil Türü:</span> ${batteryType}</div>`
+                  : ''
+              }
+              ${
+                technicalDetails
+                  ? `<div><span class="label">Teknik Özellikler:</span> ${technicalDetails}</div>`
+                  : ''
+              }
             </div>
           </div>
         `;
