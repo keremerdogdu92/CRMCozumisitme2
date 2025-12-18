@@ -1,13 +1,40 @@
-// src/features/trials/printTrialOffer.ts
-// Helper for rendering and printing a trial hearing aid offer as an A4 page.
+// src/features/trials/TrialDetailDrawer.tsx
+// Read-only detail drawer for a trial, with tabs and printable offer sheet.
 
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { SideDrawer } from '../../components/layout/SideDrawer';
 import type { TrialRow, TrialDeviceRow } from './types';
-import type { OrgSettings } from '../settings/orgSettingsTypes';
+import {
+  fetchTrialDevicesByTrialId,
+  TRIAL_DEVICES_BY_TRIAL_QUERY_KEY,
+} from './api';
+import { openTrialOfferPrint } from './printTrialOffer';
+import {
+  fetchReferenceLiteById,
+  type ReferenceLiteForTrial,
+} from '../references/api';
+import type { MeetingRow } from '../meetings/types';
+import {
+  MEETINGS_BY_TRIAL_QUERY_KEY,
+  fetchMeetingsByTrialId,
+} from '../meetings/api';
+import { useOrgSettings } from '../settings/useOrgSettings';
 
-function formatPriceForPrint(amount: number | null | undefined): string {
-  if (amount == null || Number.isNaN(amount)) return '-';
+type TrialDetailDrawerProps = {
+  trial: TrialRow | null;
+  open: boolean;
+  onClose: () => void;
+};
+
+type TrialTabId = 'summary' | 'devices' | 'meetings';
+
+function formatPrice(amount: number | null | undefined): string {
+  if (amount == null || Number.isNaN(amount as number)) return '-';
   try {
-    return amount.toLocaleString('tr-TR', {
+    const n = typeof amount === 'number' ? amount : Number(amount);
+    if (!Number.isFinite(n)) return `${amount}`;
+    return n.toLocaleString('tr-TR', {
       style: 'currency',
       currency: 'TRY',
       minimumFractionDigits: 2,
@@ -17,448 +44,383 @@ function formatPriceForPrint(amount: number | null | undefined): string {
   }
 }
 
-function getInitials(name: string | null | undefined): string {
-  if (!name) return '';
-  const parts = name
-    .split(' ')
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (parts.length === 0) return '';
-  if (parts.length === 1) {
-    return parts[0].charAt(0).toUpperCase();
+function formatDate(value: string | null): string {
+  if (!value) return '-';
+  try {
+    return new Date(value).toLocaleString('tr-TR');
+  } catch {
+    return '-';
   }
-  return (
-    parts[0].charAt(0).toUpperCase() +
-    parts[parts.length - 1].charAt(0).toUpperCase()
-  );
 }
 
-type PrintOptions = {
-  includeDeviceDetails?: boolean;
-};
+export function TrialDetailDrawer({
+  trial,
+  open,
+  onClose,
+}: TrialDetailDrawerProps) {
+  const [activeTab, setActiveTab] = useState<TrialTabId>('summary');
 
-export function openTrialOfferPrint(
-  trial: TrialRow,
-  devices: TrialDeviceRow[],
-  orgSettings?: OrgSettings | null,
-  options?: PrintOptions,
-): void {
-  const printWindow = window.open('', '_blank', 'width=800,height=1000');
-  if (!printWindow) return;
+  // Org ayarları (logo, firma adı, iletişim bilgileri, watermark)
+  const { data: orgSettings } = useOrgSettings();
 
-  const includeDetails = options?.includeDeviceDetails ?? true;
+  // Stabil key için trialId'yi yukarıda hesaplıyoruz
+  const trialId = trial?.id ?? null;
 
-  const companyName =
-    orgSettings?.companyName ?? 'Çözüm İşitme Merkezi';
-  const companyTagline =
-    orgSettings?.companyTagline ?? 'İşitme Cihazları ve İşitme Sağlığı';
-  const companyPhone = orgSettings?.phone ?? '0 (xxx) xxx xx xx';
-  const companyAddress =
-    orgSettings?.address ?? 'Adres bilgisi buraya gelecek';
-  const companyWebsite = orgSettings?.website ?? 'www.ornek-site.com';
-  const watermarkText =
-    orgSettings?.offerWatermark ?? 'İşitme Cihazı Teklifi';
-  const logoUrl = orgSettings?.logoUrl ?? null;
-  const logoInitials = getInitials(companyName) || 'İÇ';
-
-  const deviceRowsHtml = devices
-    .map((d, index) => {
-      return `
-        <tr>
-          <td>${index + 1}</td>
-          <td>${d.brand ?? ''}</td>
-          <td>${d.model ?? ''}</td>
-          <td>${d.side ?? ''}</td>
-          <td style="text-align:right;">${formatPriceForPrint(
-            d.list_price ?? null,
-          )}</td>
-          <td style="text-align:right;">${formatPriceForPrint(
-            d.quote_price,
-          )}</td>
-        </tr>
-      `;
-    })
-    .join('');
-
-  let deviceDetailsHtml = '';
-
-  if (includeDetails && devices.length > 0) {
-    const detailBlocks = devices
-      .map((d, idx) => {
-        const listPriceText = formatPriceForPrint(d.list_price ?? null);
-        const quotePriceText = formatPriceForPrint(d.quote_price);
-
-        return `
-          <div class="device-detail-block">
-            <div class="device-detail-header">
-              <span class="device-detail-index">${idx + 1}.</span>
-              <span class="device-detail-title">${
-                d.brand ?? '-'
-              } ${d.model ?? ''}</span>
-            </div>
-            <div class="device-detail-body">
-              <div><span class="label">Kulak:</span> ${
-                d.side ?? '-'
-              }</div>
-              <div><span class="label">Liste Fiyatı:</span> ${listPriceText}</div>
-              <div><span class="label">Teklif Edilen Fiyat:</span> ${quotePriceText}</div>
-            </div>
-          </div>
-        `;
-      })
-      .join('');
-
-    deviceDetailsHtml = `
-      <div class="section-title">Cihaz Detayları</div>
-      <div class="device-details-wrapper">
-        ${detailBlocks}
-      </div>
-    `;
-  }
-
-  const now = new Date();
-  const issueDate = now.toLocaleDateString('tr-TR');
-  const issueTime = now.toLocaleTimeString('tr-TR', {
-    hour: '2-digit',
-    minute: '2-digit',
+  const {
+    data: devices = [],
+    isLoading: isDevicesLoading,
+    isError: isDevicesError,
+  } = useQuery({
+    queryKey: TRIAL_DEVICES_BY_TRIAL_QUERY_KEY(trialId ?? 'none'),
+    queryFn: () => fetchTrialDevicesByTrialId(trialId as string),
+    enabled: !!trialId && open,
   });
 
-  const logoHtml = logoUrl
-    ? `<div class="logo-wrapper"><img src="${logoUrl}" alt="${companyName} logo" class="logo-img" /></div>`
-    : `<div class="logo-box">${logoInitials}</div>`;
+  // Referans adını çekmek için hafif sorgu
+  const referenceId = trial?.reference_id ?? null;
 
-  const html = `
-<!doctype html>
-<html lang="tr">
-<head>
-  <meta charset="utf-8" />
-  <title>İşitme Cihazı Teklifi - ${trial.full_name ?? ''}</title>
-  <style>
-    @page { size: A4; margin: 20mm; }
-    * {
-      box-sizing: border-box;
+  const {
+    data: referenceLite,
+    isLoading: isReferenceLoading,
+    isError: isReferenceError,
+  } = useQuery<ReferenceLiteForTrial | null>({
+    queryKey: ['reference-lite-by-id', referenceId],
+    queryFn: () => fetchReferenceLiteById(referenceId as string),
+    enabled: !!referenceId && open,
+  });
+
+  // Bu deneme hastasına bağlı görüşmeler
+  const {
+    data: meetings = [],
+    isLoading: isMeetingsLoading,
+    isError: isMeetingsError,
+    error: meetingsError,
+  } = useQuery<MeetingRow[]>({
+    queryKey: MEETINGS_BY_TRIAL_QUERY_KEY(trialId ?? 'none'),
+    queryFn: () => fetchMeetingsByTrialId(trialId as string),
+    enabled: !!trialId && open,
+  });
+
+  useEffect(() => {
+    if (open) {
+      setActiveTab('summary');
     }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      font-size: 12px;
-      color: #111827;
-      margin: 0;
-      padding: 0;
-      position: relative;
-    }
-    .watermark {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) rotate(-30deg);
-      font-size: 72px;
-      font-weight: 700;
-      color: rgba(148, 163, 184, 0.15);
-      pointer-events: none;
-      z-index: 0;
-      text-align: center;
-      white-space: nowrap;
-    }
-    .page {
-      padding: 0;
-      position: relative;
-      z-index: 1;
-    }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-    }
-    .company {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .logo-box {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      background: #2563eb;
-      color: #ffffff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      font-size: 14px;
-    }
-    .logo-wrapper {
-      width: 40px;
-      height: 40px;
-      border-radius: 8px;
-      overflow: hidden;
-      border: 1px solid #e5e7eb;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #ffffff;
-    }
-    .logo-img {
-      max-width: 100%;
-      max-height: 100%;
-      display: block;
-    }
-    .company-name {
-      font-size: 13px;
-      font-weight: 600;
-    }
-    .company-subtitle {
-      font-size: 11px;
-      color: #6b7280;
-    }
-    .title-block {
-      text-align: right;
-    }
-    .title {
-      font-size: 18px;
-      font-weight: 600;
-    }
-    .subtitle {
-      font-size: 11px;
-      color: #6b7280;
-      margin-top: 2px;
-    }
-    .section-title {
-      font-size: 12px;
-      font-weight: 600;
-      margin-top: 16px;
-      margin-bottom: 4px;
-    }
-    .info-grid {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 8px;
-    }
-    .info-grid td {
-      padding: 3px 0;
-      font-size: 11px;
-    }
-    .info-label {
-      color: #6b7280;
-      width: 30%;
-    }
-    .info-value {
-      font-weight: 500;
-    }
-    table.offer-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 8px;
-      font-size: 11px;
-    }
-    table.offer-table th,
-    table.offer-table td {
-      border: 1px solid #e5e7eb;
-      padding: 6px 8px;
-    }
-    table.offer-table th {
-      background: #f3f4f6;
-      text-align: left;
-    }
-    .notes {
-      margin-top: 16px;
-      font-size: 11px;
-    }
-    .notes-box {
-      border: 1px solid #e5e7eb;
-      min-height: 80px;
-      padding: 6px 8px;
-      margin-top: 4px;
-    }
-    .signature-row {
-      margin-top: 24px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 11px;
-    }
-    .signature-box {
-      width: 45%;
-    }
-    .signature-line {
-      margin-top: 32px;
-      border-top: 1px solid #e5e7eb;
-    }
-    .footer {
-      margin-top: 24px;
-      border-top: 1px solid #e5e7eb;
-      padding-top: 8px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 10px;
-      color: #374151;
-    }
-    .footer-left {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .footer-name {
-      font-weight: 600;
-      font-size: 11px;
-    }
-    .footer-meta {
-      font-size: 10px;
-      color: #6b7280;
-    }
-    .footer-right {
-      text-align: right;
-      line-height: 1.4;
-    }
-    .device-details-wrapper {
-      border: 1px solid #e5e7eb;
-      border-radius: 6px;
-      padding: 8px;
-      margin-top: 4px;
-      font-size: 11px;
-    }
-    .device-detail-block + .device-detail-block {
-      border-top: 1px dashed #e5e7eb;
-      margin-top: 6px;
-      padding-top: 6px;
-    }
-    .device-detail-header {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      margin-bottom: 2px;
-    }
-    .device-detail-index {
-      font-weight: 600;
-      color: #4b5563;
-    }
-    .device-detail-title {
-      font-weight: 600;
-      color: #111827;
-    }
-    .device-detail-body .label {
-      color: #6b7280;
-      font-weight: 500;
-      margin-right: 4px;
-    }
-  </style>
-</head>
-<body>
-  <div class="watermark">${watermarkText}</div>
-  <div class="page">
-    <div class="header">
-      <div class="company">
-        ${logoHtml}
-        <div>
-          <div class="company-name">${companyName}</div>
-          <div class="company-subtitle">${companyTagline}</div>
+  }, [open, trialId]);
+
+  if (!trial) {
+    return null;
+  }
+
+  const typedDevices = devices as TrialDeviceRow[];
+  const typedMeetings = meetings as MeetingRow[];
+
+  const tabs: { id: TrialTabId; label: string }[] = [
+    { id: 'summary', label: 'Özet' },
+    { id: 'devices', label: 'Deneme Cihazları' },
+    { id: 'meetings', label: 'Görüşmeler' },
+  ];
+
+  const handlePrintOffer = () => {
+    if (typedDevices.length === 0) return;
+
+    const includeDetails = window.confirm(
+      'Cihazların katalog özellikleri (liste fiyatı ve teknik detaylar) ile birlikte yazdırılsın mı?\n\n"Tamam" derseniz teknik detaylar da eklenecek, "İptal" derseniz sadece temel teklif tablosu yazdırılacak.',
+    );
+
+    openTrialOfferPrint(trial, typedDevices, orgSettings ?? null, {
+      includeDeviceDetails: includeDetails,
+    });
+  };
+
+  const content = (
+    <div className="flex h-full flex-col">
+      {/* Tab bar + print button */}
+      <div className="border-b border-slate-200 px-3 pt-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-1">
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={
+                    'rounded-md px-3 py-1.5 text-xs font-medium ' +
+                    (isActive
+                      ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                      : 'text-slate-600 hover:bg-slate-50 border border-transparent')
+                  }
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={handlePrintOffer}
+            disabled={typedDevices.length === 0}
+            className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Teklif Yazdır
+          </button>
         </div>
       </div>
-      <div class="title-block">
-        <div class="title">İşitme Cihazı Teklifi</div>
-        <div class="subtitle">
-          Teklif Tarihi: ${issueDate} ${issueTime}
-        </div>
+
+      {/* Tab contents */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 text-sm">
+        {activeTab === 'summary' && (
+          <section className="space-y-2">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase">
+              Özet
+            </h4>
+            <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 space-y-1">
+              <div className="flex justify-between gap-2">
+                <span className="text-xs text-slate-500">Ad Soyad</span>
+                <span className="text-xs font-medium text-slate-900">
+                  {trial.full_name ?? '-'}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-xs text-slate-500">Telefon</span>
+                <span className="text-xs text-slate-900">
+                  {trial.phone ?? '-'}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-xs text-slate-500">Kayıt Tarihi</span>
+                <span className="text-xs text-slate-900">
+                  {formatDate(trial.created_at)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-xs text-slate-500">İlk Görüşme</span>
+                <span className="text-xs text-slate-900">
+                  {trial.first_meet_at ? formatDate(trial.first_meet_at) : '-'}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-xs text-slate-500">Sonraki Randevu</span>
+                <span className="text-xs text-slate-900">
+                  {trial.next_meet_at ? formatDate(trial.next_meet_at) : '-'}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-xs text-slate-500">Referans</span>
+                <span className="text-xs text-slate-900">
+                  {!referenceId
+                    ? '-'
+                    : isReferenceLoading
+                    ? 'Yükleniyor...'
+                    : isReferenceError
+                    ? 'Referans yüklenemedi'
+                    : referenceLite?.full_name ?? '-'}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-slate-500">Not</span>
+                <span className="whitespace-pre-line text-xs text-slate-900">
+                  {trial.note && trial.note.trim() ? trial.note : '-'}
+                </span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'devices' && (
+          <section className="space-y-2">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase">
+              Deneme Cihazları
+            </h4>
+
+            {isDevicesLoading && (
+              <p className="text-xs text-slate-500">Cihazlar yükleniyor...</p>
+            )}
+
+            {isDevicesError && (
+              <p className="text-xs text-red-600">
+                Cihazlar alınırken bir hata oluştu. Lütfen tekrar deneyin.
+              </p>
+            )}
+
+            {!isDevicesLoading &&
+              !isDevicesError &&
+              typedDevices.length === 0 && (
+                <p className="text-xs text-slate-500">
+                  Bu deneme için kayıtlı cihaz satırı bulunmuyor.
+                </p>
+              )}
+
+            {!isDevicesLoading &&
+              !isDevicesError &&
+              typedDevices.length > 0 && (
+                <div className="space-y-2">
+                  <table className="min-w-full border border-slate-200 text-[11px]">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                          #
+                        </th>
+                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                          Marka
+                        </th>
+                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                          Model
+                        </th>
+                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                          Kulak
+                        </th>
+                        <th className="border-b border-slate-200 px-2 py-1 text-right font-medium text-slate-600">
+                          Liste Fiyatı
+                        </th>
+                        <th className="border-b border-slate-200 px-2 py-1 text-right font-medium text-slate-600">
+                          Teklif (Satır)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {typedDevices.map((d, index) => (
+                        <tr key={d.id}>
+                          <td className="border-b border-slate-100 px-2 py-1">
+                            {index + 1}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1">
+                            {d.brand ?? '-'}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1">
+                            {d.model ?? '-'}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1">
+                            {d.side ?? '-'}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1 text-right">
+                            {formatPrice(d.list_price ?? null)}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1 text-right">
+                            {formatPrice(d.quote_price)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {/* Toplam teklif satırı bilinçli olarak kaldırıldı; hasta genelde
+                      bu satırlardan yalnızca birini seçeceği için kafa karışıklığı
+                      yaratmaması adına gösterilmiyor. */}
+                </div>
+              )}
+          </section>
+        )}
+
+        {activeTab === 'meetings' && (
+          <section className="space-y-2">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase">
+              Görüşmeler
+            </h4>
+
+            {isMeetingsLoading && (
+              <p className="text-xs text-slate-500">
+                Görüşmeler yükleniyor...
+              </p>
+            )}
+
+            {isMeetingsError && (
+              <p className="text-xs text-red-600">
+                Görüşmeler alınırken bir hata oluştu:{' '}
+                {(meetingsError as Error)?.message ?? 'Bilinmeyen hata'}
+              </p>
+            )}
+
+            {!isMeetingsLoading &&
+              !isMeetingsError &&
+              typedMeetings.length === 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-500">
+                    Bu deneme hastası için kayıtlı görüşme bulunmuyor.
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Yeni görüşme eklemek için üst menüden{' '}
+                    <span className="font-semibold">Görüşmeler</span> ekranına
+                    gidip, görüşme tipi olarak{' '}
+                    <span className="font-semibold">Deneme hastası</span>{' '}
+                    seçerek ilgili kişiyi seçebilirsiniz.
+                  </p>
+                </div>
+              )}
+
+            {!isMeetingsLoading &&
+              !isMeetingsError &&
+              typedMeetings.length > 0 && (
+                <div className="space-y-2">
+                  <table className="min-w-full border border-slate-200 text-[11px]">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="px-2 py-1 text-left font-medium">
+                          Tarih
+                        </th>
+                        <th className="px-2 py-1 text-left font-medium">
+                          Başlık
+                        </th>
+                        <th className="px-2 py-1 text-left font-medium">
+                          Sonraki Tarih
+                        </th>
+                        <th className="px-2 py-1 text-left font-medium">
+                          Memnuniyet
+                        </th>
+                        <th className="px-2 py-1 text-left font-medium">
+                          Not
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {typedMeetings.map((m) => (
+                        <tr
+                          key={m.id}
+                          className="border-t border-slate-100 align-top"
+                        >
+                          <td className="px-2 py-1 text-slate-800">
+                            {formatDate(m.at)}
+                          </td>
+                          <td className="px-2 py-1 text-slate-800">
+                            {m.subject ?? '-'}
+                          </td>
+                          <td className="px-2 py-1 text-slate-800">
+                            {formatDate(m.next_at)}
+                          </td>
+                          <td className="px-2 py-1 text-slate-800">
+                            {m.satisfaction_10 ?? '-'}
+                          </td>
+                          <td className="px-2 py-1 text-slate-600">
+                            {m.note ? m.note.slice(0, 160) : '-'}
+                            {m.note && m.note.length > 160 ? '…' : ''}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-[11px] text-slate-400">
+                    Yeni görüşme eklemek için{' '}
+                    <span className="font-semibold">Görüşmeler</span> ana
+                    ekranını kullanın. Bu sekme sadece ilgili deneme
+                    görüşmelerini görüntüler.
+                  </p>
+                </div>
+              )}
+          </section>
+        )}
       </div>
     </div>
+  );
 
-    <div class="section-title">Hasta Bilgileri</div>
-    <table class="info-grid">
-      <tr>
-        <td class="info-label">Ad Soyad</td>
-        <td class="info-value">${trial.full_name ?? '-'}</td>
-      </tr>
-      <tr>
-        <td class="info-label">Telefon</td>
-        <td class="info-value">${trial.phone ?? '-'}</td>
-      </tr>
-      <tr>
-        <td class="info-label">İlk Görüşme</td>
-        <td class="info-value">${
-          trial.first_meet_at
-            ? new Date(trial.first_meet_at).toLocaleString('tr-TR')
-            : '-'
-        }</td>
-      </tr>
-      <tr>
-        <td class="info-label">Sonraki Randevu</td>
-        <td class="info-value">${
-          trial.next_meet_at
-            ? new Date(trial.next_meet_at).toLocaleString('tr-TR')
-            : '-'
-        }</td>
-      </tr>
-    </table>
-
-    <div class="section-title">Teklif Edilen Cihazlar</div>
-    <table class="offer-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Marka</th>
-          <th>Model</th>
-          <th>Kulak</th>
-          <th>Liste Fiyatı</th>
-          <th>Teklif (Satır)</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${
-          deviceRowsHtml ||
-          '<tr><td colspan="6">Kayıtlı cihaz satırı bulunmuyor.</td></tr>'
-        }
-      </tbody>
-    </table>
-
-    ${deviceDetailsHtml}
-
-    <div class="notes">
-      Notlar:
-      <div class="notes-box">
-        <!-- Bu alan el ile doldurulabilir -->
-      </div>
-    </div>
-
-    <div class="signature-row">
-      <div class="signature-box">
-        <div>Hasta / Veli</div>
-        <div class="signature-line"></div>
-      </div>
-      <div class="signature-box">
-        <div>${companyName} Yetkilisi</div>
-        <div class="signature-line"></div>
-      </div>
-    </div>
-
-    <div class="footer">
-      <div class="footer-left">
-        ${
-          logoUrl
-            ? `<div class="logo-wrapper"><img src="${logoUrl}" alt="${companyName} logo" class="logo-img" /></div>`
-            : `<div class="logo-box">${logoInitials}</div>`
-        }
-        <div>
-          <div class="footer-name">${companyName}</div>
-          <div class="footer-meta">Yetkili İşitme Cihazı Satış ve Uygulama Merkezi</div>
-        </div>
-      </div>
-      <div class="footer-right">
-        <div>Telefon: ${companyPhone || '-'}</div>
-        <div>Adres: ${companyAddress || '-'}</div>
-        <div>Web: ${companyWebsite || '-'}</div>
-      </div>
-    </div>
-  </div>
-  <script>
-    window.onload = function () {
-      window.focus();
-      window.print();
-    };
-  </script>
-</body>
-</html>
-`;
-
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
+  return (
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      title="Deneme Detayı"
+      subtitle="Kişi bilgileri, deneme cihazları ve görüşme süreci"
+    >
+      {content}
+    </SideDrawer>
+  );
 }
