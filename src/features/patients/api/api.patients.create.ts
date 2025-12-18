@@ -1,6 +1,13 @@
 // src/features/patients/api/api.patients.create.ts
 // Summary: Create patient rows and attach optional financial/device drafts.
 //
+// Patch v2.12:
+// - CHANGE: createPatient no longer auto-saves saleBreakdownDraft.
+//   * patient_sale_breakdown rows are now managed only from the Payments tab
+//     via PatientDetailPaymentsTab + PatientSaleBreakdownCard.
+//   * This avoids duplicate "Ödeme dağılımı" lines and keeps patients.sale_total_amount
+//     as the single source of truth for total sales.
+//
 // Patch v2.11:
 // - CHANGE: Auto-create battery_prescription_deliveries when deviceFlowType is
 //   'battery_device' or 'battery_only' AND SGK is enabled AND at least one battery line has qty > 0.
@@ -346,7 +353,9 @@ export async function createPatient(
         legacyCreatedAt = iso;
         legacyInvoiceIssuedAt = iso;
       } else {
-        console.warn('LEGACY_SALE_DATE_INVALID: Unable to parse legacy sale date on createPatient', { raw });
+        console.warn('LEGACY_SALE_DATE_INVALID: Unable to parse legacy sale date on createPatient', {
+          raw,
+        });
       }
     }
   }
@@ -532,22 +541,13 @@ export async function createPatient(
   };
 
   // v2 chaining (best-effort)
+  // NOTE (v2.12): sale breakdown is NO LONGER auto-created here.
+  // patient_sale_breakdown rows are edited/saved exclusively from the Payments tab.
   const saleBreakdownDraft = input.saleBreakdownDraft ?? [];
   const installmentPlanDraft = input.installmentPlanDraft ?? null;
   const deviceDrafts = input.deviceDrafts ?? [];
   const chargerInventoryItemId = input.chargerInventoryItemId ?? null;
   const batteryLines = input.batteryLines ?? [];
-
-  if (saleBreakdownDraft.length > 0) {
-    try {
-      await savePatientSaleBreakdown({
-        patientId: inserted.id,
-        items: saleBreakdownDraft,
-      });
-    } catch (err) {
-      console.error('STEP_CHAIN_BREAKDOWN: Failed to save sale breakdown draft after patient insert', err);
-    }
-  }
 
   if (installmentPlanDraft) {
     try {
@@ -556,7 +556,10 @@ export async function createPatient(
         patientId: inserted.id,
       });
     } catch (err) {
-      console.error('STEP_CHAIN_PLAN: Failed to save installment plan draft after patient insert', err);
+      console.error(
+        'STEP_CHAIN_PLAN: Failed to save installment plan draft after patient insert',
+        err,
+      );
     }
   }
 
@@ -568,7 +571,10 @@ export async function createPatient(
         drafts: deviceDrafts,
       });
     } catch (err) {
-      console.error('STEP_CHAIN_DEVICE: Unexpected error while attaching device drafts after patient insert', err);
+      console.error(
+        'STEP_CHAIN_DEVICE: Unexpected error while attaching device drafts after patient insert',
+        err,
+      );
     }
   }
 
@@ -580,7 +586,10 @@ export async function createPatient(
         chargerInventoryItemId,
       });
     } catch (err) {
-      console.error('STEP_CHAIN_CHARGER: Unexpected error while attaching charger after patient insert', err);
+      console.error(
+        'STEP_CHAIN_CHARGER: Unexpected error while attaching charger after patient insert',
+        err,
+      );
     }
   }
 
