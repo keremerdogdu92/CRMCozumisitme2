@@ -1,5 +1,5 @@
 // src/pages/ReportsPage.tsx
-// Summary: CRM reporting page – wraps ReportsDashboard and enforces auth.
+// Summary: CRM reporting page – admin-only.
 
 import { ReportsDashboard } from '../features/reports/ReportsDashboard';
 import { useCurrentProfile } from '../features/auth/useCurrentProfile';
@@ -15,10 +15,11 @@ export default function ReportsPage() {
     );
   }
 
-  if (!profile) {
+  if (!profile || profile.role !== 'admin') {
     return (
       <div className="p-8 text-sm text-slate-500">
-        Sadece giriş yapmış kullanıcılar raporları görebilir.
+        Bu sayfa sadece yöneticilere özeldir. Raporlama araçları yalnızca yönetici
+        hesaplarına açıktır.
       </div>
     );
   }
