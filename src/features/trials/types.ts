@@ -17,12 +17,12 @@ export type TrialRow = {
  * Each row corresponds to a row in trial_devices on the backend.
  */
 export type TrialDeviceFormRow = {
-  rowKey: string; // local UI key, not persisted
-  side: string; // 'both' | 'left' | 'right' | ''
-  brand: string; // brand text
-  model: string; // model text
-  listPrice: string; // suggested list price (auto from catalog view, toplam)
-  quotePrice: string; // user-entered total offer for this device row
+  rowKey: string;      // local UI key, not persisted
+  side: string;        // 'both' | 'left' | 'right' | ''
+  brand: string;       // brand text
+  model: string;       // model text
+  listPrice: string;   // suggested list price (auto from catalog view, toplam)
+  quotePrice: string;  // user-entered total offer for this device row
 };
 
 export type NewTrialForm = {
@@ -30,7 +30,7 @@ export type NewTrialForm = {
   fullName: string;
   phone: string;
   firstMeetAt: string; // datetime-local string, can be empty
-  nextMeetAt: string; // datetime-local string, can be empty
+  nextMeetAt: string;  // datetime-local string, can be empty
 
   // Optional reference link (who sent this trial)
   referenceId?: string | null;
@@ -55,7 +55,8 @@ export type DeviceModelPriceRow = {
 };
 
 /**
- * trial_devices table row used in detail drawer + print sheet.
+ * trial_devices row enriched with catalog data via
+ * trial_devices_with_catalog_public view.
  */
 export type TrialDeviceRow = {
   id: string;
@@ -63,9 +64,12 @@ export type TrialDeviceRow = {
   brand: string | null;
   model: string | null;
   quote_price: number | null;
-  /**
-   * Optional list price from catalog (if available).
-   * Backend tarafında eklenirse, teklif çıktısında da gösterilir.
-   */
+
+  // From current_device_model_prices_public (via view)
   list_price?: number | null;
+  purchase_price?: number | null;
+  item_type?: string | null;
+  battery_type?: string | null;
+  details?: unknown | null;
+  notes?: string | null;
 };
