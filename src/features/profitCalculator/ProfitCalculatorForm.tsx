@@ -2,8 +2,9 @@
 // Summary: React UI composition for the Profitability Calculator.
 // Uses current_device_model_prices_public for device & charger prices.
 // State, side-effects, and calculation logic are delegated to useProfitCalculatorForm + ./logic.
-// v3: Card commission section now also shows net profit *after* card fee
-//     by treating the commission as an extra expense over the base result.
+// v4: Payment (cash/card) and installment selection live above the final result.
+//     Card commission is passed to ResultSection as an extra expense so you get
+//     a single unified profitability breakdown (no separate second summary).
 
 import React, { useMemo, useState } from "react";
 import { useProfitCalculatorForm } from "./hooks/useProfitCalculatorForm";
@@ -74,19 +75,6 @@ function formatCurrencyTry(amount: number | null): string {
   }
 }
 
-function formatPercent(value: number | null): string {
-  if (value == null || !Number.isFinite(value)) return "-";
-  try {
-    return value.toLocaleString("tr-TR", {
-      style: "percent",
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    });
-  } catch {
-    return `${(value * 100).toFixed(1)}%`;
-  }
-}
-
 type PaymentMethodForCommission = "" | "Nakit" | "Kredi_Kartı";
 
 export const ProfitCalculatorForm: React.FC = () => {
@@ -119,11 +107,11 @@ export const ProfitCalculatorForm: React.FC = () => {
   } = useProfitCalculatorForm();
 
   // -----------------------------
-  // Local state for card commission preview
-  // (now used to show net profit AFTER card fee as an extra expense)
+  // Local state for payment + card commission
+  // (affects the final profitability breakdown)
   // -----------------------------
   const [paymentMethodForCommission, setPaymentMethodForCommission] =
-    useState<PaymentMethodForCommission>("");
+    useState<PaymentMethodForCommission>("Nakit"); // default: Nakit
   const [selectedInstallment, setSelectedInstallment] = useState<string>("");
   const [cardFeeRate, setCardFeeRate] = useState<string>("");
 
@@ -152,56 +140,21 @@ export const ProfitCalculatorForm: React.FC = () => {
     }
   };
 
-  const {
-    feeAmount,
-    netAmount,
-    netProfitAfterCard,
-    profitOverCostAfterCard,
-    profitOverRevenueAfterCard,
-  } = useMemo(() => {
-    if (
-      !result ||
-      !result.valid ||
-      !result.salePrice ||
-      !isCard
-    ) {
-      return {
-        feeAmount: null,
-        netAmount: null,
-        netProfitAfterCard: null,
-        profitOverCostAfterCard: null,
-        profitOverRevenueAfterCard: null,
-      };
+  const { feeAmount, netAmount } = useMemo(() => {
+    if (!result || !result.valid || !result.salePrice || !isCard) {
+      return { feeAmount: null, netAmount: null };
     }
 
     const rate = parsePercentLike(cardFeeRate);
     if (rate == null || rate <= 0) {
-      return {
-        feeAmount: null,
-        netAmount: null,
-        netProfitAfterCard: null,
-        profitOverCostAfterCard: null,
-        profitOverRevenueAfterCard: null,
-      };
+      return { feeAmount: null, netAmount: null };
     }
 
     const sale = result.salePrice;
     const fee = Number((sale * (rate / 100)).toFixed(2));
     const net = Number((sale - fee).toFixed(2));
 
-    const netProfitAfter = result.netProfit - fee;
-    const pocAfter =
-      result.totalCost > 0 ? netProfitAfter / result.totalCost : null;
-    const porAfter =
-      sale > 0 ? netProfitAfter / sale : null;
-
-    return {
-      feeAmount: fee,
-      netAmount: net,
-      netProfitAfterCard: netProfitAfter,
-      profitOverCostAfterCard: pocAfter,
-      profitOverRevenueAfterCard: porAfter,
-    };
+    return { feeAmount: fee, netAmount: net };
   }, [result, cardFeeRate, isCard]);
 
   if (loading) {
@@ -246,18 +199,19 @@ export const ProfitCalculatorForm: React.FC = () => {
 
       <ModeSection inputs={inputs} onChange={handleChange} />
 
-      <ResultSection result={result} totalDeviceCost={totalDeviceCost} />
-
-      {/* Kart komisyonu + net kâr (komisyon dahil) bölümü */}
-      {result && result.salePrice > 0 && (
+      {/* Ödeme + kart komisyonu seçimi:
+          Bu alan, satış fiyatı hesaplandıktan sonra görünür ve
+          alttaki sonuç kutusunda kart komisyonunu ekstra gider olarak hesaba katar. */}
+      {result && result.valid && result.salePrice > 0 && (
         <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
           <p className="text-sm font-medium text-slate-800">
-            Ödeme ve Kart Komisyonu (kârlılığa etkisiyle birlikte)
+            4. Ödeme Şekli ve Kart Komisyonu
           </p>
           <p className="text-[11px] text-slate-600">
-            Hesaplanan satış fiyatı için ödeme şeklini ve taksit sayısını
-            seçerek kart komisyonunu görebilir, bu komisyonu gider olarak
-            düştükten sonra net kâr ve kâr oranlarını inceleyebilirsiniz.
+            Buradaki seçim, aşağıdaki kârlılık tablosunda dikkate alınır.
+            Nakit ödemede ekstra komisyon yoktur. Kredi kartı ve taksit
+            seçersen, kart komisyonu gider olarak düşülür ve net kâr buna
+            göre hesaplanır.
           </p>
 
           <div className="grid gap-2 md:grid-cols-4 md:items-end">
@@ -280,12 +234,11 @@ export const ProfitCalculatorForm: React.FC = () => {
                 <option value="Kredi_Kartı">Kredi Kartı</option>
               </select>
               <p className="mt-1 text-[11px] text-slate-500">
-                Buradaki seçim sadece bu analiz içindir; hasta kaydını
-                etkilemez.
+                Nakit seçiliyse kart komisyonu = 0 kabul edilir.
               </p>
             </div>
 
-            {/* Kart seçiliyse: taksit + komisyon */}
+            {/* Kart seçiliyse: taksit + oran + kısa özet */}
             {isCard && (
               <>
                 <div className="md:col-span-1">
@@ -312,7 +265,7 @@ export const ProfitCalculatorForm: React.FC = () => {
 
                 <div className="md:col-span-1">
                   <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                    Komisyon (%)
+                    Komisyon Oranı (%)
                   </label>
                   <input
                     type="text"
@@ -327,9 +280,9 @@ export const ProfitCalculatorForm: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="md:col-span-4 mt-2 space-y-1">
+                <div className="md:col-span-4 mt-2">
                   <p className="text-[11px] text-slate-600">
-                    Kart Komisyonu:{" "}
+                    Kart komisyonu:{" "}
                     <span className="font-semibold">
                       {formatCurrencyTry(feeAmount)}
                     </span>{" "}
@@ -337,32 +290,12 @@ export const ProfitCalculatorForm: React.FC = () => {
                     <span className="font-semibold">
                       {formatCurrencyTry(netAmount)}
                     </span>
+                    .
                   </p>
-
-                  <p className="text-[11px] text-slate-600">
-                    Kart komisyonu <span className="font-semibold">gider</span>{" "}
-                    olarak düşüldüğünde net kâr:{" "}
-                    <span className="font-semibold">
-                      {formatCurrencyTry(netProfitAfterCard)}
-                    </span>{" "}
-                    – Maliyet üzerinden kâr:{" "}
-                    <span className="font-semibold">
-                      {formatPercent(profitOverCostAfterCard)}
-                    </span>{" "}
-                    – Ciro üzerinden kâr:{" "}
-                    <span className="font-semibold">
-                      {formatPercent(profitOverRevenueAfterCard)}
-                    </span>
-                  </p>
-
                   <p className="text-[11px] text-slate-500">
-                    Baz satış fiyatı:{" "}
-                    <span className="font-semibold">
-                      {formatCurrencyTry(result.salePrice)}
-                    </span>
-                    . Kart komisyonu bu tutar üzerinden hesaplanır ve
-                    yukarıdaki kârlılık hesabındaki net kârın üzerine ek
-                    gider olarak yansıtılır.
+                    Aşağıdaki &quot;Net Kâr&quot; ve kâr oranları, bu
+                    kart komisyonu gider olarak düşüldükten sonra
+                    hesaplanır.
                   </p>
                 </div>
               </>
@@ -371,15 +304,22 @@ export const ProfitCalculatorForm: React.FC = () => {
             {!isCard && (
               <div className="md:col-span-3">
                 <p className="text-[11px] text-slate-500">
-                  Kart komisyonu analizi yalnızca &quot;Kredi Kartı&quot;
-                  seçiliyse ve yukarıda satış fiyatı hesaplanmışsa
-                  gösterilir. Nakit ödemede ekstra komisyon dikkate alınmaz.
+                  Nakit seçiliyken kart komisyonu alınmaz; aşağıdaki
+                  kârlılık tablosu doğrudan hesaplanan satış fiyatına göre
+                  gösterilir.
                 </p>
               </div>
             )}
           </div>
         </div>
       )}
+
+      {/* 5. Sonuç: tek bir döküm, kart komisyonu varsa ekstra gider olarak dahil */}
+      <ResultSection
+        result={result}
+        totalDeviceCost={totalDeviceCost}
+        cardFee={isCard ? feeAmount ?? 0 : 0}
+      />
     </div>
   );
 };
