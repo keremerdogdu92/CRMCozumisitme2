@@ -33,8 +33,8 @@ const PAYMENT_METHOD_LABELS: { value: PatientPaymentMethod; label: string }[] =
   [
     { value: 'Kredi_Kartı', label: 'Kredi Kartı' },
     { value: 'Nakit', label: 'Nakit' },
-    { value: 'Tim', label: 'Tim (Firma katkısı)' },
-    { value: 'Sivantos', label: 'Sivantos (Firma katkısı)' },
+    { value: 'Tim', label: 'Tim' },
+    { value: 'Sivantos', label: 'Sivantos' },
     { value: 'Senet', label: 'Senet' },
   ];
 
