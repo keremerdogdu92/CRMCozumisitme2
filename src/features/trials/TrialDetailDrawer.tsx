@@ -59,6 +59,7 @@ export function TrialDetailDrawer({
   onClose,
 }: TrialDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<TrialTabId>('summary');
+  const [includeDetailsForPrint, setIncludeDetailsForPrint] = useState<boolean>(true);
 
   // Org ayarları (logo, firma adı, iletişim bilgileri, watermark)
   const { data: orgSettings } = useOrgSettings();
@@ -104,6 +105,7 @@ export function TrialDetailDrawer({
   useEffect(() => {
     if (open) {
       setActiveTab('summary');
+      setIncludeDetailsForPrint(true);
     }
   }, [open, trialId]);
 
@@ -123,20 +125,16 @@ export function TrialDetailDrawer({
   const handlePrintOffer = () => {
     if (typedDevices.length === 0) return;
 
-    const includeDetails = window.confirm(
-      'Cihazların katalog özellikleri (liste fiyatı ve teknik detaylar) ile birlikte yazdırılsın mı?\n\n"Tamam" derseniz teknik detaylar da eklenecek, "İptal" derseniz sadece temel teklif tablosu yazdırılacak.',
-    );
-
     openTrialOfferPrint(trial, typedDevices, orgSettings ?? null, {
-      includeDeviceDetails: includeDetails,
+      includeDeviceDetails: includeDetailsForPrint,
     });
   };
 
   const content = (
     <div className="flex h-full flex-col">
-      {/* Tab bar + print button */}
+      {/* Tab bar + print controls */}
       <div className="border-b border-slate-200 px-3 pt-2">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex flex-wrap gap-1">
             {tabs.map((tab) => {
               const isActive = activeTab === tab.id;
@@ -158,25 +156,37 @@ export function TrialDetailDrawer({
             })}
           </div>
 
-          <button
-            type="button"
-            onClick={handlePrintOffer}
-            disabled={typedDevices.length === 0}
-            className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Teklif Yazdır
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            <label className="flex items-center gap-1 text-[11px] text-slate-600">
+              <input
+                type="checkbox"
+                className="h-3 w-3 rounded border-slate-300"
+                checked={includeDetailsForPrint}
+                onChange={(e) => setIncludeDetailsForPrint(e.target.checked)}
+              />
+              <span>Detaylı çıktı (katalog özellikleri)</span>
+            </label>
+
+            <button
+              type="button"
+              onClick={handlePrintOffer}
+              disabled={typedDevices.length === 0}
+              className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Teklif Yazdır
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Tab contents */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 text-sm">
+      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm">
         {activeTab === 'summary' && (
           <section className="space-y-2">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase">
+            <h4 className="text-xs font-semibold uppercase text-slate-500">
               Özet
             </h4>
-            <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 space-y-1">
+            <div className="space-y-1 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Ad Soyad</span>
                 <span className="text-xs font-medium text-slate-900">
@@ -231,7 +241,7 @@ export function TrialDetailDrawer({
 
         {activeTab === 'devices' && (
           <section className="space-y-2">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase">
+            <h4 className="text-xs font-semibold uppercase text-slate-500">
               Deneme Cihazları
             </h4>
 
@@ -315,7 +325,7 @@ export function TrialDetailDrawer({
 
         {activeTab === 'meetings' && (
           <section className="space-y-2">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase">
+            <h4 className="text-xs font-semibold uppercase text-slate-500">
               Görüşmeler
             </h4>
 
