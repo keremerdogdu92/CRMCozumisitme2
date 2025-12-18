@@ -3,7 +3,12 @@
 // and device brand/model pie chart.
 
 import { useMemo, useState } from 'react';
-import type { ReportsMonthFilter, ReportsKpis, MonthlyRevenuePoint, PieSlice } from './types';
+import type {
+  ReportsMonthFilter,
+  ReportsKpis,
+  MonthlyRevenuePoint,
+  PieSlice,
+} from './types';
 import { useReportsKpis } from './api';
 
 function getDefaultMonth(): string {
@@ -17,9 +22,7 @@ function getDefaultMonth(): string {
 export function ReportsDashboard() {
   const [filter, setFilter] = useState<ReportsMonthFilter>({ month: getDefaultMonth() });
 
-  const { data, isLoading, isError } = useReportsKpis(filter, {
-    keepPreviousData: true,
-  });
+  const { data, isLoading, isError } = useReportsKpis(filter);
 
   const kpis: ReportsKpis | null = data ?? null;
 
@@ -50,7 +53,8 @@ export function ReportsDashboard() {
         </div>
 
         <div className="ml-auto text-xs text-slate-500">
-          Seçili ay: <span className="font-semibold text-slate-700">{monthLabel}</span>
+          Seçili ay:{' '}
+          <span className="font-semibold text-slate-700">{monthLabel}</span>
         </div>
       </div>
 
@@ -176,11 +180,7 @@ export function ReportsDashboard() {
               </div>
             </div>
 
-            <KpiCard
-              title="Aylık ciro"
-              value={kpis.monthlyTurnover}
-              suffix="₺"
-            />
+            <KpiCard title="Aylık ciro" value={kpis.monthlyTurnover} suffix="₺" />
 
             <div className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-4">
               <div className="text-xs font-medium text-slate-500">
@@ -197,7 +197,9 @@ export function ReportsDashboard() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-500">Önümüzdeki 3 ay toplam</span>
+                  <span className="text-xs text-slate-500">
+                    Önümüzdeki 3 ay toplam
+                  </span>
                   <span className="font-semibold text-slate-900">
                     {formatMoney(kpis.sgkDueNextThreeMonths)} ₺
                   </span>
@@ -262,7 +264,9 @@ function KpiCard({ title, value, suffix, highlight }: KpiCardProps) {
         <span className={highlight ? 'text-slate-900' : 'text-slate-800'}>
           {formatMoney(value)}
         </span>
-        {suffix ? <span className="ml-1 text-sm font-normal text-slate-500">{suffix}</span> : null}
+        {suffix ? (
+          <span className="ml-1 text-sm font-normal text-slate-500">{suffix}</span>
+        ) : null}
       </div>
     </div>
   );
