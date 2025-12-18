@@ -1,17 +1,12 @@
 // src/features/reports/api.ts
 // Summary: React Query hook that fetches reporting KPIs from Supabase RPC.
 
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
 import type { ReportsKpis, ReportsMonthFilter } from './types';
 import { REPORTS_QUERY_KEYS } from './api.keys';
 
 type QueryKey = [typeof REPORTS_QUERY_KEYS.kpis, ReportsMonthFilter];
-
-type QueryOptions = Omit<
-  UseQueryOptions<ReportsKpis, unknown, ReportsKpis, QueryKey>,
-  'queryKey' | 'queryFn'
->;
 
 async function fetchReportsKpis(filter: ReportsMonthFilter): Promise<ReportsKpis> {
   const { month } = filter;
@@ -29,8 +24,6 @@ async function fetchReportsKpis(filter: ReportsMonthFilter): Promise<ReportsKpis
     throw error;
   }
 
-  // Backend'in her zaman dolu bir JSON döndüreceğini varsayıyoruz.
-  // Yine de typescript tarafında minimum güvenlik için fallback bırakıyoruz.
   const raw = (data as ReportsKpis | null) ?? {
     totalReceivables: 0,
     monthlyTaxAmount: 0,
@@ -50,11 +43,10 @@ async function fetchReportsKpis(filter: ReportsMonthFilter): Promise<ReportsKpis
   return raw;
 }
 
-export function useReportsKpis(filter: ReportsMonthFilter, options?: QueryOptions) {
+export function useReportsKpis(filter: ReportsMonthFilter) {
   return useQuery<ReportsKpis, unknown, ReportsKpis, QueryKey>({
     queryKey: [REPORTS_QUERY_KEYS.kpis, filter],
     queryFn: () => fetchReportsKpis(filter),
     staleTime: 1000 * 60 * 5,
-    ...options,
   });
 }
