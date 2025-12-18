@@ -176,7 +176,8 @@ export async function fetchDeviceModelsByBrand(
 }
 
 /**
- * Fetch trial_devices rows for a single trial.
+ * Fetch trial_devices rows for a single trial, enriched with
+ * catalog model data via trial_devices_with_catalog_public view.
  */
 export async function fetchTrialDevicesByTrialId(
   trialId: string,
@@ -186,8 +187,22 @@ export async function fetchTrialDevicesByTrialId(
   }
 
   const { data, error } = await supabaseClient
-    .from('trial_devices')
-    .select('id, side, brand, model, quote_price')
+    .from('trial_devices_with_catalog_public')
+    .select(
+      `
+      id,
+      side,
+      brand,
+      model,
+      quote_price,
+      list_price,
+      purchase_price,
+      item_type,
+      battery_type,
+      details,
+      notes
+    `,
+    )
     .eq('trial_id', trialId)
     .order('id', { ascending: true });
 
