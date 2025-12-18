@@ -19,6 +19,7 @@ import {
   MEETINGS_BY_TRIAL_QUERY_KEY,
   fetchMeetingsByTrialId,
 } from '../meetings/api';
+import { useOrgSettings } from '../settings/useOrgSettings';
 
 type TrialDetailDrawerProps = {
   trial: TrialRow | null;
@@ -56,6 +57,9 @@ export function TrialDetailDrawer({
   onClose,
 }: TrialDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<TrialTabId>('summary');
+
+  // Organization settings (firma adı, logo, watermark, iletişim)
+  const { data: orgSettings } = useOrgSettings();
 
   // Stabil key için trialId'yi yukarıda hesaplıyoruz
   const trialId = trial?.id ?? null;
@@ -116,7 +120,14 @@ export function TrialDetailDrawer({
 
   const handlePrintOffer = () => {
     if (typedDevices.length === 0) return;
-    openTrialOfferPrint(trial, typedDevices);
+
+    const includeDetails = window.confirm(
+      'Cihaz katalog detayları da (marka/model/kulak + fiyat bilgileri) teklife eklensin mi?\n\nÖnerilen: Evet için Onayla, sade teklif için İptal.',
+    );
+
+    openTrialOfferPrint(trial, typedDevices, orgSettings ?? undefined, {
+      includeDeviceDetails: includeDetails,
+    });
   };
 
   const content = (
@@ -223,7 +234,9 @@ export function TrialDetailDrawer({
             </h4>
 
             {isDevicesLoading && (
-              <p className="text-xs text-slate-500">Cihazlar yükleniyor...</p>
+              <p className="text-xs text-slate-500">
+                Cihazlar yükleniyor...
+              </p>
             )}
 
             {isDevicesError && (
@@ -322,8 +335,8 @@ export function TrialDetailDrawer({
                   </p>
                   <p className="text-[11px] text-slate-400">
                     Yeni görüşme eklemek için üst menüden{' '}
-                    <span className="font-semibold">Görüşmeler</span> ekranına
-                    gidip, görüşme tipi olarak{' '}
+                    <span className="font-semibold">Görüşmeler</span>{' '}
+                    ekranına gidip, görüşme tipi olarak{' '}
                     <span className="font-semibold">Deneme hastası</span>{' '}
                     seçerek ilgili kişiyi seçebilirsiniz.
                   </p>
