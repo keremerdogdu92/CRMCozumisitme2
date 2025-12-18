@@ -17,6 +17,25 @@ function toNumber(value: unknown): number {
 }
 
 /**
+ * Safely read a numeric field from an RPC row.
+ * Handles both camelCase (revenueTotal) and lowercase (revenuetotal)
+ * to be robust against PostgREST/SQL casing differences.
+ */
+function readNumberField(
+  row: Record<string, unknown> | null,
+  camelName: string,
+): number {
+  if (!row) return 0;
+  const lowerName = camelName.toLowerCase();
+  const value =
+    // Prefer exact camelCase key if it exists
+    Object.prototype.hasOwnProperty.call(row, camelName)
+      ? row[camelName]
+      : row[lowerName];
+  return toNumber(value);
+}
+
+/**
  * Fetch KPI aggregates for the given month window.
  * Uses Europe/Istanbul month window on the RPC side.
  */
@@ -34,21 +53,31 @@ export async function fetchDashboardKpis(
     );
   }
 
-  const firstRow = Array.isArray(data) ? data[0] : null;
+  const firstRow = (Array.isArray(data) ? data[0] : null) as
+    | Record<string, unknown>
+    | null;
+
   if (!firstRow) {
     throw new Error('DASHBOARD_KPIS_RPC_FAILED: RPC returned empty result');
   }
 
   return {
-    revenueTotal: toNumber(firstRow.revenueTotal),
-    sgkEnteredThisMonthTotal: toNumber(firstRow.sgkEnteredThisMonthTotal),
-    sgkDueThisMonthTotal: toNumber(firstRow.sgkDueThisMonthTotal),
-    devicesSoldCount: toNumber(firstRow.devicesSoldCount),
-    devicePatientsCount: toNumber(firstRow.devicePatientsCount),
-    cardFeeTotal: toNumber(firstRow.cardFeeTotal),
-    referenceCommissionTotal: toNumber(firstRow.referenceCommissionTotal),
-    unpaidInstallmentsDueThisMonth: toNumber(
-      firstRow.unpaidInstallmentsDueThisMonth,
+    revenueTotal: readNumberField(firstRow, 'revenueTotal'),
+    sgkEnteredThisMonthTotal: readNumberField(
+      firstRow,
+      'sgkEnteredThisMonthTotal',
+    ),
+    sgkDueThisMonthTotal: readNumberField(firstRow, 'sgkDueThisMonthTotal'),
+    devicesSoldCount: readNumberField(firstRow, 'devicesSoldCount'),
+    devicePatientsCount: readNumberField(firstRow, 'devicePatientsCount'),
+    cardFeeTotal: readNumberField(firstRow, 'cardFeeTotal'),
+    referenceCommissionTotal: readNumberField(
+      firstRow,
+      'referenceCommissionTotal',
+    ),
+    unpaidInstallmentsDueThisMonth: readNumberField(
+      firstRow,
+      'unpaidInstallmentsDueThisMonth',
     ),
   };
 }
