@@ -165,6 +165,7 @@ export const ProfitCalculatorForm: React.FC = () => {
     <div className="space-y-6 max-w-3xl">
       <h1 className="text-2xl font-semibold">Karlılık Hesaplama Aracı</h1>
 
+      {/* 1-3: Cihaz, referans, aksesuarlar */}
       <DeviceSection
         inputs={inputs}
         brandOptions={brandOptions}
@@ -197,21 +198,16 @@ export const ProfitCalculatorForm: React.FC = () => {
         onRemoveAccessoryRow={removeAccessoryRow}
       />
 
-      <ModeSection inputs={inputs} onChange={handleChange} />
-
-      {/* Ödeme + kart komisyonu seçimi:
-          Bu alan, satış fiyatı hesaplandıktan sonra görünür ve
-          alttaki sonuç kutusunda kart komisyonunu ekstra gider olarak hesaba katar. */}
+      {/* 4: Ödeme tipi + kart komisyonu */}
       {result && result.valid && result.salePrice > 0 && (
         <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
           <p className="text-sm font-medium text-slate-800">
             4. Ödeme Şekli ve Kart Komisyonu
           </p>
           <p className="text-[11px] text-slate-600">
-            Buradaki seçim, aşağıdaki kârlılık tablosunda dikkate alınır.
-            Nakit ödemede ekstra komisyon yoktur. Kredi kartı ve taksit
-            seçersen, kart komisyonu gider olarak düşülür ve net kâr buna
-            göre hesaplanır.
+            Önce ödeme şeklini ve (kredi kartıysa) taksit sayısını seç.
+            Kart komisyonu gider olarak kabul edilir ve aşağıdaki kârlılık
+            hesabında dikkate alınır.
           </p>
 
           <div className="grid gap-2 md:grid-cols-4 md:items-end">
@@ -314,7 +310,10 @@ export const ProfitCalculatorForm: React.FC = () => {
         </div>
       )}
 
-      {/* 5. Sonuç: tek bir döküm, kart komisyonu varsa ekstra gider olarak dahil */}
+      {/* 5: Hesaplama modu (fiyatı gir / hedefe göre hesapla) */}
+      <ModeSection inputs={inputs} onChange={handleChange} />
+
+      {/* 6: Sonuç – tek döküm, kart komisyonu varsa ekstra gider olarak dahil */}
       <ResultSection
         result={result}
         totalDeviceCost={totalDeviceCost}
