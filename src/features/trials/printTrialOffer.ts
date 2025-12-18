@@ -2,11 +2,16 @@
 // Helper for rendering and printing a trial hearing aid offer as an A4 page.
 
 import type { TrialRow, TrialDeviceRow } from './types';
+import type { OrgSettings } from '../settings/orgSettingsTypes';
 
 function formatPriceForPrint(amount: number | null | undefined): string {
-  if (amount == null || Number.isNaN(amount)) return '-';
+  if (amount == null || Number.isNaN(amount as number)) return '-';
   try {
-    return amount.toLocaleString('tr-TR', {
+    // toLocaleString string'e de çağrılabilir ama currency formatı için
+    // sayıya dönüştürmeyi tercih ediyoruz.
+    const n = typeof amount === 'number' ? amount : Number(amount);
+    if (!Number.isFinite(n)) return `${amount}`;
+    return n.toLocaleString('tr-TR', {
       style: 'currency',
       currency: 'TRY',
       minimumFractionDigits: 2,
@@ -16,9 +21,49 @@ function formatPriceForPrint(amount: number | null | undefined): string {
   }
 }
 
-export function openTrialOfferPrint(trial: TrialRow, devices: TrialDeviceRow[]): void {
+function getInitials(name: string | null | undefined): string {
+  if (!name) return '';
+  const parts = name
+    .split(' ')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) {
+    return parts[0].charAt(0).toUpperCase();
+  }
+  return (
+    parts[0].charAt(0).toUpperCase() +
+    parts[parts.length - 1].charAt(0).toUpperCase()
+  );
+}
+
+type PrintOptions = {
+  includeDeviceDetails?: boolean;
+};
+
+export function openTrialOfferPrint(
+  trial: TrialRow,
+  devices: TrialDeviceRow[],
+  orgSettings?: OrgSettings | null,
+  options?: PrintOptions,
+): void {
   const printWindow = window.open('', '_blank', 'width=800,height=1000');
   if (!printWindow) return;
+
+  const includeDetails = options?.includeDeviceDetails ?? true;
+
+  const companyName =
+    orgSettings?.companyName ?? 'Çözüm İşitme Merkezi';
+  const companyTagline =
+    orgSettings?.companyTagline ?? 'İşitme Cihazları ve İşitme Sağlığı';
+  const companyPhone = orgSettings?.phone ?? '0 (xxx) xxx xx xx';
+  const companyAddress =
+    orgSettings?.address ?? 'Adres bilgisi buraya gelecek';
+  const companyWebsite = orgSettings?.website ?? 'www.ornek-site.com';
+  const watermarkText =
+    orgSettings?.offerWatermark ?? 'İşitme Cihazı Teklifi';
+  const logoUrl = orgSettings?.logoUrl ?? null;
+  const logoInitials = getInitials(companyName) || 'İÇ';
 
   const deviceRowsHtml = devices
     .map((d, index) => {
@@ -28,11 +73,87 @@ export function openTrialOfferPrint(trial: TrialRow, devices: TrialDeviceRow[]):
           <td>${d.brand ?? ''}</td>
           <td>${d.model ?? ''}</td>
           <td>${d.side ?? ''}</td>
-          <td style="text-align:right;">${formatPriceForPrint(d.quote_price)}</td>
+          <td style="text-align:right;">${formatPriceForPrint(
+            d.list_price ?? null,
+          )}</td>
+          <td style="text-align:right;">${formatPriceForPrint(
+            d.quote_price,
+          )}</td>
         </tr>
       `;
     })
     .join('');
+
+  let deviceDetailsHtml = '';
+
+  if (includeDetails && devices.length > 0) {
+    const detailBlocks = devices
+      .map((d, idx) => {
+        const listPriceText = formatPriceForPrint(d.list_price ?? null);
+        const quotePriceText = formatPriceForPrint(d.quote_price);
+
+        const extraLines: string[] = [];
+
+        if (d.item_type) {
+          extraLines.push(
+            `<div><span class="label">Tip:</span> ${d.item_type}</div>`,
+          );
+        }
+
+        if (d.battery_type) {
+          extraLines.push(
+            `<div><span class="label">Pil Tipi:</span> ${d.battery_type}</div>`,
+          );
+        }
+
+        if (d.details) {
+          const rawDetails = String(d.details);
+          const compactDetails = rawDetails
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .join(' • ');
+          if (compactDetails) {
+            extraLines.push(
+              `<div><span class="label">Teknik Özellikler:</span> ${compactDetails}</div>`,
+            );
+          }
+        }
+
+        if (d.notes) {
+          extraLines.push(
+            `<div><span class="label">Not:</span> ${d.notes}</div>`,
+          );
+        }
+
+        return `
+          <div class="device-detail-block">
+            <div class="device-detail-header">
+              <span class="device-detail-index">${idx + 1}.</span>
+              <span class="device-detail-title">${
+                d.brand ?? '-'
+              } ${d.model ?? ''}</span>
+            </div>
+            <div class="device-detail-body">
+              <div><span class="label">Kulak:</span> ${
+                d.side ?? '-'
+              }</div>
+              <div><span class="label">Liste Fiyatı:</span> ${listPriceText}</div>
+              <div><span class="label">Teklif Edilen Fiyat:</span> ${quotePriceText}</div>
+              ${extraLines.join('')}
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+
+    deviceDetailsHtml = `
+      <div class="section-title">Cihaz Detayları</div>
+      <div class="device-details-wrapper">
+        ${detailBlocks}
+      </div>
+    `;
+  }
 
   const now = new Date();
   const issueDate = now.toLocaleDateString('tr-TR');
@@ -40,6 +161,10 @@ export function openTrialOfferPrint(trial: TrialRow, devices: TrialDeviceRow[]):
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  const logoHtml = logoUrl
+    ? `<div class="logo-wrapper"><img src="${logoUrl}" alt="${companyName} logo" class="logo-img" /></div>`
+    : `<div class="logo-box">${logoInitials}</div>`;
 
   const html = `
 <!doctype html>
@@ -100,6 +225,22 @@ export function openTrialOfferPrint(trial: TrialRow, devices: TrialDeviceRow[]):
       justify-content: center;
       font-weight: 600;
       font-size: 14px;
+    }
+    .logo-wrapper {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+    }
+    .logo-img {
+      max-width: 100%;
+      max-height: 100%;
+      display: block;
     }
     .company-name {
       font-size: 13px;
@@ -207,17 +348,48 @@ export function openTrialOfferPrint(trial: TrialRow, devices: TrialDeviceRow[]):
       text-align: right;
       line-height: 1.4;
     }
+    .device-details-wrapper {
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 8px;
+      margin-top: 4px;
+      font-size: 11px;
+    }
+    .device-detail-block + .device-detail-block {
+      border-top: 1px dashed #e5e7eb;
+      margin-top: 6px;
+      padding-top: 6px;
+    }
+    .device-detail-header {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 2px;
+    }
+    .device-detail-index {
+      font-weight: 600;
+      color: #4b5563;
+    }
+    .device-detail-title {
+      font-weight: 600;
+      color: #111827;
+    }
+    .device-detail-body .label {
+      color: #6b7280;
+      font-weight: 500;
+      margin-right: 4px;
+    }
   </style>
 </head>
 <body>
-  <div class="watermark">Çözüm İşitme Merkezi</div>
+  <div class="watermark">${watermarkText}</div>
   <div class="page">
     <div class="header">
       <div class="company">
-        <div class="logo-box">Çİ</div>
+        ${logoHtml}
         <div>
-          <div class="company-name">Çözüm İşitme Merkezi</div>
-          <div class="company-subtitle">İşitme Cihazları ve İşitme Sağlığı</div>
+          <div class="company-name">${companyName}</div>
+          <div class="company-subtitle">${companyTagline}</div>
         </div>
       </div>
       <div class="title-block">
@@ -264,13 +436,19 @@ export function openTrialOfferPrint(trial: TrialRow, devices: TrialDeviceRow[]):
           <th>Marka</th>
           <th>Model</th>
           <th>Kulak</th>
+          <th>Liste Fiyatı</th>
           <th>Teklif (Satır)</th>
         </tr>
       </thead>
       <tbody>
-        ${deviceRowsHtml || '<tr><td colspan="5">Kayıtlı cihaz satırı bulunmuyor.</td></tr>'}
+        ${
+          deviceRowsHtml ||
+          '<tr><td colspan="6">Kayıtlı cihaz satırı bulunmuyor.</td></tr>'
+        }
       </tbody>
     </table>
+
+    ${deviceDetailsHtml}
 
     <div class="notes">
       Notlar:
@@ -285,23 +463,27 @@ export function openTrialOfferPrint(trial: TrialRow, devices: TrialDeviceRow[]):
         <div class="signature-line"></div>
       </div>
       <div class="signature-box">
-        <div>Çözüm İşitme Yetkilisi</div>
+        <div>${companyName} Yetkilisi</div>
         <div class="signature-line"></div>
       </div>
     </div>
 
     <div class="footer">
       <div class="footer-left">
-        <div class="logo-box">Çİ</div>
+        ${
+          logoUrl
+            ? `<div class="logo-wrapper"><img src="${logoUrl}" alt="${companyName} logo" class="logo-img" /></div>`
+            : `<div class="logo-box">${logoInitials}</div>`
+        }
         <div>
-          <div class="footer-name">Çözüm İşitme Merkezi</div>
+          <div class="footer-name">${companyName}</div>
           <div class="footer-meta">Yetkili İşitme Cihazı Satış ve Uygulama Merkezi</div>
         </div>
       </div>
       <div class="footer-right">
-        <div>Telefon: 0 (xxx) xxx xx xx</div>
-        <div>Adres: Adres bilgisi buraya gelecek</div>
-        <div>Web: www.ornek-site.com</div>
+        <div>Telefon: ${companyPhone || '-'}</div>
+        <div>Adres: ${companyAddress || '-'}</div>
+        <div>Web: ${companyWebsite || '-'}</div>
       </div>
     </div>
   </div>
