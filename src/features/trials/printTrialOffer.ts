@@ -116,7 +116,6 @@ export function openTrialOfferPrint(
         const quotePriceText = formatPriceForPrint(d.quote_price);
         const technicalDetails =
           (d as any).details ?? (d as any).technical_details ?? null;
-        const itemType = (d as any).item_type ?? null;
         const batteryType = (d as any).battery_type ?? null;
 
         return `
@@ -131,11 +130,6 @@ export function openTrialOfferPrint(
               <div><span class="label">Kulak:</span> ${sideLabel}</div>
               <div><span class="label">Liste Fiyatı:</span> ${listPriceText}</div>
               <div><span class="label">Teklif Edilen Fiyat:</span> ${quotePriceText}</div>
-              ${
-                itemType
-                  ? `<div><span class="label">Tip:</span> ${itemType}</div>`
-                  : ''
-              }
               ${
                 batteryType
                   ? `<div><span class="label">Pil Türü:</span> ${batteryType}</div>`
