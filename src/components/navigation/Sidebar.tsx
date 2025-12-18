@@ -1,5 +1,6 @@
 // src/components/navigation/Sidebar.tsx
 // Navigation sidebar for desktop and mobile, including a Settings entry.
+
 import { NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import {
@@ -13,6 +14,7 @@ import {
   Settings,
   Users,
   X,
+  BarChart3,
 } from 'lucide-react';
 import { useCurrentProfile } from '../../features/auth/useCurrentProfile';
 
@@ -48,6 +50,11 @@ const NAV_ITEMS: NavItem[] = [
     icon: <Calculator className="h-5 w-5" />,
   },
   {
+    path: '/reports',
+    label: 'Raporlar',
+    icon: <BarChart3 className="h-5 w-5" />,
+  },
+  {
     path: '/settings',
     label: 'Ayarlar',
     icon: <Settings className="h-5 w-5" />,
@@ -62,8 +69,13 @@ function SidebarNav({
   isAdmin: boolean;
 }) {
   const itemsToRender = NAV_ITEMS.filter((item) => {
-    // Hide References and Profit Calculator for non-admin users
-    if (!isAdmin && (item.path === '/references' || item.path === '/profit-calculator')) {
+    // Hide References, Profit Calculator and Reports for non-admin users
+    if (
+      !isAdmin &&
+      (item.path === '/references' ||
+        item.path === '/profit-calculator' ||
+        item.path === '/reports')
+    ) {
       return false;
     }
     return true;
