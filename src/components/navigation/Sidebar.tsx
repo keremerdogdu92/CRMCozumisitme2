@@ -5,6 +5,7 @@ import { NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import {
   Activity,
+  BarChart3,
   BookUser,
   Boxes,
   CalendarClock,
@@ -14,7 +15,6 @@ import {
   Settings,
   Users,
   X,
-  BarChart3,
 } from 'lucide-react';
 import { useCurrentProfile } from '../../features/auth/useCurrentProfile';
 
@@ -148,7 +148,7 @@ export function SidebarMobile({ open, onClose }: SidebarMobileProps) {
       />
 
       <aside className="relative z-50 flex w-64 flex-col border-r border-slate-200 bg-white shadow-lg">
-        <div className="flex items-center justify_between border-b border-slate-200 px-4 py-3">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-500 text-sm font-semibold text-white">
               Ç
