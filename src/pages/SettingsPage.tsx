@@ -1,7 +1,7 @@
 // src/pages/SettingsPage.tsx
 // Settings page that hosts data import tools for patients (v2),
-// legacy devices, import fix center, inventory stock imports
-// and device catalog price imports.
+// legacy devices, import fix center, inventory stock imports,
+// device catalog price imports and organization-level offer settings.
 
 import { useState } from 'react';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -11,24 +11,29 @@ import { LegacyDevicesImportSection } from '../features/patients/components/impo
 import { ImportFixCenterSection } from '../features/patients/import/ImportFixCenterSection';
 import { InventoryImportCard } from '../features/inventory/InventoryImportCard';
 import { DeviceCatalogImportCard } from '../features/inventory/deviceCatalog/DeviceCatalogImportCard';
+import { OrgSettingsCard } from '../features/settings/OrgSettingsCard';
 
 export default function SettingsPage() {
   // Inventory import kartını default açık yapıyoruz
   const [inventoryImportOpen, setInventoryImportOpen] = useState(true);
   // Device catalog import kartı: varsayılan kapalı (isteğe göre açılır)
-  const [deviceCatalogImportOpen, setDeviceCatalogImportOpen] = useState(false);
+  const [deviceCatalogImportOpen, setDeviceCatalogImportOpen] =
+    useState(false);
 
   return (
     <PageLayout
       header={
         <PageHeader
           title="Ayarlar"
-          subtitle="Veri import araçlarını ve diğer operasyonel araçları yönetin."
+          subtitle="Veri import araçlarını, organizasyon bilgilerini ve diğer operasyonel araçları yönetin."
         />
       }
       maxWidth="xl"
     >
       <div className="space-y-4">
+        {/* Organization / Offer Settings */}
+        <OrgSettingsCard />
+
         {/* Patients import (v2) */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -52,8 +57,8 @@ export default function SettingsPage() {
                 Legacy Patient Devices Import
               </h3>
               <p className="mt-1 text-xs text-slate-600">
-                Upload legacy patient-device CSV to stage eski hasta cihazları
-                and link them to existing patients.
+                Upload legacy patient-device CSV to stage eski hasta
+                cihazları and link them to existing patients.
               </p>
             </div>
           </div>
@@ -103,8 +108,9 @@ export default function SettingsPage() {
               </h3>
               <p className="mt-1 text-xs text-slate-600">
                 Upload CSV files to update device catalog purchase/list prices
-                for profit calculator and trial flows. Inventory stok kayıtlarını
-                etkilemez, sadece cihaz model kataloğunu günceller.
+                for profit calculator and trial flows. Inventory stok
+                kayıtlarını etkilemez, sadece cihaz model kataloğunu
+                günceller.
               </p>
             </div>
           </div>
