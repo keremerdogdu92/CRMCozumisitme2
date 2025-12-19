@@ -8,6 +8,7 @@ import {
   DeviceModelPriceRow,
   DevicePriceInfo,
   ReferenceOption,
+  ReferenceScheme,
 } from './types';
 
 // Supabase view / table names
@@ -127,7 +128,7 @@ export async function fetchEffectiveDeviceCost(
     return { deviceCost: null, listPrice: null };
   }
 
-  const row = (data[0] as any) as DeviceModelPriceRow;
+  const row = data[0] as DeviceModelPriceRow;
 
   const deviceCost =
     row.purchase_price != null ? Number(row.purchase_price) : null;
@@ -139,13 +140,14 @@ export async function fetchEffectiveDeviceCost(
 
 /**
  * Referans listesi:
- * Şu an sadece references tablosundan id + full_name çekiyoruz.
- * Komisyon şeması DB'de yok; kullanıcı ekranda manuel seçiyor.
+ * references tablosundan id + full_name yanında komisyon şemasını da çeker.
+ * Eğer commission_scheme + ilgili alan doluysa, kar hesaplama formu
+ * bu değerleri otomatik olarak kullanabilir.
  */
 export async function fetchReferenceOptions(): Promise<ReferenceOption[]> {
   const { data, error } = await supabaseClient
     .from(REFERENCES_TABLE)
-    .select('id, full_name')
+    .select('id, full_name, commission_scheme, commission_percent, commission_fixed')
     .order('full_name', { ascending: true });
 
   if (error) {
@@ -153,11 +155,25 @@ export async function fetchReferenceOptions(): Promise<ReferenceOption[]> {
     throw error;
   }
 
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    name: row.full_name ?? '',
-    scheme: null,
-    default_percent: null,
-    default_fixed: null,
-  }));
+  return (data ?? []).map((row: any) => {
+    const scheme = (row.commission_scheme ?? null) as ReferenceScheme | null;
+
+    const percent =
+      row.commission_percent !== null && row.commission_percent !== undefined
+        ? Number(row.commission_percent)
+        : null;
+
+    const fixed =
+      row.commission_fixed !== null && row.commission_fixed !== undefined
+        ? Number(row.commission_fixed)
+        : null;
+
+    return {
+      id: row.id as string,
+      name: (row.full_name ?? '') as string,
+      scheme,
+      default_percent: percent,
+      default_fixed: fixed,
+    } satisfies ReferenceOption;
+  });
 }
