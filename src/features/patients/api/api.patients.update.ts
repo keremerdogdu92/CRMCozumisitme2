@@ -7,16 +7,6 @@ import { parseMoneyToNumber } from './api.core';
 
 /**
  * Update SGK-related fields for a given patient.
- *
- * Behavior:
- * - sgk_flag false ise:
- *   * sgk_prescription_received = false
- *   * sgk_recorded_to_system = false
- *   * sgk_recorded_to_system_at = NULL
- * - sgk_flag true ve sgkRecordedToSystem true ise:
- *   * sgk_recorded_to_system_at = now()
- * - sgk_flag true ve sgkRecordedToSystem false ise:
- *   * sgk_recorded_to_system_at = NULL
  */
 export async function updatePatientSgkFields(
   params: PatientSgkUpdateInput,
@@ -29,18 +19,12 @@ export async function updatePatientSgkFields(
     sgkPrescriptionNo,
   } = params;
 
-  const nextRecordedToSystemAt =
-    sgkFlag && sgkRecordedToSystem ? new Date().toISOString() : null;
-
   const { error } = await supabaseClient
     .from('patients')
     .update({
       sgk_flag: sgkFlag,
-      sgk_prescription_received: sgkFlag
-        ? sgkPrescriptionReceived
-        : false,
+      sgk_prescription_received: sgkFlag ? sgkPrescriptionReceived : false,
       sgk_recorded_to_system: sgkFlag ? sgkRecordedToSystem : false,
-      sgk_recorded_to_system_at: nextRecordedToSystemAt,
       sgk_prescription_no: sgkPrescriptionNo.trim() || null,
     })
     .eq('id', id);
@@ -51,6 +35,75 @@ export async function updatePatientSgkFields(
       error,
     );
     throw new Error('STEP_UPDATE_SGK: ' + error.message);
+  }
+}
+
+/**
+ * Update SGK profile-based reimbursement info for a given patient.
+ * Used from the SGK tab "Düzenle" bölümü.
+ *
+ * - sgkProfileId: SGK profil kodu (ör: 'SGK_YETISKIN_EMEKLI'), boşsa NULL.
+ * - sgkExpectedReimbursement: TR formatında toplam beklenen ödeme (örn: "8.478,40"),
+ *   boşsa NULL.
+ * - sgkExpectedMonth: "yyyy-MM" formatında beklenen ödeme ayı, boşsa NULL.
+ */
+export async function updatePatientSgkProfileInfo(params: {
+  id: string;
+  sgkProfileId: string | null;
+  sgkExpectedReimbursement: string | null;
+  sgkExpectedMonth: string | null;
+}): Promise<void> {
+  const { id, sgkProfileId, sgkExpectedReimbursement, sgkExpectedMonth } = params;
+
+  const updatePayload: Record<string, unknown> = {};
+
+  // sgk_profile
+  if (typeof sgkProfileId !== 'undefined') {
+    const trimmed = sgkProfileId ? sgkProfileId.trim() : '';
+    updatePayload.sgk_profile = trimmed.length > 0 ? trimmed : null;
+  }
+
+  // sgk_expected_reimbursement
+  if (typeof sgkExpectedReimbursement !== 'undefined') {
+    const raw = sgkExpectedReimbursement ?? '';
+    if (!raw.trim()) {
+      updatePayload.sgk_expected_reimbursement = null;
+    } else {
+      updatePayload.sgk_expected_reimbursement = parseMoneyToNumber(
+        raw,
+        'SGK_EXPECTED_REIMBURSEMENT',
+      );
+    }
+  }
+
+  // sgk_expected_reimbursement_month
+  if (typeof sgkExpectedMonth !== 'undefined') {
+    const raw = sgkExpectedMonth ?? '';
+    if (!raw.trim()) {
+      updatePayload.sgk_expected_reimbursement_month = null;
+    } else {
+      const [yearStr, monthStr] = raw.split('-');
+      const year = Number(yearStr);
+      const month = Number(monthStr);
+      if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+        throw new Error('SGK_EXPECTED_MONTH: Geçerli bir ay seçin (yyyy-AA).');
+      }
+      const date = new Date(Date.UTC(year, month - 1, 15));
+      updatePayload.sgk_expected_reimbursement_month = date.toISOString().slice(0, 10);
+    }
+  }
+
+  const { error } = await supabaseClient
+    .from('patients')
+    .update(updatePayload)
+    .eq('id', id);
+
+  if (error) {
+    console.error(
+      'Failed to update patient SGK profile info (STEP_UPDATE_SGK_PROFILE):',
+      error,
+    );
+    throw new Error('STEP_UPDATE_SGK_PROFILE: ' + error.message);
   }
 }
 
