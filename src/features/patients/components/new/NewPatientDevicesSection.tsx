@@ -10,7 +10,14 @@
 // - Brand options now also include any prefilled deviceDraft brand values (even if not in inventory).
 // - Model options per row now also include that row's prefilled model (from trial), so the select
 //   shows the correct value even when the model name doesn't exactly match inventory strings.
+//
+// Patch v3.1 (trial brand/model normalization):
+// - When deviceDrafts come prefilled from trial, brand/model values are normalized against
+//   available inventory (case/whitespace-insensitive) in a useEffect.
+// - If a matching inventory brand/model is found, the draft is updated to use that canonical
+//   label, preventing visually duplicated options and allowing serial-no dropdown to work.
 
+import { useEffect } from 'react';
 import type {
   BatteryLineDraft,
   NewPatientDeviceDraft,
@@ -84,6 +91,20 @@ function createEmptyBatteryLine(): BatteryLineDraft {
   };
 }
 
+/**
+ * Normalizes brand/model names for comparison:
+ * - trims
+ * - collapses internal whitespace
+ * - uppercases (TR locale) so "Widex", "WIDEX" vb. aynı kabul edilir.
+ */
+function normalizeName(value: string | null | undefined): string {
+  if (!value) return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const collapsed = trimmed.replace(/\s+/g, ' ');
+  return collapsed.toLocaleUpperCase('tr-TR');
+}
+
 export function NewPatientDevicesSection({
   deviceFlowType,
   onChangeDeviceFlowType,
@@ -111,6 +132,47 @@ export function NewPatientDevicesSection({
     (row) => row.item_type === 'charger',
   );
 
+  // Trial'dan gelen deviceDraft brand/model değerlerini, stoktaki
+  // brand/model stringleriyle normalize ederek eşler.
+  // Eşleşme bulunursa ilgili satırın brand/model alanını stoktaki
+  // kanonik değerle güncelleriz. Böylece:
+  // - Dropdown'da aynı görünen iki model yerine tek model olur.
+  // - Seri no filtresi (brand+model eşitliği) doğru çalışır.
+  useEffect(() => {
+    if (!availableDeviceInventory.length || !items.length) return;
+
+    items.forEach((item, index) => {
+      const normalizedBrand = normalizeName(item.brand);
+      const normalizedModel = normalizeName(item.model);
+
+      // Marka eşleme (case/whitespace insensitive)
+      if (normalizedBrand) {
+        const brandCandidate = availableDeviceInventory.find(
+          (row) => normalizeName(row.brand) === normalizedBrand,
+        );
+
+        if (brandCandidate && brandCandidate.brand !== item.brand) {
+          onChangeRow(index, { brand: brandCandidate.brand });
+        }
+      }
+
+      // Model eşleme (marka da varsa aynı marka içinde aramaya çalış)
+      if (normalizedModel) {
+        const modelCandidate = availableDeviceInventory.find((row) => {
+          const rowBrandNorm = normalizeName(row.brand);
+          const rowModelNorm = normalizeName(row.model);
+          const brandMatches =
+            !normalizedBrand || rowBrandNorm === normalizedBrand;
+          return brandMatches && rowModelNorm === normalizedModel;
+        });
+
+        if (modelCandidate && modelCandidate.model !== item.model) {
+          onChangeRow(index, { model: modelCandidate.model });
+        }
+      }
+    });
+  }, [availableDeviceInventory, items, onChangeRow]);
+
   // Unique marka listesi (devices only) + trial'dan gelen marka değerleri
   const brandOptions = Array.from(
     new Set(
@@ -136,9 +198,7 @@ export function NewPatientDevicesSection({
 
   const updateBatteryLine = (index: number, patch: Partial<BatteryLineDraft>) => {
     onChangeBatteryLines(
-      (batteryLines ?? []).map((l, i) =>
-        i === index ? { ...l, ...patch } : l,
-      ),
+      (batteryLines ?? []).map((l, i) => (i === index ? { ...l, ...patch } : l)),
     );
   };
 
@@ -177,9 +237,7 @@ export function NewPatientDevicesSection({
         <select
           value={deviceFlowType}
           onChange={(e) =>
-            onChangeDeviceFlowType(
-              e.target.value as NewPatientDeviceFlowType,
-            )
+            onChangeDeviceFlowType(e.target.value as NewPatientDeviceFlowType)
           }
           className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         >
