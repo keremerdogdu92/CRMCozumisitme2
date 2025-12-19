@@ -256,7 +256,10 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
     .maybeSingle();
 
   if (profileError) {
-    console.error('Failed to load profile for org_id (TRIAL_STEP_PROFILE):', profileError);
+    console.error(
+      'Failed to load profile for org_id (TRIAL_STEP_PROFILE):',
+      profileError,
+    );
     throw new Error('TRIAL_STEP_PROFILE: ' + profileError.message);
   }
 
@@ -315,5 +318,42 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
       deviceInsertError,
     );
     throw new Error('TRIAL_STEP_DEVICE_INSERT: ' + deviceInsertError.message);
+  }
+}
+
+/**
+ * RPC wrapper: link a trial to a newly created patient and then delete the trial.
+ *
+ * Server-side logic:
+ * - Checks org isolation (caller org, trial org, patient org).
+ * - Moves meetings.trial_id → meetings.patient_id and sets meeting_type = 'patient'.
+ * - Deletes the trial row.
+ */
+export async function linkTrialToPatientAndDelete(
+  trialId: string,
+  patientId: string,
+): Promise<void> {
+  if (!trialId || !patientId) {
+    throw new Error(
+      'TRIAL_LINK_INVALID_IDS: trialId and patientId are required for linking.',
+    );
+  }
+
+  const { error } = await supabaseClient.rpc(
+    'link_trial_to_patient_and_delete',
+    {
+      p_trial_id: trialId,
+      p_patient_id: patientId,
+    },
+  );
+
+  if (error) {
+    console.error(
+      'Supabase link_trial_to_patient_and_delete RPC error:',
+      error,
+    );
+    throw new Error(
+      `TRIAL_LINK_RPC_FAILED: ${error.message ?? 'Unknown Supabase RPC error'}`,
+    );
   }
 }
