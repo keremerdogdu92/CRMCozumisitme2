@@ -1,5 +1,13 @@
 // src/features/trials/TrialDetailDrawer.tsx
 // Read-only detail drawer for a trial, with tabs and printable offer sheet.
+//
+// Patch v2.0 (trial → patient device selection):
+// - "Hastaya dönüştür" butonu artık direkt navigate etmiyor; önce seçim modali açılıyor.
+// - Modalda kullanıcı, denemedeki cihaz satırlarından hangilerini hasta formuna
+//   taşımak istediğini işaretleyebiliyor.
+// - side === 'both' / 'bilateral' olan satırlar, hasta formunda iki ayrı satıra
+//   bölünüyor: sağ (right) + sol (left).
+// - Aynı deneme altında birden fazla çift/tek teklif senaryosu destekleniyor.
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -54,6 +62,28 @@ function formatDate(value: string | null): string {
   }
 }
 
+/**
+ * Trial cihaz satırında marka/model dolu mu kontrolü.
+ * Boş satırlar hasta formuna taşınmaz.
+ */
+function hasBrandOrModel(d: TrialDeviceRow): boolean {
+  const brand = d.brand?.trim() ?? '';
+  const model = d.model?.trim() ?? '';
+  return brand.length > 0 || model.length > 0;
+}
+
+/**
+ * Trial'daki side değerini normalize eder.
+ * - 'both' / 'bilateral' özel olarak kullanılır (split için).
+ * - Diğerleri küçük harfe çekilir.
+ */
+function normalizeTrialSide(raw: string | null): string {
+  const s = (raw ?? '').trim().toLowerCase();
+  if (s === 'both' || s === 'bilateral') return 'both';
+  if (s === 'right' || s === 'left') return s;
+  return '';
+}
+
 export function TrialDetailDrawer({
   trial,
   open,
@@ -63,6 +93,10 @@ export function TrialDetailDrawer({
   const [activeTab, setActiveTab] = useState<TrialTabId>('summary');
   const [includeDetailsForPrint, setIncludeDetailsForPrint] =
     useState<boolean>(true);
+
+  // "Hastaya dönüştür" seçim modali state'i
+  const [convertModalOpen, setConvertModalOpen] = useState(false);
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
 
   // Org ayarları (logo, firma adı, iletişim bilgileri, watermark)
   const { data: orgSettings } = useOrgSettings();
@@ -109,6 +143,8 @@ export function TrialDetailDrawer({
     if (open) {
       setActiveTab('summary');
       setIncludeDetailsForPrint(true);
+      setConvertModalOpen(false);
+      setSelectedDeviceIds([]);
     }
   }, [open, trialId]);
 
@@ -133,7 +169,59 @@ export function TrialDetailDrawer({
     });
   };
 
-  const handleConvertToPatient = () => {
+  /**
+   * "Hastaya dönüştür" modali aç.
+   * Varsayılan olarak marka/model dolu tüm satırları seçili yap.
+   */
+  const handleOpenConvertModal = () => {
+    if (!trial || typedDevices.length === 0) {
+      // Cihaz satırı olmasa da hasta oluşturmak isteyebilirsin;
+      // bu durumda direkt navigate etmek yerine, seçimsiz modal da açılabilir.
+      setSelectedDeviceIds([]);
+      setConvertModalOpen(true);
+      return;
+    }
+
+    const defaultSelected = typedDevices
+      .filter((d) => hasBrandOrModel(d))
+      .map((d) => d.id);
+
+    setSelectedDeviceIds(defaultSelected);
+    setConvertModalOpen(true);
+  };
+
+  const toggleDeviceSelected = (id: string) => {
+    setSelectedDeviceIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+
+  const handleToggleAllSelectable = () => {
+    const selectable = typedDevices
+      .filter((d) => hasBrandOrModel(d))
+      .map((d) => d.id);
+
+    const allSelected =
+      selectable.length > 0 &&
+      selectable.every((id) => selectedDeviceIds.includes(id));
+
+    if (allSelected) {
+      // Hepsini kaldır
+      setSelectedDeviceIds([]);
+    } else {
+      // Hepsini seç
+      setSelectedDeviceIds(selectable);
+    }
+  };
+
+  /**
+   * Modal içindeki "Hastaya dönüştür" onayı.
+   * Seçilen satırlar:
+   * - side === 'both' / 'bilateral' → 2 satır (right + left)
+   * - side === 'right' / 'left' → tek satır
+   * - diğer → side: ''
+   */
+  const handleConfirmConvertToPatient = () => {
     if (!trial) return;
 
     const fromTrial = {
@@ -145,21 +233,55 @@ export function TrialDetailDrawer({
       note: trial.note ?? '',
     };
 
-    // Map trial devices → lightweight payload for new patient device drafts.
+    const selectedRows = typedDevices.filter((d) =>
+      selectedDeviceIds.includes(d.id),
+    );
+
     const devicePayload =
-      typedDevices.length > 0
-        ? typedDevices
-            .filter(
-              (d) =>
-                (d.brand && d.brand.trim().length > 0) ||
-                (d.model && d.model.trim().length > 0),
-            )
-            .slice(0, 2)
-            .map((d) => ({
-              side: d.side ?? '',
-              brand: d.brand ?? '',
-              model: d.model ?? '',
-            }))
+      selectedRows.length > 0
+        ? selectedRows
+            .filter((d) => hasBrandOrModel(d))
+            .flatMap((d) => {
+              const brand = d.brand?.trim() ?? '';
+              const model = d.model?.trim() ?? '';
+              const side = normalizeTrialSide(d.side);
+
+              // Çift kulak (both / bilateral) → iki satır
+              if (side === 'both') {
+                return [
+                  {
+                    side: 'right',
+                    brand,
+                    model,
+                  },
+                  {
+                    side: 'left',
+                    brand,
+                    model,
+                  },
+                ];
+              }
+
+              // Sağ / sol → tek satır
+              if (side === 'right' || side === 'left') {
+                return [
+                  {
+                    side,
+                    brand,
+                    model,
+                  },
+                ];
+              }
+
+              // Diğer / boş → kulak boş bırakılır (hasta formunda manuel seçilebilir)
+              return [
+                {
+                  side: '',
+                  brand,
+                  model,
+                },
+              ];
+            })
         : [];
 
     navigate(`/patients?trialId=${trial.id}`, {
@@ -168,6 +290,12 @@ export function TrialDetailDrawer({
         fromTrialDevices: devicePayload,
       },
     });
+
+    setConvertModalOpen(false);
+  };
+
+  const handleCancelConvertModal = () => {
+    setConvertModalOpen(false);
   };
 
   const content = (
@@ -279,7 +407,7 @@ export function TrialDetailDrawer({
 
                   <button
                     type="button"
-                    onClick={handleConvertToPatient}
+                    onClick={handleOpenConvertModal}
                     className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-800 shadow-sm hover:bg-emerald-100"
                   >
                     Hastaya dönüştür
@@ -471,6 +599,124 @@ export function TrialDetailDrawer({
           </section>
         )}
       </div>
+
+      {/* "Hastaya dönüştür" seçim modali */}
+      {convertModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-lg rounded-lg bg-white p-4 shadow-lg">
+            <h3 className="mb-2 text-sm font-semibold text-slate-900">
+              Hastaya dönüştür: Cihaz seçimi
+            </h3>
+            <p className="mb-3 text-[11px] text-slate-600">
+              Bu denemede teklif ettiğiniz cihaz satırlarından hangilerini yeni
+              hasta kaydına taşımak istiyorsunuz? Seçtiğiniz satırlar hasta
+              formunda cihaz satırı olarak önceden doldurulur.
+            </p>
+            <p className="mb-3 text-[11px] text-slate-500">
+              Not: Kulak alanı <span className="font-semibold">Çift</span>{' '}
+              (both/bilateral) olan satırlar, hasta formunda otomatik olarak iki
+              satıra bölünür: sağ ve sol.
+            </p>
+
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[11px] font-medium text-slate-700">
+                Deneme cihazları
+              </span>
+              <button
+                type="button"
+                onClick={handleToggleAllSelectable}
+                className="text-[11px] font-medium text-primary-700 hover:underline"
+              >
+                Tümünü seç / kaldır
+              </button>
+            </div>
+
+            <div className="max-h-60 overflow-y-auto rounded-md border border-slate-200">
+              {typedDevices.length === 0 ? (
+                <p className="px-3 py-2 text-[11px] text-slate-500">
+                  Bu deneme için kayıtlı cihaz satırı bulunmuyor. Yine de hasta
+                  kaydı açabilirsiniz; cihazlar hasta ekranında seçilir.
+                </p>
+              ) : (
+                <table className="min-w-full text-[11px]">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="px-2 py-1 text-left font-medium">Seç</th>
+                      <th className="px-2 py-1 text-left font-medium">Marka</th>
+                      <th className="px-2 py-1 text-left font-medium">Model</th>
+                      <th className="px-2 py-1 text-left font-medium">Kulak</th>
+                      <th className="px-2 py-1 text-right font-medium">
+                        Teklif
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {typedDevices.map((d) => {
+                      const selectable = hasBrandOrModel(d);
+                      const normalizedSide = normalizeTrialSide(d.side);
+                      const sideLabel =
+                        normalizedSide === 'both'
+                          ? 'Çift'
+                          : normalizedSide === 'right'
+                          ? 'Sağ'
+                          : normalizedSide === 'left'
+                          ? 'Sol'
+                          : d.side ?? '-';
+                      const checked = selectedDeviceIds.includes(d.id);
+
+                      return (
+                        <tr
+                          key={d.id}
+                          className={
+                            'border-t border-slate-100 ' +
+                            (!selectable ? 'bg-slate-50/60 text-slate-400' : '')
+                          }
+                        >
+                          <td className="px-2 py-1">
+                            <input
+                              type="checkbox"
+                              className="h-3 w-3 rounded border-slate-300"
+                              disabled={!selectable}
+                              checked={selectable && checked}
+                              onChange={() => {
+                                if (!selectable) return;
+                                toggleDeviceSelected(d.id);
+                              }}
+                            />
+                          </td>
+                          <td className="px-2 py-1">{d.brand ?? '-'}</td>
+                          <td className="px-2 py-1">{d.model ?? '-'}</td>
+                          <td className="px-2 py-1">{sideLabel}</td>
+                          <td className="px-2 py-1 text-right">
+                            {formatPrice(d.quote_price)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCancelConvertModal}
+                className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmConvertToPatient}
+                className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-800 shadow-sm hover:bg-emerald-100"
+              >
+                Seçilenlerle hastaya dönüştür
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
