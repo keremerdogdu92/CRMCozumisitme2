@@ -8,6 +8,12 @@
 // Patch v2.9:
 // - For deviceFlowType === 'battery_only': allow saving with empty payment rows (SGK-only battery patient).
 // - Payment UI stays visible, but required constraints are relaxed for battery_only.
+//
+// Patch v3.0 (trial → patient flow):
+// - When opened from TrialDetailDrawer, form auto-opens (handled in PatientsPage) and
+//   basic fields (name/phone/reference) are prefilled.
+// - If trial has 1–2 devices, device rows are pre-populated with side/brand/model
+//   so that only serial number (inventory item) needs to be selected.
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -42,6 +48,11 @@ type FromTrialState = {
     referenceName?: string | null;
     note?: string | null;
   };
+  fromTrialDevices?: {
+    side: string | null;
+    brand: string | null;
+    model: string | null;
+  }[];
 };
 
 export function NewPatientFormCard({
@@ -53,6 +64,7 @@ export function NewPatientFormCard({
 }: NewPatientFormCardProps) {
   const location = useLocation() as { state?: FromTrialState };
   const fromTrial = location.state?.fromTrial;
+  const fromTrialDevices = location.state?.fromTrialDevices ?? [];
 
   const [fromTrialApplied, setFromTrialApplied] = useState(false);
 
@@ -64,6 +76,7 @@ export function NewPatientFormCard({
     handleChangePaymentRow,
     handleRemovePaymentRow,
     deviceDrafts,
+    setDeviceDrafts,
     handleAddDeviceRow,
     handleChangeDeviceRow,
     handleRemoveDeviceRow,
@@ -84,23 +97,62 @@ export function NewPatientFormCard({
     externalErrorMessage: errorMessage,
   });
 
-  // Eğer form deneme (trial) detayından açıldıysa, ilk render'da temel alanları doldur.
+  // Eğer form deneme (trial) detayından açıldıysa, ilk render'da temel alanları
+  // ve varsa cihaz bilgilerini doldur.
   useEffect(() => {
     if (!fromTrial || fromTrialApplied) return;
 
-    setFormState((s) => ({
-      ...s,
-      fullName: fromTrial.fullName || s.fullName,
-      phone: fromTrial.phone ?? s.phone,
-      referenceId: fromTrial.referenceId,
-      referenceName:
-        fromTrial.referenceName != null && fromTrial.referenceName !== ''
-          ? fromTrial.referenceName
-          : s.referenceName,
-    }));
+    const mappedDevices =
+      fromTrialDevices && fromTrialDevices.length > 0
+        ? fromTrialDevices
+            .filter(
+              (d) =>
+                (d.brand && d.brand.trim().length > 0) ||
+                (d.model && d.model.trim().length > 0),
+            )
+            .slice(0, 2)
+            .map((d) => ({
+              inventoryItemId: null,
+              side: d.side ?? '',
+              brand: d.brand ?? '',
+              model: d.model ?? '',
+              listPrice: '',
+              salePrice: '',
+              note: '',
+            }))
+        : [];
+
+    setFormState((s) => {
+      const nextBase = {
+        ...s,
+        fullName: fromTrial.fullName || s.fullName,
+        phone: fromTrial.phone ?? s.phone,
+        referenceId: fromTrial.referenceId,
+        referenceName:
+          fromTrial.referenceName != null && fromTrial.referenceName !== ''
+            ? fromTrial.referenceName
+            : s.referenceName,
+      };
+
+      if (mappedDevices.length > 0) {
+        return {
+          ...nextBase,
+          sgkDeviceCount:
+            mappedDevices.length >= 2
+              ? '2'
+              : (nextBase.sgkDeviceCount ?? '1'),
+        };
+      }
+
+      return nextBase;
+    });
+
+    if (mappedDevices.length > 0) {
+      setDeviceDrafts(mappedDevices);
+    }
 
     setFromTrialApplied(true);
-  }, [fromTrial, fromTrialApplied, setFormState]);
+  }, [fromTrial, fromTrialApplied, fromTrialDevices, setFormState, setDeviceDrafts]);
 
   const deviceFlowType = formState.deviceFlowType ?? 'rechargeable_device';
   const isBatteryOnly = deviceFlowType === 'battery_only';
