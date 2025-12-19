@@ -7,6 +7,10 @@
 //   - Removes non-existent DB columns: brand, created_by (unless you add them to DB).
 //   - Adds sgk_expected_amount (nullable) per DB.
 // - Keeps BatteryLineDraft as UI draft; API maps it to DB rows.
+//
+// v2.11:
+// - Adds sgk_recorded_to_system_at (optional) to PatientRow to mirror DB column.
+//   * Used to show "sisteme işlendiği tarih" in patient detail SGK tab.
 
 export type PatientPaymentMethod =
   | 'Tim'
@@ -27,6 +31,12 @@ export type PatientRow = {
   sgk_flag: boolean | null;
   sgk_prescription_received: boolean | null;
   sgk_recorded_to_system: boolean | null;
+
+  /**
+   * When SGK "sisteme işlendi mi?" is marked true, this timestamp shows
+   * when it was recorded. Optional for backward compatibility.
+   */
+  sgk_recorded_to_system_at?: string | null;
 
   /**
    * Extra SGK / satisfaction fields stored on patients.
@@ -209,11 +219,11 @@ export type DeviceRepairRow = {
   note: string | null;
 };
 
-export type NewPatientDeviceSide = 'right' | 'left' | 'bilateral' | '';
+export type NewPatientDeviceEarSide = 'right' | 'left' | 'bilateral' | '';
 
 export type NewPatientDeviceDraft = {
   inventoryItemId?: string | null;
-  side: NewPatientDeviceSide;
+  side: NewPatientDeviceEarSide;
   brand: string;
   model: string;
   listPrice: string;
