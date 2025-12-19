@@ -2,9 +2,9 @@
 // Summary: React UI composition for the Profitability Calculator.
 // Uses current_device_model_prices_public for device & charger prices.
 // State, side-effects, and calculation logic are delegated to useProfitCalculatorForm + ./logic.
-// v4: Payment (cash/card) and installment selection live above the final result.
-//     Card commission is passed to ResultSection as an extra expense so you get
-//     a single unified profitability breakdown (no separate second summary).
+// v5: Payment (cash/card) selector is always visible. Card commission is
+//     still treated as an extra expense in ResultSection when a valid
+//     sale price exists.
 
 import React, { useMemo, useState } from "react";
 import { useProfitCalculatorForm } from "./hooks/useProfitCalculatorForm";
@@ -108,7 +108,6 @@ export const ProfitCalculatorForm: React.FC = () => {
 
   // -----------------------------
   // Local state for payment + card commission
-  // (affects the final profitability breakdown)
   // -----------------------------
   const [paymentMethodForCommission, setPaymentMethodForCommission] =
     useState<PaymentMethodForCommission>("Nakit"); // default: Nakit
@@ -141,6 +140,7 @@ export const ProfitCalculatorForm: React.FC = () => {
   };
 
   const { feeAmount, netAmount } = useMemo(() => {
+    // Satış fiyatı çıkmadan veya kart seçili değilken komisyon hesaplama.
     if (!result || !result.valid || !result.salePrice || !isCard) {
       return { feeAmount: null, netAmount: null };
     }
@@ -198,117 +198,116 @@ export const ProfitCalculatorForm: React.FC = () => {
         onRemoveAccessoryRow={removeAccessoryRow}
       />
 
-      {/* 4: Ödeme tipi + kart komisyonu */}
-      {result && result.valid && result.salePrice > 0 && (
-        <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
-          <p className="text-sm font-medium text-slate-800">
-            4. Ödeme Şekli ve Kart Komisyonu
-          </p>
-          <p className="text-[11px] text-slate-600">
-            Önce ödeme şeklini ve (kredi kartıysa) taksit sayısını seç.
-            Kart komisyonu gider olarak kabul edilir ve aşağıdaki kârlılık
-            hesabında dikkate alınır.
-          </p>
+      {/* 4: Ödeme tipi + kart komisyonu (her zaman görünür) */}
+      <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+        <p className="text-sm font-medium text-slate-800">
+          4. Ödeme Şekli ve Kart Komisyonu
+        </p>
+        <p className="text-[11px] text-slate-600">
+          Önce ödeme şeklini ve (kredi kartıysa) taksit sayısını seç.
+          Kart komisyonu gider olarak kabul edilir ve satış fiyatı
+          hesaplandığında aşağıdaki kârlılık hesabında dikkate alınır.
+        </p>
 
-          <div className="grid gap-2 md:grid-cols-4 md:items-end">
-            {/* Ödeme şekli */}
-            <div className="md:col-span-1">
-              <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                Ödeme Şekli
-              </label>
-              <select
-                className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                value={paymentMethodForCommission}
-                onChange={(e) =>
-                  handlePaymentMethodChange(
-                    e.target.value as PaymentMethodForCommission
-                  )
-                }
-              >
-                <option value="">Seçilmedi</option>
-                <option value="Nakit">Nakit</option>
-                <option value="Kredi_Kartı">Kredi Kartı</option>
-              </select>
-              <p className="mt-1 text-[11px] text-slate-500">
-                Nakit seçiliyse kart komisyonu = 0 kabul edilir.
-              </p>
-            </div>
+        <div className="grid gap-2 md:grid-cols-4 md:items-end">
+          {/* Ödeme şekli */}
+          <div className="md:col-span-1">
+            <label className="mb-1 block text-[11px] font-medium text-slate-600">
+              Ödeme Şekli
+            </label>
+            <select
+              className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              value={paymentMethodForCommission}
+              onChange={(e) =>
+                handlePaymentMethodChange(
+                  e.target.value as PaymentMethodForCommission
+                )
+              }
+            >
+              <option value="">Seçilmedi</option>
+              <option value="Nakit">Nakit</option>
+              <option value="Kredi_Kartı">Kredi Kartı</option>
+            </select>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Nakit seçiliyse kart komisyonu = 0 kabul edilir.
+            </p>
+          </div>
 
-            {/* Kart seçiliyse: taksit + oran + kısa özet */}
-            {isCard && (
-              <>
-                <div className="md:col-span-1">
-                  <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                    Taksit (Fiziki POS)
-                  </label>
-                  <select
-                    value={selectedInstallment}
-                    onChange={(e) =>
-                      handleInstallmentChange(e.target.value)
-                    }
-                    className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  >
-                    <option value="">Seçilmedi</option>
-                    <option value="1">1 (Tek çekim)</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="6">6</option>
-                    <option value="9">9</option>
-                    <option value="12">12</option>
-                  </select>
-                </div>
+          {/* Kart seçiliyse: taksit + oran + kısa özet */}
+          {isCard && (
+            <>
+              <div className="md:col-span-1">
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                  Taksit (Fiziki POS)
+                </label>
+                <select
+                  value={selectedInstallment}
+                  onChange={(e) =>
+                    handleInstallmentChange(e.target.value)
+                  }
+                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                >
+                  <option value="">Seçilmedi</option>
+                  <option value="1">1 (Tek çekim)</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="6">6</option>
+                  <option value="9">9</option>
+                  <option value="12">12</option>
+                </select>
+              </div>
 
-                <div className="md:col-span-1">
-                  <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                    Komisyon Oranı (%)
-                  </label>
-                  <input
-                    type="text"
-                    value={cardFeeRate}
-                    readOnly
-                    className="w-full cursor-not-allowed rounded-md border border-slate-200 bg-slate-100 px-2 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    placeholder="Taksit seçiniz"
-                  />
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Taksit seçimine göre otomatik dolar; oranlar hasta
-                    formundaki tabloyla aynıdır.
-                  </p>
-                </div>
-
-                <div className="md:col-span-4 mt-2">
-                  <p className="text-[11px] text-slate-600">
-                    Kart komisyonu:{" "}
-                    <span className="font-semibold">
-                      {formatCurrencyTry(feeAmount)}
-                    </span>{" "}
-                    – Komisyon sonrası net tahsilat:{" "}
-                    <span className="font-semibold">
-                      {formatCurrencyTry(netAmount)}
-                    </span>
-                    .
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    Aşağıdaki &quot;Net Kâr&quot; ve kâr oranları, bu
-                    kart komisyonu gider olarak düşüldükten sonra
-                    hesaplanır.
-                  </p>
-                </div>
-              </>
-            )}
-
-            {!isCard && (
-              <div className="md:col-span-3">
-                <p className="text-[11px] text-slate-500">
-                  Nakit seçiliyken kart komisyonu alınmaz; aşağıdaki
-                  kârlılık tablosu doğrudan hesaplanan satış fiyatına göre
-                  gösterilir.
+              <div className="md:col-span-1">
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                  Komisyon Oranı (%)
+                </label>
+                <input
+                  type="text"
+                  value={cardFeeRate}
+                  readOnly
+                  className="w-full cursor-not-allowed rounded-md border border-slate-200 bg-slate-100 px-2 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="Taksit seçiniz"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Taksit seçimine göre otomatik dolar; oranlar hasta
+                  formundaki tabloyla aynıdır.
                 </p>
               </div>
-            )}
-          </div>
+
+              <div className="md:col-span-4 mt-2">
+                <p className="text-[11px] text-slate-600">
+                  Kart komisyonu:{" "}
+                  <span className="font-semibold">
+                    {formatCurrencyTry(feeAmount)}
+                  </span>{" "}
+                  – Komisyon sonrası net tahsilat:{" "}
+                  <span className="font-semibold">
+                    {formatCurrencyTry(netAmount)}
+                  </span>
+                  .
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Satış fiyatı henüz hesaplanmadıysa, komisyon tutarı{" "}
+                  sadece taksit ve oran bilgisine göre tahmini olarak
+                  gösterilir; kârlılık hesabına, satış fiyatı çıktığında
+                  yansır.
+                </p>
+              </div>
+            </>
+          )}
+
+          {!isCard && (
+            <div className="md:col-span-3">
+              <p className="text-[11px] text-slate-500">
+                Nakit seçiliyken kart komisyonu alınmaz; aşağıdaki
+                kârlılık tablosu doğrudan hesaplanan satış fiyatına göre
+                gösterilir.
+              </p>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* 5: Hesaplama modu (fiyatı gir / hedefe göre hesapla) */}
       <ModeSection inputs={inputs} onChange={handleChange} />
