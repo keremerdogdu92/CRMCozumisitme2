@@ -68,9 +68,7 @@ export async function updatePatientSgkFields(
     .from('patients')
     .update({
       sgk_flag: sgkFlag,
-      sgk_prescription_received: sgkFlag
-        ? sgkPrescriptionReceived
-        : false,
+      sgk_prescription_received: sgkFlag ? sgkPrescriptionReceived : false,
       sgk_recorded_to_system: sgkFlag ? sgkRecordedToSystem : false,
       sgk_recorded_to_system_at: effectiveRecordedAt,
       sgk_prescription_no: sgkPrescriptionNo.trim() || null,
@@ -106,7 +104,10 @@ export async function updatePatientSgkProfileInfo(params: {
   // Beklenen tutarı TR formatlı string'ten number'a çevir.
   let expectedAmount: number | null = null;
   if (sgkExpectedReimbursement && sgkExpectedReimbursement.trim().length > 0) {
-    const parsed = parseMoneyToNumber(sgkExpectedReimbursement);
+    const parsed = parseMoneyToNumber(
+      sgkExpectedReimbursement,
+      'sgkExpectedReimbursement',
+    );
     expectedAmount =
       parsed != null && !Number.isNaN(parsed) ? parsed : null;
   }
