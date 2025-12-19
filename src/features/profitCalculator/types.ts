@@ -36,8 +36,15 @@ export interface ReferenceOption {
   id: string;
   name: string;
   scheme: ReferenceScheme;
-  // Bunlar şimdilik DB'den gelmeyecek, ileride kullanmak üzere opsiyonel:
+  /**
+   * Default percent commission (0–1). Example: 0.10 = %10
+   * Filled from references.commission_percent when available.
+   */
   default_percent?: number | null;
+  /**
+   * Default fixed commission amount in TL.
+   * Filled from references.commission_fixed when available.
+   */
   default_fixed?: number | null;
 }
 
@@ -61,8 +68,14 @@ export interface ProfitCalcInputs {
   // Reference
   selectedReferenceId: string | null;
   referenceScheme: ReferenceScheme;
-  referencePercent: number; // 0.10 = %10
-  referenceFixed: number;   // TL
+  /**
+   * Commission rate as 0–1. Example: 0.10 = %10
+   */
+  referencePercent: number;
+  /**
+   * Fixed commission amount in TL.
+   */
+  referenceFixed: number;
 
   // Tax
   taxRate: number; // 0.15 = %15
