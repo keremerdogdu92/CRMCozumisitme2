@@ -1,6 +1,13 @@
 // src/features/patients/api/api.patients.create.ts
 // Summary: Create patient rows and attach optional financial/device drafts.
 //
+// Patch v2.13:
+// - ADD: Optional linkedTrialId support via CreatePatientOptions.
+//   * If provided, after successful patient insert + chaining, calls
+//     linkTrialToPatientAndDelete(trialId, patientId).
+//   * If the RPC fails, an explicit STEP_TRIAL_LINK_FAILED error is thrown
+//     so the caller can surface/handle it.
+//
 // Patch v2.12:
 // - CHANGE: createPatient no longer auto-saves saleBreakdownDraft.
 //   * patient_sale_breakdown rows are now managed only from the Payments tab
@@ -31,9 +38,9 @@ import type {
   BatteryLineDraft,
 } from '../types';
 import { parseMoneyToNumber } from './api.core';
-import { savePatientSaleBreakdown } from './api.saleBreakdown';
 import { upsertPatientInstallmentPlan } from './api.payments';
 import { createBatteryPrescriptionDeliveries } from './api.batteryPrescriptionDeliveries';
+import { linkTrialToPatientAndDelete } from '../../trials/api';
 
 export type CreatePatientOptions = {
   /**
@@ -41,6 +48,12 @@ export type CreatePatientOptions = {
    * Used mainly for CSV imports where historical patients are loaded.
    */
   setInvoiceIssuedTrue?: boolean;
+
+  /**
+   * Optional: if this patient is created from an existing trial,
+   * pass the trial id here so we can link + delete the trial via RPC.
+   */
+  linkedTrialId?: string;
 };
 
 type InventoryItemStatus = 'in_stock' | 'sold' | string;
@@ -608,6 +621,22 @@ export async function createPatient(
       batteryLines,
       prescriptionNo: input.sgkPrescriptionNo ? input.sgkPrescriptionNo.trim() : null,
     });
+  }
+
+  // Optional: link trial → patient and delete trial via RPC.
+  if (options?.linkedTrialId) {
+    try {
+      await linkTrialToPatientAndDelete(options.linkedTrialId, inserted.id);
+    } catch (err) {
+      console.error('STEP_TRIAL_LINK_FAILED: link_trial_to_patient_and_delete RPC failed', {
+        trialId: options.linkedTrialId,
+        patientId: inserted.id,
+        err,
+      });
+      const msg =
+        err instanceof Error ? err.message : 'Unknown error while linking trial to patient.';
+      throw new Error('STEP_TRIAL_LINK_FAILED: ' + msg);
+    }
   }
 
   return inserted;
