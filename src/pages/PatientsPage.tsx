@@ -4,15 +4,13 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import {
   PATIENTS_QUERY_KEY,
   fetchPatients,
   updatePatientSgkFields,
+  createPatientFromForm,
 } from '../features/patients/api';
-import { createPatient } from '../features/patients/api/api.patients';
-import { savePatientSaleBreakdown } from '../features/patients/api/api.saleBreakdown';
-import { upsertPatientInstallmentPlan } from '../features/patients/api/api.payments';
-import { attachDevicesToPatientFromDrafts } from '../features/patients/api/api.devices';
 import type { NewPatientForm, PatientRow } from '../features/patients/types';
 import {
   NewPatientFormCard,
@@ -29,14 +27,16 @@ type PatientDetailTabId =
 
 export default function PatientsPage() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+
+  // Optional: if PatientsPage is opened from a Trial context,
+  // ?trialId=<uuid> can be passed in the URL.
+  const linkedTrialId = searchParams.get('trialId');
+
   const [search, setSearch] = useState('');
-  const [sgkFilter, setSgkFilter] = useState<'all' | 'sgk' | 'non-sgk'>(
-    'all',
-  );
+  const [sgkFilter, setSgkFilter] = useState<'all' | 'sgk' | 'non-sgk'>('all');
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [detailPatient, setDetailPatient] = useState<PatientRow | null>(
-    null,
-  );
+  const [detailPatient, setDetailPatient] = useState<PatientRow | null>(null);
   const [detailInitialTab, setDetailInitialTab] =
     useState<PatientDetailTabId>('info');
   const [detailInitialShowPlan, setDetailInitialShowPlan] =
@@ -48,59 +48,14 @@ export default function PatientsPage() {
   });
 
   const createMutation = useMutation({
-    // Yeni hasta oluşturma + isteğe bağlı breakdown + senet plan + cihaz zinciri
+    // Yeni hasta oluşturma:
+    // - Finansal ve cihaz zinciri createPatientFromForm içinde yönetilir.
+    // - patient_sale_breakdown artık sadece Payments tabından yönetilir.
     mutationFn: async (values: NewPatientForm) => {
-      // 1) Hasta kaydı
-      const patient = await createPatient(values);
-
-      // 2) Ödeme dağılımı taslağı varsa kaydet
-      if (
-        values.saleBreakdownDraft &&
-        values.saleBreakdownDraft.length > 0
-      ) {
-        try {
-          await savePatientSaleBreakdown({
-            patientId: patient.id,
-            items: values.saleBreakdownDraft,
-          });
-        } catch (err) {
-          console.error('NewPatient: sale breakdown save error:', err);
-          // Hasta zaten oluştu; yine de kullanıcıya hata göstermek için
-          // mutasyonu hatalı sayıyoruz.
-          throw err;
-        }
-      }
-
-      // 3) Senet plan taslağı varsa kaydet/güncelle
-      if (values.installmentPlanDraft) {
-        try {
-          await upsertPatientInstallmentPlan({
-            ...values.installmentPlanDraft,
-            patientId: patient.id,
-          });
-        } catch (err) {
-          console.error('NewPatient: installment plan save error:', err);
-          // Yine: hasta oluşturuldu ama plan kaydı başarısız; hata
-          // kullanıcıya yansısın diye yeniden fırlatıyoruz.
-          throw err;
-        }
-      }
-
-      // 4) Cihaz taslakları varsa stok cihazlarını hastaya bağla
-      if (values.deviceDrafts && values.deviceDrafts.length > 0) {
-        try {
-          await attachDevicesToPatientFromDrafts(
-            patient.id,
-            values.deviceDrafts,
-          );
-        } catch (err) {
-          console.error('NewPatient: attach devices error:', err);
-          // Hasta oluştu; ancak stok-hasta eşlemesi kritik olduğu için
-          // bu hatayı da kullanıcıya gösteriyoruz.
-          throw err;
-        }
-      }
-
+      const patient = await createPatientFromForm(
+        values,
+        linkedTrialId ? { linkedTrialId } : undefined,
+      );
       return patient;
     },
     onSuccess: (createdPatient, variables) => {
@@ -267,8 +222,7 @@ export default function PatientsPage() {
           }
           isSaving={sgkUpdateMutation.isPending}
           errorMsg={
-            (sgkUpdateMutation.error as Error | null | undefined)
-              ?.message ?? ''
+            (sgkUpdateMutation.error as Error | null | undefined)?.message ?? ''
           }
           initialTab={detailInitialTab}
           initialShowPlanForm={detailInitialShowPlan}
