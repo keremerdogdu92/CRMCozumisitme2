@@ -48,8 +48,6 @@ function createEmptyPaymentRow(): PaymentRowDraft {
 function createEmptyDeviceDraft(): NewPatientDeviceDraft {
   return {
     inventoryItemId: null,
-    // NOTE: side is a stricter enum type (e.g. NewPatientDeviceEarSide).
-    // We start with an "unset" value and let the UI force user to choose.
     side: '' as NewPatientDeviceDraft['side'],
     brand: '',
     model: '',
@@ -234,7 +232,8 @@ export function useNewPatientForm({
       formState.deviceFlowType ?? 'rechargeable_device';
     const isBatteryOnly = deviceFlowType === 'battery_only';
     const isBatteryFlow =
-      deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
+      deviceFlowType === 'battery_device' ||
+      deviceFlowType === 'battery_only';
 
     if (!fullName) {
       setLocalError('Ad Soyad alanı zorunludur.');
@@ -260,9 +259,7 @@ export function useNewPatientForm({
 
       const primaryPayment = paymentRows[0];
       if (!primaryPayment.paymentMethod) {
-        setLocalError(
-          'İlk ödeme satırında bir ödeme şekli seçmelisiniz.',
-        );
+        setLocalError('İlk ödeme satırında bir ödeme şekli seçmelisiniz.');
         return;
       }
       if (!primaryPayment.amount.trim()) {
@@ -416,8 +413,7 @@ export function useNewPatientForm({
     handleRemovePaymentRow,
 
     deviceDrafts,
-    setDeviceDrafts, // <-- EKLENDİ: NewPatientFormCard gibi çağıranlar için dışarı açılıyor.
-
+    setDeviceDrafts,
     handleAddDeviceRow,
     handleChangeDeviceRow,
     handleRemoveDeviceRow,
