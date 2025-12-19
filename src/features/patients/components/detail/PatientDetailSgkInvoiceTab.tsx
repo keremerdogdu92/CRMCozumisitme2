@@ -1,6 +1,6 @@
 // src/features/patients/components/detail/PatientDetailSgkInvoiceTab.tsx
 // SGK and Invoice tab for patient detail drawer: read-only SGK summary
-// + collapsible edit section (flags, profile, device count, pill extra) and invoice status.
+// + collapsible edit section (flags, profile, device count, pill extra, system date) and invoice status.
 
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -18,6 +18,10 @@ type PatientDetailSgkInvoiceTabProps = {
   onChangeSgkFlag: (value: boolean) => void;
   onChangeSgkPrescriptionReceived: (value: boolean) => void;
   onChangeSgkRecordedToSystem: (value: boolean) => void;
+
+  // Optional: upper component ileride sisteme işlendiği tarihi de state olarak tutmak isterse.
+  sgkRecordedToSystemAt?: string | null;
+  onChangeSgkRecordedToSystemAt?: (value: string | null) => void;
 
   sgkPrescriptionNo: string;
   onChangeSgkPrescriptionNo: (value: string) => void;
@@ -81,6 +85,25 @@ function monthInputToIsoDate(monthValue: string): string | null {
   return date.toISOString();
 }
 
+// For <input type="date"> value from ISO-like strings.
+function toDateInputValue(isoLike: string | null | undefined): string {
+  if (!isoLike) return '';
+  const d = new Date(isoLike);
+  if (Number.isNaN(d.getTime())) return '';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function todayAsDateInput(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export function PatientDetailSgkInvoiceTab({
   patient,
   sgkFlag,
@@ -89,6 +112,8 @@ export function PatientDetailSgkInvoiceTab({
   onChangeSgkFlag,
   onChangeSgkPrescriptionReceived,
   onChangeSgkRecordedToSystem,
+  sgkRecordedToSystemAt,
+  onChangeSgkRecordedToSystemAt,
   sgkPrescriptionNo,
   onChangeSgkPrescriptionNo,
   invoiceIssued,
@@ -108,6 +133,15 @@ export function PatientDetailSgkInvoiceTab({
   const [sgkPillPrescription, setSgkPillPrescription] = useState<boolean>(false);
   const [sgkExpectedReimbursement, setSgkExpectedReimbursement] = useState<string>('');
   const [sgkExpectedMonth, setSgkExpectedMonth] = useState<string>('');
+
+  // Sisteme işlendiği tarih için lokal input state.
+  const [sgkRecordedAtInput, setSgkRecordedAtInput] = useState<string>(
+    toDateInputValue(
+      sgkRecordedToSystemAt ??
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (((patient as any).sgk_recorded_to_system_at as string | null) ?? null),
+    ),
+  );
 
   // Initial sync from patient row whenever patient changes.
   useEffect(() => {
@@ -142,11 +176,21 @@ export function PatientDetailSgkInvoiceTab({
     // Device count & pill bayrakları DB'de tutulmuyor, sadece hesaplama amaçlı.
     setSgkDeviceCount('1');
     setSgkPillPrescription(false);
+
+    // Sisteme işlendiği tarih input’unu da hasta satırından senkronize et.
+    setSgkRecordedAtInput(
+      toDateInputValue(
+        sgkRecordedToSystemAt ??
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (((patient as any).sgk_recorded_to_system_at as string | null) ?? null),
+      ),
+    );
   }, [
     patient.id,
     patient.sgk_profile,
     patient.sgk_expected_reimbursement,
     patient.sgk_expected_reimbursement_month,
+    sgkRecordedToSystemAt,
   ]);
 
   const findProfileNetToFirm = (profileId: string): number | null => {
@@ -175,17 +219,35 @@ export function PatientDetailSgkInvoiceTab({
   };
 
   const handleToggleSgkFlag = (checked: boolean) => {
-    onChangeSgkFlag(checked);
     if (!checked) {
+      const confirmed = window.confirm(
+        [
+          'SGK hastası işaretini kaldırırsanız SGK ile ilgili işaretler (reçete geldi / sisteme işlendi) ve',
+          'beklenen SGK ödemesi bilgileri sıfırlanabilir.',
+          '',
+          'Devam etmek istediğinize emin misiniz?',
+        ].join('\n'),
+      );
+      if (!confirmed) return;
+
       // SGK kapandığında yerel alanları da sıfırla.
       setSgkProfileId('');
       setSgkDeviceCount('1');
       setSgkPillPrescription(false);
       setSgkExpectedReimbursement('');
       setSgkExpectedMonth('');
+      setSgkRecordedAtInput('');
+      onChangeSgkRecordedToSystemAt?.(null);
+      onChangeSgkRecordedToSystem(false);
+      onChangeSgkPrescriptionReceived(false);
     } else {
       // SGK açıldığında mevcut profil + varsayılanlarla yeniden hesapla.
       recomputeExpected(true, sgkProfileId, sgkDeviceCount, sgkPillPrescription);
+      onChangeSgkFlag(true);
+    }
+
+    if (!checked) {
+      onChangeSgkFlag(false);
     }
   };
 
@@ -202,6 +264,41 @@ export function PatientDetailSgkInvoiceTab({
   const handleTogglePillPrescription = (checked: boolean) => {
     setSgkPillPrescription(checked);
     recomputeExpected(sgkFlag, sgkProfileId, sgkDeviceCount, checked);
+  };
+
+  const handleToggleRecordedToSystem = (checked: boolean) => {
+    if (!sgkFlag) return;
+
+    if (!checked) {
+      const confirmed = window.confirm(
+        [
+          '“Sisteme işlendi mi?” kutusunu kapatırsanız sisteme işlenme tarihi temizlenecek.',
+          '',
+          'Bu durum SGK takip ve raporlamayı etkileyebilir.',
+          'Devam etmek istediğinize emin misiniz?',
+        ].join('\n'),
+      );
+      if (!confirmed) return;
+
+      setSgkRecordedAtInput('');
+      onChangeSgkRecordedToSystemAt?.(null);
+      onChangeSgkRecordedToSystem(false);
+      return;
+    }
+
+    // İlk kez TRUE yapılırken tarih boşsa bugünün tarihi olarak set et.
+    if (!sgkRecordedToSystem && !sgkRecordedAtInput) {
+      const today = todayAsDateInput();
+      setSgkRecordedAtInput(today);
+      onChangeSgkRecordedToSystemAt?.(today);
+    }
+
+    onChangeSgkRecordedToSystem(true);
+  };
+
+  const handleRecordedDateChange = (value: string) => {
+    setSgkRecordedAtInput(value);
+    onChangeSgkRecordedToSystemAt?.(value || null);
   };
 
   const handleSaveSgkProfile = async () => {
@@ -258,6 +355,11 @@ export function PatientDetailSgkInvoiceTab({
       ? sgkPrescriptionNo
       : '-';
 
+  const sgkRecordedDateDisplay =
+    sgkRecordedAtInput && sgkRecordedAtInput.trim().length > 0
+      ? formatDate(sgkRecordedAtInput)
+      : '-';
+
   return (
     <section className="space-y-2">
       <h4 className="text-xs font-semibold uppercase text-slate-500">
@@ -281,6 +383,12 @@ export function PatientDetailSgkInvoiceTab({
             <span className="text-slate-500">Beklenen Ödeme Ayı</span>
             <span className="text-right text-slate-900">
               {sgkExpectedMonthDisplay}
+            </span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-slate-500">Sisteme İşlendiği Tarih</span>
+            <span className="text-right text-slate-900">
+              {sgkRecordedDateDisplay}
             </span>
           </div>
           <div className="flex justify-between gap-2">
@@ -344,11 +452,29 @@ export function PatientDetailSgkInvoiceTab({
                   type="checkbox"
                   disabled={!sgkFlag}
                   checked={sgkRecordedToSystem}
-                  onChange={(e) => onChangeSgkRecordedToSystem(e.target.checked)}
+                  onChange={(e) => handleToggleRecordedToSystem(e.target.checked)}
                   className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
                 />
                 <span>Sisteme işlendi mi?</span>
               </label>
+
+              {/* Sisteme işlendiği tarih (manuel ayar) */}
+              <div className="mt-1 flex flex-col gap-1 pl-5">
+                <span className="text-xs text-slate-700">
+                  Sisteme işlendiği tarih
+                </span>
+                <input
+                  type="date"
+                  value={sgkRecordedAtInput}
+                  onChange={(e) => handleRecordedDateChange(e.target.value)}
+                  disabled={!sgkFlag || !sgkRecordedToSystem}
+                  className="w-44 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
+                />
+                <p className="text-[11px] text-slate-400">
+                  Kutuyu ilk kez işaretlediğinizde bugünün tarihi otomatik gelir.
+                  Gerekirse buradan geri dönük olarak düzeltebilirsiniz.
+                </p>
+              </div>
 
               <label className="mt-1 flex items-center gap-2">
                 <input
