@@ -76,7 +76,10 @@ type UseNewPatientFormArgs = {
   externalErrorMessage?: string;
 };
 
-export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPatientFormArgs) {
+export function useNewPatientForm({
+  onSubmit,
+  externalErrorMessage,
+}: UseNewPatientFormArgs) {
   const [formState, setFormState] = useState<NewPatientForm>({
     fullName: '',
     phone: '',
@@ -115,16 +118,21 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
   const [localError, setLocalError] = useState<string | null>(null);
 
   // Çoklu ödeme satırları.
-  const [paymentRows, setPaymentRows] = useState<PaymentRowDraft[]>([createEmptyPaymentRow()]);
+  const [paymentRows, setPaymentRows] = useState<PaymentRowDraft[]>([
+    createEmptyPaymentRow(),
+  ]);
 
   // Senet plan taslağı.
   const [senetUpfrontPaid, setSenetUpfrontPaid] = useState<string>('');
-  const [senetInstallmentCount, setSenetInstallmentCount] = useState<string>('');
+  const [senetInstallmentCount, setSenetInstallmentCount] =
+    useState<string>('');
   const [senetFirstDueDate, setSenetFirstDueDate] = useState<string>('');
   const [senetDayOfMonth, setSenetDayOfMonth] = useState<string>('');
 
   // Cihaz taslakları: form en az bir cihaz satırı ile açılır.
-  const [deviceDrafts, setDeviceDrafts] = useState<NewPatientDeviceDraft[]>([createEmptyDeviceDraft()]);
+  const [deviceDrafts, setDeviceDrafts] = useState<NewPatientDeviceDraft[]>([
+    createEmptyDeviceDraft(),
+  ]);
 
   const paymentsTotal = useMemo(() => {
     return paymentRows.reduce((sum, row) => {
@@ -183,20 +191,32 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
     setPaymentRows((rows) => [...rows, createEmptyPaymentRow()]);
   };
 
-  const handleChangePaymentRow = (index: number, patch: Partial<PaymentRowDraft>) => {
-    setPaymentRows((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  const handleChangePaymentRow = (
+    index: number,
+    patch: Partial<PaymentRowDraft>,
+  ) => {
+    setPaymentRows((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
   };
 
   const handleRemovePaymentRow = (index: number) => {
-    setPaymentRows((rows) => (rows.length <= 1 ? rows : rows.filter((_, i) => i !== index)));
+    setPaymentRows((rows) =>
+      rows.length <= 1 ? rows : rows.filter((_, i) => i !== index),
+    );
   };
 
   const handleAddDeviceRow = () => {
     setDeviceDrafts((rows) => [...rows, createEmptyDeviceDraft()]);
   };
 
-  const handleChangeDeviceRow = (index: number, patch: Partial<NewPatientDeviceDraft>) => {
-    setDeviceDrafts((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  const handleChangeDeviceRow = (
+    index: number,
+    patch: Partial<NewPatientDeviceDraft>,
+  ) => {
+    setDeviceDrafts((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
   };
 
   const handleRemoveDeviceRow = (index: number) => {
@@ -213,7 +233,8 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
     const deviceFlowType: NewPatientDeviceFlowType =
       formState.deviceFlowType ?? 'rechargeable_device';
     const isBatteryOnly = deviceFlowType === 'battery_only';
-    const isBatteryFlow = deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
+    const isBatteryFlow =
+      deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
 
     if (!fullName) {
       setLocalError('Ad Soyad alanı zorunludur.');
@@ -239,7 +260,9 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
 
       const primaryPayment = paymentRows[0];
       if (!primaryPayment.paymentMethod) {
-        setLocalError('İlk ödeme satırında bir ödeme şekli seçmelisiniz.');
+        setLocalError(
+          'İlk ödeme satırında bir ödeme şekli seçmelisiniz.',
+        );
         return;
       }
       if (!primaryPayment.amount.trim()) {
@@ -248,7 +271,8 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
       }
 
       const saleTotalNumber = paymentsTotal;
-      const saleTotalRaw = saleTotalNumber > 0 ? saleTotalNumber.toString() : '';
+      const saleTotalRaw =
+        saleTotalNumber > 0 ? saleTotalNumber.toString() : '';
 
       if (!saleTotalRaw) {
         setLocalError('Toplam satış tutarı zorunludur.');
@@ -266,7 +290,8 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
       const primaryPayment = paymentRows[0] ?? createEmptyPaymentRow();
 
       const saleTotalNumber = paymentsTotal;
-      const saleTotalRaw = saleTotalNumber > 0 ? saleTotalNumber.toString() : '';
+      const saleTotalRaw =
+        saleTotalNumber > 0 ? saleTotalNumber.toString() : '';
 
       // Senet plan taslağı: yalnızca battery_only değilse ve temel alanlar doluysa oluştur.
       const hasInstallmentDraft =
@@ -275,28 +300,33 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
         senetFirstDueDate.trim() !== '' &&
         senetDayOfMonth.trim() !== '';
 
-      const installmentPlanDraft: UpsertPatientInstallmentPlanInput | null = hasInstallmentDraft
-        ? {
-            patientId: '', // createPatient sonrası zincirde doldurulacak.
-            saleTotal: saleTotalRaw,
-            upfrontPaid: senetUpfrontPaid.trim(),
-            installmentCount: senetInstallmentCount.trim(),
-            firstDueDate: senetFirstDueDate.trim(),
-            dayOfMonth: senetDayOfMonth.trim(),
-          }
-        : null;
+      const installmentPlanDraft: UpsertPatientInstallmentPlanInput | null =
+        hasInstallmentDraft
+          ? {
+              patientId: '', // createPatient sonrası zincirde doldurulacak.
+              saleTotal: saleTotalRaw,
+              upfrontPaid: senetUpfrontPaid.trim(),
+              installmentCount: senetInstallmentCount.trim(),
+              firstDueDate: senetFirstDueDate.trim(),
+              dayOfMonth: senetDayOfMonth.trim(),
+            }
+          : null;
 
       // Çoklu ödeme satırlarından saleBreakdownDraft üret (battery_only ise tamamen boş).
-      const saleBreakdownDraft: UpsertPatientSaleBreakdownItem[] = isBatteryOnly
-        ? []
-        : paymentRows
-            .filter((row) => !!row.paymentMethod && row.amount.trim().length > 0)
-            .map((row) => ({
-              id: undefined,
-              method: row.paymentMethod as PatientPaymentMethod,
-              amount: row.amount.trim(),
-              note: '',
-            }));
+      const saleBreakdownDraft: UpsertPatientSaleBreakdownItem[] =
+        isBatteryOnly
+          ? []
+          : paymentRows
+              .filter(
+                (row) =>
+                  !!row.paymentMethod && row.amount.trim().length > 0,
+              )
+              .map((row) => ({
+                id: undefined,
+                method: row.paymentMethod as PatientPaymentMethod,
+                amount: row.amount.trim(),
+                note: '',
+              }));
 
       onSubmit({
         fullName,
@@ -305,34 +335,50 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
         // New flow fields (soft, no strict validation yet)
         deviceFlowType,
         chargerInventoryItemId:
-          deviceFlowType === 'rechargeable_device' ? formState.chargerInventoryItemId ?? null : null,
+          deviceFlowType === 'rechargeable_device'
+            ? formState.chargerInventoryItemId ?? null
+            : null,
         batteryLines: isBatteryFlow ? formState.batteryLines ?? [] : [],
-        sgkPillPrescription: formState.sgkFlag && isBatteryFlow ? !!formState.sgkPillPrescription : false,
+        sgkPillPrescription:
+          formState.sgkFlag && isBatteryFlow
+            ? !!formState.sgkPillPrescription
+            : false,
 
         sgkFlag: formState.sgkFlag,
-        sgkPrescriptionReceived: formState.sgkFlag ? formState.sgkPrescriptionReceived : false,
-        sgkRecordedToSystem: formState.sgkFlag ? formState.sgkRecordedToSystem : false,
+        sgkPrescriptionReceived: formState.sgkFlag
+          ? formState.sgkPrescriptionReceived
+          : false,
+        sgkRecordedToSystem: formState.sgkFlag
+          ? formState.sgkRecordedToSystem
+          : false,
 
         // SGK values are authored by the SGK UI section:
         // - sgkDeviceCount is manual
         // - sgkExpectedReimbursement is TOTAL
         sgkProfileId: formState.sgkFlag ? formState.sgkProfileId : '',
-        sgkExpectedReimbursement: formState.sgkFlag ? (formState.sgkExpectedReimbursement ?? '') : '',
-        sgkExpectedMonth: formState.sgkFlag ? (formState.sgkExpectedMonth ?? '') : '',
-        sgkPrescriptionNo: formState.sgkFlag ? (formState.sgkPrescriptionNo ?? '').trim() : '',
-        sgkDeviceCount: formState.sgkFlag ? (formState.sgkDeviceCount ?? '1') : '1',
+        sgkExpectedReimbursement: formState.sgkFlag
+          ? formState.sgkExpectedReimbursement ?? ''
+          : '',
+        sgkExpectedMonth: formState.sgkFlag
+          ? formState.sgkExpectedMonth ?? ''
+          : '',
+        sgkPrescriptionNo: formState.sgkFlag
+          ? (formState.sgkPrescriptionNo ?? '').trim()
+          : '',
+        sgkDeviceCount: formState.sgkFlag
+          ? formState.sgkDeviceCount ?? '1'
+          : '1',
 
         // Payment fields:
         // - battery_only: keep empty (SGK-only).
         // - others: strict & mapped from primary row.
         paymentMethod: isBatteryOnly ? '' : primaryPayment.paymentMethod,
         saleTotal: isBatteryOnly ? '' : saleTotalRaw,
-        cardFeeRate:
-          isBatteryOnly
-            ? ''
-            : primaryPayment.paymentMethod === 'Kredi_Kartı'
-              ? primaryPayment.cardFeeRate
-              : '',
+        cardFeeRate: isBatteryOnly
+          ? ''
+          : primaryPayment.paymentMethod === 'Kredi_Kartı'
+          ? primaryPayment.cardFeeRate
+          : '',
 
         referenceId: formState.referenceId,
         referenceName: formState.referenceName,
@@ -350,7 +396,10 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
       // İstersen çağıran tarafta success sonrası resetFormState() çalıştırabilirsin.
       // resetFormState();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Form doğrulaması sırasında hata oluştu.';
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Form doğrulaması sırasında hata oluştu.';
       setLocalError(message);
     }
   };
@@ -367,6 +416,8 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
     handleRemovePaymentRow,
 
     deviceDrafts,
+    setDeviceDrafts, // <-- EKLENDİ: NewPatientFormCard gibi çağıranlar için dışarı açılıyor.
+
     handleAddDeviceRow,
     handleChangeDeviceRow,
     handleRemoveDeviceRow,
@@ -409,7 +460,9 @@ function normalizePhone(input: string): string {
   if (v.startsWith('+')) {
     const digits = v.slice(1).replace(/\D/g, '');
     if (digits.length < 8 || digits.length > 15) {
-      throw new Error('Telefon numarası geçerli bir uluslararası formatta değil.');
+      throw new Error(
+        'Telefon numarası geçerli bir uluslararası formatta değil.',
+      );
     }
     return `+${digits}`;
   }
@@ -418,7 +471,9 @@ function normalizePhone(input: string): string {
   if (v.startsWith('00')) {
     const digits = v.slice(2).replace(/\D/g, '');
     if (digits.length < 8 || digits.length > 15) {
-      throw new Error('Telefon numarası geçerli bir uluslararası formatta değil.');
+      throw new Error(
+        'Telefon numarası geçerli bir uluslararası formatta değil.',
+      );
     }
     return `+${digits}`;
   }
@@ -437,7 +492,9 @@ function normalizePhone(input: string): string {
     return `+90${digits.slice(1)}`;
   }
 
-  throw new Error('Telefon numarası 10–11 haneli TR veya geçerli uluslararası formatta olmalıdır.');
+  throw new Error(
+    'Telefon numarası 10–11 haneli TR veya geçerli uluslararası formatta olmalıdır.',
+  );
 }
 
 // Normalize T.C.: keep digits only and require 11 digits.
