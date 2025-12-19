@@ -14,10 +14,6 @@
 //   basic fields (name/phone/reference) are prefilled.
 // - If trial has 1–2 devices, device rows are pre-populated with side/brand/model
 //   so that only serial number (inventory item) needs to be selected.
-//
-// Patch v3.1:
-// - Fixes TS type mismatch by typing mappedDevices as NewPatientDeviceDraft[] and
-//   casting side coming from trial devices to the proper ear-side type.
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -57,7 +53,7 @@ type FromTrialState = {
     note?: string | null;
   };
   fromTrialDevices?: {
-    side: string | null;
+    side: NewPatientDeviceDraft['side'] | null;
     brand: string | null;
     model: string | null;
   }[];
@@ -119,19 +115,15 @@ export function NewPatientFormCard({
                 (d.model && d.model.trim().length > 0),
             )
             .slice(0, 2)
-            .map(
-              (d): NewPatientDeviceDraft => ({
-                inventoryItemId: null,
-                // side tipini NewPatientDeviceEarSide ile hizalamak için trial'dan gelen değeri
-                // bire bir taşıyoruz; gerekirse kullanıcı burada değiştirir.
-                side: (d.side as any) ?? '',
-                brand: d.brand ?? '',
-                model: d.model ?? '',
-                listPrice: '',
-                salePrice: '',
-                note: '',
-              }),
-            )
+            .map((d) => ({
+              inventoryItemId: null,
+              side: (d.side ?? '') as NewPatientDeviceDraft['side'],
+              brand: d.brand?.trim() ?? '',
+              model: d.model?.trim() ?? '',
+              listPrice: '',
+              salePrice: '',
+              note: '',
+            }))
         : [];
 
     setFormState((s) => {
@@ -139,7 +131,7 @@ export function NewPatientFormCard({
         ...s,
         fullName: fromTrial.fullName || s.fullName,
         phone: fromTrial.phone ?? s.phone,
-        referenceId: fromTrial.referenceId,
+        referenceId: fromTrial.referenceId ?? s.referenceId,
         referenceName:
           fromTrial.referenceName != null && fromTrial.referenceName !== ''
             ? fromTrial.referenceName
@@ -164,7 +156,13 @@ export function NewPatientFormCard({
     }
 
     setFromTrialApplied(true);
-  }, [fromTrial, fromTrialApplied, fromTrialDevices, setFormState, setDeviceDrafts]);
+  }, [
+    fromTrial,
+    fromTrialApplied,
+    fromTrialDevices,
+    setFormState,
+    setDeviceDrafts,
+  ]);
 
   const deviceFlowType = formState.deviceFlowType ?? 'rechargeable_device';
   const isBatteryOnly = deviceFlowType === 'battery_only';
@@ -486,7 +484,9 @@ export function NewPatientFormCard({
                 <p className="text-[11px] text-slate-700">
                   Çoklu ödemelerin toplamı:{' '}
                   <span className="font-semibold">
-                    {formatCurrencyTry(paymentsTotal > 0 ? paymentsTotal : null)}
+                    {formatCurrencyTry(
+                      paymentsTotal > 0 ? paymentsTotal : null,
+                    )}
                   </span>
                 </p>
               </div>
@@ -530,7 +530,12 @@ export function NewPatientFormCard({
         </FormSection>
 
         <div className="flex justify-end">
-          <Button type="submit" variant="primary" size="md" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            disabled={isSubmitting}
+          >
             {isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
           </Button>
         </div>
