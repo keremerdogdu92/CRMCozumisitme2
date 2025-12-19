@@ -7,6 +7,16 @@ import { parseMoneyToNumber } from './api.core';
 
 /**
  * Update SGK-related fields for a given patient.
+ *
+ * Behavior:
+ * - sgk_flag false ise:
+ *   * sgk_prescription_received = false
+ *   * sgk_recorded_to_system = false
+ *   * sgk_recorded_to_system_at = NULL
+ * - sgk_flag true ve sgkRecordedToSystem true ise:
+ *   * sgk_recorded_to_system_at = now()
+ * - sgk_flag true ve sgkRecordedToSystem false ise:
+ *   * sgk_recorded_to_system_at = NULL
  */
 export async function updatePatientSgkFields(
   params: PatientSgkUpdateInput,
@@ -19,6 +29,9 @@ export async function updatePatientSgkFields(
     sgkPrescriptionNo,
   } = params;
 
+  const nextRecordedToSystemAt =
+    sgkFlag && sgkRecordedToSystem ? new Date().toISOString() : null;
+
   const { error } = await supabaseClient
     .from('patients')
     .update({
@@ -27,6 +40,7 @@ export async function updatePatientSgkFields(
         ? sgkPrescriptionReceived
         : false,
       sgk_recorded_to_system: sgkFlag ? sgkRecordedToSystem : false,
+      sgk_recorded_to_system_at: nextRecordedToSystemAt,
       sgk_prescription_no: sgkPrescriptionNo.trim() || null,
     })
     .eq('id', id);
