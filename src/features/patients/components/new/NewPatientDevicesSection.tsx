@@ -5,8 +5,17 @@
 // - Filters inventory items by item_type for device vs charger selection.
 // - Adds charger selection for rechargeable flow.
 // - Adds "Pil kutusu" list: addable lines, each line has box/pack/unit quantities in a single row.
+//
+// Patch v3.0 (trial → patient compatibility):
+// - Brand options now also include any prefilled deviceDraft brand values (even if not in inventory).
+// - Model options per row now also include that row's prefilled model (from trial), so the select
+//   shows the correct value even when the model name doesn't exactly match inventory strings.
 
-import type { BatteryLineDraft, NewPatientDeviceDraft, NewPatientDeviceFlowType } from '../../types';
+import type {
+  BatteryLineDraft,
+  NewPatientDeviceDraft,
+  NewPatientDeviceFlowType,
+} from '../../types';
 import { useInventoryItems } from '../../../inventory/api';
 import type { InventoryItemRow } from '../../../inventory/types';
 
@@ -33,7 +42,11 @@ const SIDE_OPTIONS = [
   { value: 'bilateral', label: 'Çift' },
 ] as const;
 
-const DEVICE_FLOW_OPTIONS: { value: NewPatientDeviceFlowType; label: string; hint: string }[] = [
+const DEVICE_FLOW_OPTIONS: {
+  value: NewPatientDeviceFlowType;
+  label: string;
+  hint: string;
+}[] = [
   {
     value: 'rechargeable_device',
     label: 'Şarjlı cihaz',
@@ -98,22 +111,34 @@ export function NewPatientDevicesSection({
     (row) => row.item_type === 'charger',
   );
 
-  // Unique marka listesi (devices only)
+  // Unique marka listesi (devices only) + trial'dan gelen marka değerleri
   const brandOptions = Array.from(
-    new Set(availableDeviceInventory.map((row) => row.brand).filter(Boolean)),
+    new Set(
+      [
+        ...availableDeviceInventory
+          .map((row) => row.brand)
+          .filter((b): b is string => !!b),
+        ...items.map((i) => i.brand).filter((b): b is string => !!b),
+      ].map((b) => b.trim()),
+    ),
   ).sort((a, b) => a.localeCompare(b));
 
   const selectedInventoryIds = items
     .map((d) => d.inventoryItemId)
     .filter((id): id is string => !!id);
 
-  const showDeviceRows = deviceFlowType === 'rechargeable_device' || deviceFlowType === 'battery_device';
+  const showDeviceRows =
+    deviceFlowType === 'rechargeable_device' ||
+    deviceFlowType === 'battery_device';
   const showChargerSelect = deviceFlowType === 'rechargeable_device';
-  const showBatteryBox = deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
+  const showBatteryBox =
+    deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
 
   const updateBatteryLine = (index: number, patch: Partial<BatteryLineDraft>) => {
     onChangeBatteryLines(
-      (batteryLines ?? []).map((l, i) => (i === index ? { ...l, ...patch } : l)),
+      (batteryLines ?? []).map((l, i) =>
+        i === index ? { ...l, ...patch } : l,
+      ),
     );
   };
 
@@ -151,7 +176,11 @@ export function NewPatientDevicesSection({
         </label>
         <select
           value={deviceFlowType}
-          onChange={(e) => onChangeDeviceFlowType(e.target.value as NewPatientDeviceFlowType)}
+          onChange={(e) =>
+            onChangeDeviceFlowType(
+              e.target.value as NewPatientDeviceFlowType,
+            )
+          }
           className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         >
           {DEVICE_FLOW_OPTIONS.map((o) => (
@@ -165,11 +194,16 @@ export function NewPatientDevicesSection({
         </p>
       </div>
 
-      {isLoading && <p className="text-[11px] text-slate-500">Stok listesi yükleniyor…</p>}
+      {isLoading && (
+        <p className="text-[11px] text-slate-500">
+          Stok listesi yükleniyor…
+        </p>
+      )}
 
       {isError && (
         <p className="text-[11px] text-red-600">
-          Stok listesi alınırken bir hata oluştu. Cihaz seçimi şu an yapılamıyor.
+          Stok listesi alınırken bir hata oluştu. Cihaz seçimi şu an
+          yapılamıyor.
         </p>
       )}
 
@@ -181,21 +215,32 @@ export function NewPatientDevicesSection({
           </label>
           <select
             value={chargerInventoryItemId ?? ''}
-            onChange={(e) => onChangeChargerInventoryItemId(e.target.value ? e.target.value : null)}
+            onChange={(e) =>
+              onChangeChargerInventoryItemId(
+                e.target.value ? e.target.value : null,
+              )
+            }
             className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             disabled={availableChargerInventory.length === 0}
           >
             <option value="">
-              {availableChargerInventory.length > 0 ? 'Şarj aleti seç...' : 'Stokta şarj aleti yok'}
+              {availableChargerInventory.length > 0
+                ? 'Şarj aleti seç...'
+                : 'Stokta şarj aleti yok'}
             </option>
             {availableChargerInventory.map((row) => (
               <option key={row.id} value={row.id}>
-                {(row.serial_no || row.barcode || 'Seri yok') + ' • ' + row.brand + ' ' + row.model}
+                {(row.serial_no || row.barcode || 'Seri yok') +
+                  ' • ' +
+                  row.brand +
+                  ' ' +
+                  row.model}
               </option>
             ))}
           </select>
           <p className="mt-1 text-[11px] text-slate-400">
-            Seçilirse, hasta kaydı sonrası bu satır da hastaya "satıldı" olarak işaretlenir.
+            Seçilirse, hasta kaydı sonrası bu satır da hastaya "satıldı" olarak
+            işaretlenir.
           </p>
         </div>
       )}
@@ -225,11 +270,16 @@ export function NewPatientDevicesSection({
               className="grid gap-2 rounded-md border border-slate-200 bg-slate-50 p-2 md:grid-cols-12"
             >
               <div className="md:col-span-3">
-                <label className="mb-1 block text-[11px] font-medium text-slate-600">Pil Tipi</label>
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                  Pil Tipi
+                </label>
                 <select
                   value={line.batteryType}
                   onChange={(e) =>
-                    updateBatteryLine(index, { batteryType: e.target.value as BatteryLineDraft['batteryType'] })
+                    updateBatteryLine(index, {
+                      batteryType:
+                        e.target.value as BatteryLineDraft['batteryType'],
+                    })
                   }
                   className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 >
@@ -241,42 +291,58 @@ export function NewPatientDevicesSection({
               </div>
 
               <div className="md:col-span-3">
-                <label className="mb-1 block text-[11px] font-medium text-slate-600">Marka</label>
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                  Marka
+                </label>
                 <input
                   type="text"
                   value={line.brand}
-                  onChange={(e) => updateBatteryLine(index, { brand: e.target.value })}
+                  onChange={(e) =>
+                    updateBatteryLine(index, { brand: e.target.value })
+                  }
                   className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   placeholder="Örn. Rayovac"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="mb-1 block text-[11px] font-medium text-slate-600">Kutu</label>
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                  Kutu
+                </label>
                 <input
                   inputMode="numeric"
                   value={String(line.quantity.box ?? 0)}
-                  onChange={(e) => updateBatteryQuantity(index, 'box', e.target.value)}
+                  onChange={(e) =>
+                    updateBatteryQuantity(index, 'box', e.target.value)
+                  }
                   className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="mb-1 block text-[11px] font-medium text-slate-600">Paket</label>
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                  Paket
+                </label>
                 <input
                   inputMode="numeric"
                   value={String(line.quantity.pack ?? 0)}
-                  onChange={(e) => updateBatteryQuantity(index, 'pack', e.target.value)}
+                  onChange={(e) =>
+                    updateBatteryQuantity(index, 'pack', e.target.value)
+                  }
                   className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="mb-1 block text-[11px] font-medium text-slate-600">Adet</label>
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                  Adet
+                </label>
                 <input
                   inputMode="numeric"
                   value={String(line.quantity.unit ?? 0)}
-                  onChange={(e) => updateBatteryQuantity(index, 'unit', e.target.value)}
+                  onChange={(e) =>
+                    updateBatteryQuantity(index, 'unit', e.target.value)
+                  }
                   className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
@@ -299,18 +365,27 @@ export function NewPatientDevicesSection({
       {showDeviceRows && (
         <>
           {items.map((item, index) => {
-            // Seçilen markaya göre modeller (devices only)
+            // Inventory modelleri (şu satırın markasına göre filtrelenmiş)
+            const inventoryModels = availableDeviceInventory
+              .filter((row) => !item.brand || row.brand === item.brand)
+              .map((row) => row.model)
+              .filter((m): m is string => !!m)
+              .map((m) => m.trim());
+
+            // Bu satır için model seçenekleri:
+            // - Stok modelleri
+            // - Trial'dan gelen model değeri (stokta olmasa bile)
             const modelOptions = Array.from(
-              new Set(
-                availableDeviceInventory
-                  .filter((row) => !item.brand || row.brand === item.brand)
-                  .map((row) => row.model)
-                  .filter(Boolean),
-              ),
+              new Set([
+                ...inventoryModels,
+                ...(item.model ? [item.model.trim()] : []),
+              ]),
             ).sort((a, b) => a.localeCompare(b));
 
             // Bu satır hariç seçilmiş inventory id'leri
-            const otherSelectedIds = selectedInventoryIds.filter((id) => id !== item.inventoryItemId);
+            const otherSelectedIds = selectedInventoryIds.filter(
+              (id) => id !== item.inventoryItemId,
+            );
 
             // Seri numarası / stok seçenekleri (devices only)
             const serialOptions = availableDeviceInventory.filter((row) => {
@@ -321,8 +396,9 @@ export function NewPatientDevicesSection({
             });
 
             const handleSelectBrand = (brand: string) => {
+              const trimmed = brand.trim();
               onChangeRow(index, {
-                brand,
+                brand: trimmed,
                 // Marka değişince model ve inventory seçimleri resetlenir.
                 model: '',
                 inventoryItemId: null,
@@ -331,8 +407,9 @@ export function NewPatientDevicesSection({
             };
 
             const handleSelectModel = (model: string) => {
+              const trimmed = model.trim();
               onChangeRow(index, {
-                model,
+                model: trimmed,
                 // Model değişince seri seçimleri resetlenir.
                 inventoryItemId: null,
                 listPrice: '',
@@ -348,7 +425,9 @@ export function NewPatientDevicesSection({
                 return;
               }
 
-              const inv = availableDeviceInventory.find((row) => row.id === inventoryId);
+              const inv = availableDeviceInventory.find(
+                (row) => row.id === inventoryId,
+              );
               if (!inv) {
                 onChangeRow(index, { inventoryItemId: inventoryId });
                 return;
@@ -358,7 +437,10 @@ export function NewPatientDevicesSection({
                 inventoryItemId: inventoryId,
                 brand: inv.brand || item.brand,
                 model: inv.model || item.model,
-                listPrice: inv.list_price != null ? inv.list_price.toString() : item.listPrice,
+                listPrice:
+                  inv.list_price != null
+                    ? inv.list_price.toString()
+                    : item.listPrice,
               });
             };
 
@@ -368,7 +450,9 @@ export function NewPatientDevicesSection({
                 className="space-y-2 rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-slate-700">Cihaz #{index + 1}</span>
+                  <span className="text-xs font-medium text-slate-700">
+                    Cihaz #{index + 1}
+                  </span>
                   {items.length > 1 && (
                     <button
                       type="button"
@@ -431,7 +515,9 @@ export function NewPatientDevicesSection({
                       className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                       disabled={!item.brand}
                     >
-                      <option value="">{item.brand ? 'Model seç...' : 'Önce marka seçin'}</option>
+                      <option value="">
+                        {item.brand ? 'Model seç...' : 'Önce marka seçin'}
+                      </option>
                       {modelOptions.map((model) => (
                         <option key={model} value={model}>
                           {model}
@@ -449,23 +535,34 @@ export function NewPatientDevicesSection({
                     </label>
                     <select
                       value={item.inventoryItemId ?? ''}
-                      onChange={(e) => handleSelectInventory(e.target.value ? e.target.value : null)}
+                      onChange={(e) =>
+                        handleSelectInventory(
+                          e.target.value ? e.target.value : null,
+                        )
+                      }
                       className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                       disabled={!item.brand || !item.model}
                     >
                       <option value="">
-                        {item.brand && item.model ? 'Seri numarası seç...' : 'Önce marka ve model seçin'}
+                        {item.brand && item.model
+                          ? 'Seri numarası seç...'
+                          : 'Önce marka ve model seçin'}
                       </option>
                       {serialOptions.map((row) => (
                         <option key={row.id} value={row.id}>
-                          {(row.serial_no || row.barcode || 'Seri yok') + ' • ' + row.brand + ' ' + row.model}
+                          {(row.serial_no || row.barcode || 'Seri yok') +
+                            ' • ' +
+                            row.brand +
+                            ' ' +
+                            row.model}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div className="md:col-span-6">
                     <p className="mt-5 text-[10px] text-slate-400">
-                      Seçilen seri numarası, hasta kaydından sonra bu hastaya &quot;satıldı&quot; olarak işaretlenir.
+                      Seçilen seri numarası, hasta kaydından sonra bu hastaya
+                      &quot;satıldı&quot; olarak işaretlenir.
                     </p>
                   </div>
                 </div>
@@ -479,7 +576,9 @@ export function NewPatientDevicesSection({
                     <input
                       type="text"
                       value={item.listPrice}
-                      onChange={(e) => onChangeRow(index, { listPrice: e.target.value })}
+                      onChange={(e) =>
+                        onChangeRow(index, { listPrice: e.target.value })
+                      }
                       className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                       placeholder="Örn. 25.000"
                     />
@@ -492,7 +591,9 @@ export function NewPatientDevicesSection({
                     <input
                       type="text"
                       value={item.note}
-                      onChange={(e) => onChangeRow(index, { note: e.target.value })}
+                      onChange={(e) =>
+                        onChangeRow(index, { note: e.target.value })
+                      }
                       className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                       placeholder="Renk, paket, kampanya notu..."
                     />
