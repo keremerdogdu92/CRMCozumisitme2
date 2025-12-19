@@ -18,9 +18,6 @@
 //   * No required validation for payment rows / totals.
 //   * No saleBreakdownDraft / installmentPlanDraft generated.
 //   * paymentMethod/saleTotal/cardFeeRate are submitted as empty strings.
-//
-// Patch v3.0 (trial → patient flow):
-// - Exposes setDeviceDrafts so caller can pre-populate devices from TrialDetailDrawer.
 
 import { useState, useMemo, FormEvent } from 'react';
 import type {
@@ -51,7 +48,9 @@ function createEmptyPaymentRow(): PaymentRowDraft {
 function createEmptyDeviceDraft(): NewPatientDeviceDraft {
   return {
     inventoryItemId: null,
-    side: '',
+    // NOTE: side is a stricter enum type (e.g. NewPatientDeviceEarSide).
+    // We start with an "unset" value and let the UI force user to choose.
+    side: '' as NewPatientDeviceDraft['side'],
     brand: '',
     model: '',
     listPrice: '',
@@ -368,7 +367,6 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
     handleRemovePaymentRow,
 
     deviceDrafts,
-    setDeviceDrafts,
     handleAddDeviceRow,
     handleChangeDeviceRow,
     handleRemoveDeviceRow,
