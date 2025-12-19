@@ -1,5 +1,13 @@
 // src/features/patients/api/api.patients.create.ts
-// Summary: Create patient rows and attach optional financial/device drafts.
+// Create patient rows and attach optional financial/device drafts.
+//
+// Patch v2.14:
+// - CHANGE: Respect deviceFlowType === 'battery_only' as "SGK-only battery patient":
+//   * paymentMethod / saleTotal / cardFeeRate become optional at backend as well
+//     (no validation error; payment_* columns remain NULL).
+//   * Aligns with useNewPatientForm v2.9 behavior.
+// - ADD: When SGK is enabled and sgkRecordedToSystem is true on creation,
+//   sgk_recorded_to_system_at is set to now().
 //
 // Patch v2.13:
 // - ADD: Optional linkedTrialId support via CreatePatientOptions.
@@ -353,6 +361,10 @@ export async function createPatient(
 
   const orgId = profile.org_id as string;
 
+  // Flow type affects payment requirements.
+  const deviceFlowType = input.deviceFlowType ?? 'rechargeable_device';
+  const isBatteryOnly = deviceFlowType === 'battery_only';
+
   // Legacy sale date override (mainly for CSV imports)
   let legacyCreatedAt: string | null = null;
   let legacyInvoiceIssuedAt: string | null = null;
@@ -374,39 +386,47 @@ export async function createPatient(
   }
 
   // Payment metadata on patient row
-  if (!input.paymentMethod) {
-    throw new Error('PAYMENT_METHOD: Ödeme şekli zorunludur.');
-  }
-
-  const saleTotalRaw = input.saleTotal?.trim() ?? '';
-  if (!saleTotalRaw) {
-    throw new Error('SALE_TOTAL_AMOUNT: Toplam satış tutarı zorunludur.');
-  }
-
   let payment_method: PatientPaymentMethod | null = null;
   let sale_total_amount: number | null = null;
   let card_fee_rate: number | null = null;
   let card_fee_amount: number | null = null;
 
-  sale_total_amount = parseMoneyToNumber(saleTotalRaw, 'SALE_TOTAL_AMOUNT');
+  if (!isBatteryOnly) {
+    if (!input.paymentMethod) {
+      throw new Error('PAYMENT_METHOD: Ödeme şekli zorunludur.');
+    }
 
-  if (input.paymentMethod) {
-    payment_method = input.paymentMethod as PatientPaymentMethod;
+    const saleTotalRaw = input.saleTotal?.trim() ?? '';
+    if (!saleTotalRaw) {
+      throw new Error('SALE_TOTAL_AMOUNT: Toplam satış tutarı zorunludur.');
+    }
 
-    if (payment_method === 'Kredi_Kartı') {
-      const feeRateRaw = input.cardFeeRate.trim().replace(',', '.');
-      const feeRateNum = Number(feeRateRaw);
+    sale_total_amount = parseMoneyToNumber(saleTotalRaw, 'SALE_TOTAL_AMOUNT');
 
-      if (!Number.isFinite(feeRateNum) || feeRateNum <= 0) {
-        throw new Error("CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0'dan büyük).");
-      }
+    if (input.paymentMethod) {
+      payment_method = input.paymentMethod as PatientPaymentMethod;
 
-      card_fee_rate = Number(feeRateNum.toFixed(2));
+      if (payment_method === 'Kredi_Kartı') {
+        const feeRateRaw = input.cardFeeRate.trim().replace(',', '.');
+        const feeRateNum = Number(feeRateRaw);
 
-      if (sale_total_amount != null) {
-        card_fee_amount = Number((sale_total_amount * (feeRateNum / 100)).toFixed(2));
+        if (!Number.isFinite(feeRateNum) || feeRateNum <= 0) {
+          throw new Error("CARD_FEE_RATE: Geçerli bir komisyon oranı girin (0'dan büyük).");
+        }
+
+        card_fee_rate = Number(feeRateNum.toFixed(2));
+
+        if (sale_total_amount != null) {
+          card_fee_amount = Number((sale_total_amount * (feeRateNum / 100)).toFixed(2));
+        }
       }
     }
+  } else {
+    // battery_only: SGK-only battery patient (no financials on patient row).
+    payment_method = null;
+    sale_total_amount = null;
+    card_fee_rate = null;
+    card_fee_amount = null;
   }
 
   // SGK profile-based expected reimbursement (optional)
@@ -444,6 +464,9 @@ export async function createPatient(
   const nowIso = new Date().toISOString();
   const invoiceIssuedAt = shouldMarkInvoiceIssued ? legacyInvoiceIssuedAt ?? nowIso : null;
 
+  const sgkRecordedToSystemAt =
+    input.sgkFlag && input.sgkRecordedToSystem ? nowIso : null;
+
   const insertPayload: Record<string, any> = {
     org_id: orgId,
     full_name: input.fullName.trim(),
@@ -451,6 +474,7 @@ export async function createPatient(
     sgk_flag: input.sgkFlag,
     sgk_prescription_received: input.sgkFlag ? input.sgkPrescriptionReceived : false,
     sgk_recorded_to_system: input.sgkFlag ? input.sgkRecordedToSystem : false,
+    sgk_recorded_to_system_at: sgkRecordedToSystemAt,
     reference_id: input.referenceId,
     payment_method,
     sale_total_amount,
@@ -491,6 +515,7 @@ export async function createPatient(
         'satisfaction_10',
         'sgk_prescription_received',
         'sgk_recorded_to_system',
+        'sgk_recorded_to_system_at',
         'national_id',
         'address',
         'kin_phone',
@@ -529,6 +554,8 @@ export async function createPatient(
     satisfaction_10: row.satisfaction_10 != null ? Number(row.satisfaction_10) : null,
     sgk_prescription_received: (row.sgk_prescription_received as boolean | null | undefined) ?? null,
     sgk_recorded_to_system: (row.sgk_recorded_to_system as boolean | null | undefined) ?? null,
+    sgk_recorded_to_system_at:
+      (row.sgk_recorded_to_system_at as string | null | undefined) ?? null,
     national_id: (row.national_id as string | null | undefined) ?? null,
     address: (row.address as string | null | undefined) ?? null,
     kin_phone: (row.kin_phone as string | null | undefined) ?? null,
@@ -611,8 +638,8 @@ export async function createPatient(
   // - Device flow is 'battery_device' or 'battery_only'
   // - SGK is enabled (this table is for SGK reimbursement events)
   // - At least one battery line has qty > 0
-  const deviceFlowType = input.deviceFlowType ?? 'rechargeable_device';
-  const isBatteryFlow = deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
+  const isBatteryFlow =
+    deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
 
   if (input.sgkFlag && isBatteryFlow && (batteryLines ?? []).some((l) => qtyTotal(l) > 0)) {
     await recordBatteryPrescriptionDeliveries({
