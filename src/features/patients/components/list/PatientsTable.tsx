@@ -24,6 +24,7 @@ type PatientsTableProps = {
 type PatientTableColumnId =
   | 'created_at'
   | 'full_name'
+  | 'national_id'
   | 'phone'
   | 'device'
   | 'ear'
@@ -50,6 +51,13 @@ const PATIENT_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (p) => p.full_name ?? '',
+  },
+  {
+    id: 'national_id',
+    label: 'TC Kimlik No',
+    sortable: false,
+    isDefaultVisible: true,
+    accessor: (p) => p.national_id ?? '',
   },
   {
     id: 'phone',
@@ -333,6 +341,16 @@ export function PatientsTable({
                 </div>
                 <div>
                   <span className="block text-[10px] uppercase text-slate-400">
+                    TC Kimlik No
+                  </span>
+                  <span className="font-medium">
+                    {p.national_id && p.national_id.trim().length > 0
+                      ? p.national_id
+                      : '-'}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
                     Cihaz
                   </span>
                   <span className="line-clamp-2 font-medium">
@@ -489,6 +507,17 @@ export function PatientsTable({
                             className="max-w-[220px] truncate px-4 py-2 text-slate-800"
                           >
                             {p.full_name}
+                          </td>
+                        );
+                      case 'national_id':
+                        return (
+                          <td
+                            key={col.id}
+                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                          >
+                            {p.national_id && p.national_id.trim().length > 0
+                              ? p.national_id
+                              : '-'}
                           </td>
                         );
                       case 'phone':
