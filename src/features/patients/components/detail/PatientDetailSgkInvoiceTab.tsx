@@ -59,6 +59,11 @@ export function PatientDetailSgkInvoiceTab({
     ? formatDate(patient.sgk_expected_reimbursement_month)
     : '-';
 
+  const sgkRecordedToSystemAtDisplay =
+    patient.sgk_recorded_to_system_at != null
+      ? formatDate(patient.sgk_recorded_to_system_at)
+      : '-';
+
   return (
     <section className="space-y-2">
       <h4 className="text-xs font-semibold uppercase text-slate-500">
@@ -110,12 +115,18 @@ export function PatientDetailSgkInvoiceTab({
           </label>
         </div>
 
+        {/* Sisteme işlendiği tarih (okuma amaçlı) */}
+        <div className="mt-1 pl-5 text-[11px] text-slate-500">
+          <span className="mr-1">Sisteme işlendiği tarih:</span>
+          <span className="font-medium text-slate-700">
+            {sgkRecordedToSystemAtDisplay}
+          </span>
+        </div>
+
         {/* SGK prescription no (editable but biraz geri planda) */}
         <div className="mt-2 flex flex-col gap-1 text-xs">
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-700">
-              SGK Reçete No
-            </span>
+            <span className="text-xs text-slate-700">SGK Reçete No</span>
             <input
               type="text"
               value={sgkPrescriptionNo}
@@ -130,7 +141,7 @@ export function PatientDetailSgkInvoiceTab({
         <div className="mt-2 grid grid-cols-1 gap-1 border-t border-slate-200 pt-2 text-xs sm:grid-cols-2">
           <div className="flex justify-between gap-2">
             <span className="text-xs text-slate-500">SGK Profili</span>
-            <span className="text-xs text-slate-900 text-right">
+            <span className="text-right text-xs text-slate-900">
               {sgkProfileLabel}
             </span>
           </div>
@@ -138,7 +149,7 @@ export function PatientDetailSgkInvoiceTab({
             <span className="text-xs text-slate-500">
               Beklenen SGK Ödemesi (net)
             </span>
-            <span className="text-xs text-slate-900 text-right">
+            <span className="text-right text-xs text-slate-900">
               {sgkExpectedReimbursementDisplay}
             </span>
           </div>
@@ -146,7 +157,7 @@ export function PatientDetailSgkInvoiceTab({
             <span className="text-xs text-slate-500">
               Beklenen Ödeme Ayı
             </span>
-            <span className="text-xs text-slate-900 text-right">
+            <span className="text-right text-xs text-slate-900">
               {sgkExpectedMonthDisplay}
             </span>
           </div>
@@ -154,8 +165,8 @@ export function PatientDetailSgkInvoiceTab({
 
         <p className="mt-1 text-[11px] text-slate-500">
           Bu alanlar ana listede satırları renklendirir ve SGK / fatura
-          uyarılarını tetikler. Beklenen SGK ödemesi tutarı ve ayı,
-          profil + sistem kuralına göre otomatik hesaplanır.
+          uyarılarını tetikler. Beklenen SGK ödemesi tutarı ve ayı, profil +
+          sistem kuralına göre otomatik hesaplanır.
         </p>
 
         {/* Invoice status */}
