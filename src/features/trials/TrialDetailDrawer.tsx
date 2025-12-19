@@ -154,65 +154,34 @@ export function TrialDetailDrawer({
 
   const content = (
     <div className="flex h-full flex-col">
-      {/* Tab bar + print controls */}
+      {/* Tab bar (sadece sekmeler) */}
       <div className="border-b border-slate-200 px-3 pt-2">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-wrap gap-1">
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={
-                    'rounded-md px-3 py-1.5 text-xs font-medium ' +
-                    (isActive
-                      ? 'bg-primary-50 text-primary-700 border border-primary-200'
-                      : 'text-slate-600 hover:bg-slate-50 border border-transparent')
-                  }
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex flex-col items-end gap-1">
-            <button
-              type="button"
-              onClick={handleConvertToPatient}
-              className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-800 shadow-sm hover:bg-emerald-100"
-            >
-              Hastaya dönüştür
-            </button>
-
-            <label className="flex items-center gap-1 text-[11px] text-slate-600">
-              <input
-                type="checkbox"
-                className="h-3 w-3 rounded border-slate-300"
-                checked={includeDetailsForPrint}
-                onChange={(e) => setIncludeDetailsForPrint(e.target.checked)}
-              />
-              <span>Detaylı çıktı (katalog özellikleri)</span>
-            </label>
-
-            <button
-              type="button"
-              onClick={handlePrintOffer}
-              disabled={typedDevices.length === 0}
-              className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Teklif Yazdır
-            </button>
-          </div>
+        <div className="flex flex-wrap gap-1">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={
+                  'rounded-md px-3 py-1.5 text-xs font-medium ' +
+                  (isActive
+                    ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                    : 'text-slate-600 hover:bg-slate-50 border border-transparent')
+                }
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Tab contents */}
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm">
         {activeTab === 'summary' && (
-          <section className="space-y-2">
+          <section className="space-y-3">
             <h4 className="text-xs font-semibold uppercase text-slate-500">
               Özet
             </h4>
@@ -264,6 +233,40 @@ export function TrialDetailDrawer({
                 <span className="whitespace-pre-line text-xs text-slate-900">
                   {trial.note && trial.note.trim() ? trial.note : '-'}
                 </span>
+              </div>
+            </div>
+
+            {/* Özet sekmesi altındaki aksiyonlar */}
+            <div className="mt-1 flex flex-col gap-2 rounded-md border border-slate-100 bg-white px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <label className="flex items-center gap-1 text-[11px] text-slate-600">
+                  <input
+                    type="checkbox"
+                    className="h-3 w-3 rounded border-slate-300"
+                    checked={includeDetailsForPrint}
+                    onChange={(e) => setIncludeDetailsForPrint(e.target.checked)}
+                  />
+                  <span>Detaylı çıktı (katalog özellikleri)</span>
+                </label>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePrintOffer}
+                    disabled={typedDevices.length === 0}
+                    className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Teklif Yazdır
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleConvertToPatient}
+                    className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-800 shadow-sm hover:bg-emerald-100"
+                  >
+                    Hastaya dönüştür
+                  </button>
+                </div>
               </div>
             </div>
           </section>
