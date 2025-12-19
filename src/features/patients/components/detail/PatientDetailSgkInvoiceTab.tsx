@@ -142,7 +142,12 @@ export function PatientDetailSgkInvoiceTab({
     // Device count & pill bayrakları DB'de tutulmuyor, sadece hesaplama amaçlı.
     setSgkDeviceCount('1');
     setSgkPillPrescription(false);
-  }, [patient.id, patient.sgk_profile, patient.sgk_expected_reimbursement, patient.sgk_expected_reimbursement_month]);
+  }, [
+    patient.id,
+    patient.sgk_profile,
+    patient.sgk_expected_reimbursement,
+    patient.sgk_expected_reimbursement_month,
+  ]);
 
   const findProfileNetToFirm = (profileId: string): number | null => {
     const profile = (SGK_PROFILES as SgkProfileInternal[]).find(
@@ -236,7 +241,10 @@ export function PatientDetailSgkInvoiceTab({
 
   const invoiceDateDisplay = invoiceIssuedAt ? formatDate(invoiceIssuedAt) : '-';
 
-  const sgkProfileLabel = getSgkProfileLabel(sgkProfileId || patient.sgk_profile ?? null);
+  // FIX: avoid mixing || and ?? without parentheses.
+  const sgkProfileLabel = getSgkProfileLabel(
+    (sgkProfileId || patient.sgk_profile) ?? null,
+  );
 
   const sgkExpectedReimbursementDisplay = sgkExpectedReimbursement
     ? `${sgkExpectedReimbursement} ₺`
