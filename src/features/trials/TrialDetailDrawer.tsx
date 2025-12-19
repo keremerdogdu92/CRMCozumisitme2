@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { SideDrawer } from '../../components/layout/SideDrawer';
 import type { TrialRow, TrialDeviceRow } from './types';
 import {
@@ -58,8 +59,10 @@ export function TrialDetailDrawer({
   open,
   onClose,
 }: TrialDetailDrawerProps) {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TrialTabId>('summary');
-  const [includeDetailsForPrint, setIncludeDetailsForPrint] = useState<boolean>(true);
+  const [includeDetailsForPrint, setIncludeDetailsForPrint] =
+    useState<boolean>(true);
 
   // Org ayarları (logo, firma adı, iletişim bilgileri, watermark)
   const { data: orgSettings } = useOrgSettings();
@@ -130,6 +133,25 @@ export function TrialDetailDrawer({
     });
   };
 
+  const handleConvertToPatient = () => {
+    if (!trial) return;
+
+    const fromTrial = {
+      trialId: trial.id,
+      fullName: trial.full_name ?? '',
+      phone: trial.phone ?? '',
+      referenceId: trial.reference_id ?? null,
+      referenceName: referenceLite?.full_name ?? '',
+      note: trial.note ?? '',
+    };
+
+    navigate('/patients', {
+      state: {
+        fromTrial,
+      },
+    });
+  };
+
   const content = (
     <div className="flex h-full flex-col">
       {/* Tab bar + print controls */}
@@ -157,6 +179,14 @@ export function TrialDetailDrawer({
           </div>
 
           <div className="flex flex-col items-end gap-1">
+            <button
+              type="button"
+              onClick={handleConvertToPatient}
+              className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-800 shadow-sm hover:bg-emerald-100"
+            >
+              Hastaya dönüştür
+            </button>
+
             <label className="flex items-center gap-1 text-[11px] text-slate-600">
               <input
                 type="checkbox"
