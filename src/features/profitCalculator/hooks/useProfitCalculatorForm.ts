@@ -156,15 +156,57 @@ export function useProfitCalculatorForm() {
     });
   }
 
+  /**
+   * Reference selection handler:
+   * - Sadece selectedReferenceId'yi günceller, eğer DB'den gelen bir komisyon şeması yoksa
+   *   (kullanıcının elle girdiği oran/tutar korunur).
+   * - Eğer referans için commission_scheme + ilgili değer (percent/fixed) doluysa,
+   *   formdaki referenceScheme + referencePercent/referenceFixed otomatik olarak doldurulur.
+   */
   function handleReferenceChange(id: string | null) {
     const ref = references.find((r) => r.id === id) || null;
-    setInputs((prev) => ({
-      ...prev,
-      selectedReferenceId: id,
-      referenceScheme: ref?.scheme ?? null,
-      referencePercent: ref?.default_percent ?? 0,
-      referenceFixed: ref?.default_fixed ?? 0,
-    }));
+
+    setInputs((prev) => {
+      if (!ref) {
+        // Referans temizleniyorsa sadece ID'yi sıfırla; kullanıcı girdiği komisyonu kaybetmesin.
+        return {
+          ...prev,
+          selectedReferenceId: null,
+        };
+      }
+
+      const hasPercent =
+        ref.scheme === "percent" && ref.default_percent != null;
+      const hasFixed =
+        ref.scheme === "fixed" && ref.default_fixed != null;
+
+      // Eğer veritabanında tanımlı bir şema yoksa, sadece referansı bağla, komisyonu elle girilmiş haliyle bırak.
+      if (!hasPercent && !hasFixed) {
+        return {
+          ...prev,
+          selectedReferenceId: ref.id,
+        };
+      }
+
+      if (hasPercent) {
+        return {
+          ...prev,
+          selectedReferenceId: ref.id,
+          referenceScheme: "percent",
+          referencePercent: ref.default_percent ?? 0,
+          referenceFixed: 0,
+        };
+      }
+
+      // hasFixed
+      return {
+        ...prev,
+        selectedReferenceId: ref.id,
+        referenceScheme: "fixed",
+        referenceFixed: ref.default_fixed ?? 0,
+        referencePercent: 0,
+      };
+    });
   }
 
   function addAccessoryRow(preset?: { name: string; unitCost: number }) {
