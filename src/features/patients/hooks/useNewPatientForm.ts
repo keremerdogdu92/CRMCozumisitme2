@@ -18,6 +18,9 @@
 //   * No required validation for payment rows / totals.
 //   * No saleBreakdownDraft / installmentPlanDraft generated.
 //   * paymentMethod/saleTotal/cardFeeRate are submitted as empty strings.
+//
+// Patch v3.0 (trial → patient flow):
+// - Exposes setDeviceDrafts so caller can pre-populate devices from TrialDetailDrawer.
 
 import { useState, useMemo, FormEvent } from 'react';
 import type {
@@ -365,6 +368,7 @@ export function useNewPatientForm({ onSubmit, externalErrorMessage }: UseNewPati
     handleRemovePaymentRow,
 
     deviceDrafts,
+    setDeviceDrafts,
     handleAddDeviceRow,
     handleChangeDeviceRow,
     handleRemoveDeviceRow,
