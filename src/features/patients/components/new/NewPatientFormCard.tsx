@@ -16,12 +16,16 @@
 //   so that only serial number (inventory item) needs to be selected.
 //
 // Patch v3.1:
-// - Fixes TS type mismatch by seeding device drafts with side = '' (valid NewPatientDeviceEarSide),
-//   while still prefilling brand/model from trial devices.
+// - Fixes TS type mismatch by typing mappedDevices as NewPatientDeviceDraft[] and
+//   casting side coming from trial devices to the proper ear-side type.
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import type { NewPatientForm, BatteryLineDraft } from '../../types';
+import type {
+  NewPatientForm,
+  BatteryLineDraft,
+  NewPatientDeviceDraft,
+} from '../../types';
 import { InlineCreateCard } from '../../../../components/layout/InlineCreateCard';
 import { FormSection } from '../../../../components/layout/FormSection';
 import { NewPatientReferenceField } from './NewPatientReferenceField';
@@ -106,7 +110,7 @@ export function NewPatientFormCard({
   useEffect(() => {
     if (!fromTrial || fromTrialApplied) return;
 
-    const mappedDevices =
+    const mappedDevices: NewPatientDeviceDraft[] =
       fromTrialDevices && fromTrialDevices.length > 0
         ? fromTrialDevices
             .filter(
@@ -115,17 +119,19 @@ export function NewPatientFormCard({
                 (d.model && d.model.trim().length > 0),
             )
             .slice(0, 2)
-            .map((d) => ({
-              inventoryItemId: null,
-              // Ear side tip uyuşmazlığına girmemek için boş bırakıyoruz.
-              // Kullanıcı gerektiğinde kulak seçimini burada yapabilir.
-              side: '',
-              brand: d.brand ?? '',
-              model: d.model ?? '',
-              listPrice: '',
-              salePrice: '',
-              note: '',
-            }))
+            .map(
+              (d): NewPatientDeviceDraft => ({
+                inventoryItemId: null,
+                // side tipini NewPatientDeviceEarSide ile hizalamak için trial'dan gelen değeri
+                // bire bir taşıyoruz; gerekirse kullanıcı burada değiştirir.
+                side: (d.side as any) ?? '',
+                brand: d.brand ?? '',
+                model: d.model ?? '',
+                listPrice: '',
+                salePrice: '',
+                note: '',
+              }),
+            )
         : [];
 
     setFormState((s) => {
