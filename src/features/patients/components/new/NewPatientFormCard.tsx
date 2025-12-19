@@ -17,7 +17,11 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import type { NewPatientForm, BatteryLineDraft } from '../../types';
+import type {
+  NewPatientForm,
+  BatteryLineDraft,
+  NewPatientDeviceDraft,
+} from '../../types';
 import { InlineCreateCard } from '../../../../components/layout/InlineCreateCard';
 import { FormSection } from '../../../../components/layout/FormSection';
 import { NewPatientReferenceField } from './NewPatientReferenceField';
@@ -102,7 +106,7 @@ export function NewPatientFormCard({
   useEffect(() => {
     if (!fromTrial || fromTrialApplied) return;
 
-    const mappedDevices =
+    const mappedDevices: NewPatientDeviceDraft[] =
       fromTrialDevices && fromTrialDevices.length > 0
         ? fromTrialDevices
             .filter(
@@ -113,7 +117,8 @@ export function NewPatientFormCard({
             .slice(0, 2)
             .map((d) => ({
               inventoryItemId: null,
-              side: d.side ?? '',
+              // Trial tarafındaki side string'ini NewPatientDeviceEarSide union tipine cast ediyoruz.
+              side: (d.side ?? '') as NewPatientDeviceDraft['side'],
               brand: d.brand ?? '',
               model: d.model ?? '',
               listPrice: '',
@@ -152,7 +157,13 @@ export function NewPatientFormCard({
     }
 
     setFromTrialApplied(true);
-  }, [fromTrial, fromTrialApplied, fromTrialDevices, setFormState, setDeviceDrafts]);
+  }, [
+    fromTrial,
+    fromTrialApplied,
+    fromTrialDevices,
+    setFormState,
+    setDeviceDrafts,
+  ]);
 
   const deviceFlowType = formState.deviceFlowType ?? 'rechargeable_device';
   const isBatteryOnly = deviceFlowType === 'battery_only';
@@ -474,7 +485,9 @@ export function NewPatientFormCard({
                 <p className="text-[11px] text-slate-700">
                   Çoklu ödemelerin toplamı:{' '}
                   <span className="font-semibold">
-                    {formatCurrencyTry(paymentsTotal > 0 ? paymentsTotal : null)}
+                    {formatCurrencyTry(
+                      paymentsTotal > 0 ? paymentsTotal : null,
+                    )}
                   </span>
                 </p>
               </div>
@@ -518,7 +531,12 @@ export function NewPatientFormCard({
         </FormSection>
 
         <div className="flex justify-end">
-          <Button type="submit" variant="primary" size="md" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            disabled={isSubmitting}
+          >
             {isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
           </Button>
         </div>
