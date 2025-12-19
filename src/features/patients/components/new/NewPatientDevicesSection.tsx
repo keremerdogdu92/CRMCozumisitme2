@@ -11,11 +11,16 @@
 // - Model options per row now also include that row's prefilled model (from trial), so the select
 //   shows the correct value even when the model name doesn't exactly match inventory strings.
 //
-// Patch v3.1 (trial brand/model normalization):
-// - When deviceDrafts come prefilled from trial, brand/model values are normalized against
-//   available inventory (case/whitespace-insensitive) in a useEffect.
-// - If a matching inventory brand/model is found, the draft is updated to use that canonical
-//   label, preventing visually duplicated options and allowing serial-no dropdown to work.
+// Patch v3.2 (aggressive normalize + manual guidance):
+// - Brand/model equality checks for serial-no dropdown now use a normalized comparison
+//   (trim + whitespace collapse + TR-upper) to match trial vs inventory strings.
+// - Brand/model dropdown options are deduplicated by normalized key, preferring inventory labels.
+// - If a prefilled trial brand+model cannot be matched to any inventory row (even after normalization),
+//   a warning box is shown above the device rows listing:
+//   * which device row (Cihaz #),
+//   * which brand/model came from trial,
+//   * suggested candidate models from stock (same normalized brand).
+//   The user is directed to manually select the correct brand/model from stock.
 
 import { useEffect } from 'react';
 import type {
@@ -105,6 +110,13 @@ function normalizeName(value: string | null | undefined): string {
   return collapsed.toLocaleUpperCase('tr-TR');
 }
 
+type UnmatchedDeviceInfo = {
+  index: number;
+  brand: string;
+  model: string;
+  candidateModels: string[];
+};
+
 export function NewPatientDevicesSection({
   deviceFlowType,
   onChangeDeviceFlowType,
@@ -133,11 +145,8 @@ export function NewPatientDevicesSection({
   );
 
   // Trial'dan gelen deviceDraft brand/model değerlerini, stoktaki
-  // brand/model stringleriyle normalize ederek eşler.
-  // Eşleşme bulunursa ilgili satırın brand/model alanını stoktaki
-  // kanonik değerle güncelleriz. Böylece:
-  // - Dropdown'da aynı görünen iki model yerine tek model olur.
-  // - Seri no filtresi (brand+model eşitliği) doğru çalışır.
+  // brand/model stringleriyle normalize ederek eşler. Eğer normalize
+  // edilince birebir eşleşen stok etiketi varsa, draft'i o etiketle güncelleriz.
   useEffect(() => {
     if (!availableDeviceInventory.length || !items.length) return;
 
@@ -173,17 +182,25 @@ export function NewPatientDevicesSection({
     });
   }, [availableDeviceInventory, items, onChangeRow]);
 
-  // Unique marka listesi (devices only) + trial'dan gelen marka değerleri
-  const brandOptions = Array.from(
-    new Set(
-      [
-        ...availableDeviceInventory
-          .map((row) => row.brand)
-          .filter((b): b is string => !!b),
-        ...items.map((i) => i.brand).filter((b): b is string => !!b),
-      ].map((b) => b.trim()),
-    ),
-  ).sort((a, b) => a.localeCompare(b));
+  // Aggressive dedupe: brandOptions tek bir label listesi, normalize key'e göre.
+  const brandMap = new Map<string, string>();
+  for (const row of availableDeviceInventory) {
+    const key = normalizeName(row.brand);
+    if (!key) continue;
+    if (!brandMap.has(key)) {
+      brandMap.set(key, (row.brand ?? '').trim());
+    }
+  }
+  for (const item of items) {
+    const key = normalizeName(item.brand);
+    if (!key) continue;
+    if (!brandMap.has(key)) {
+      brandMap.set(key, (item.brand ?? '').trim());
+    }
+  }
+  const brandOptions = Array.from(brandMap.values()).sort((a, b) =>
+    a.localeCompare(b),
+  );
 
   const selectedInventoryIds = items
     .map((d) => d.inventoryItemId)
@@ -227,6 +244,54 @@ export function NewPatientDevicesSection({
     onChangeBatteryLines(next.length > 0 ? next : [createEmptyBatteryLine()]);
   };
 
+  // Trial'dan gelen ama stokta normalize edilmiş brand+model kombinasyonunu
+  // bulamadığımız satırlar için uyarı listesi hazırlayalım.
+  const unmatchedDevices: UnmatchedDeviceInfo[] = items
+    .map<UnmatchedDeviceInfo | null>((item, index) => {
+      const brand = item.brand?.trim() ?? '';
+      const model = item.model?.trim() ?? '';
+
+      // Boş brand/model için uyarı göstermiyoruz; kullanıcı zaten elle seçecek.
+      if (!brand || !model) return null;
+
+      const nb = normalizeName(brand);
+      const nm = normalizeName(model);
+      if (!nb || !nm) return null;
+
+      // 1) Birebir (normalize) brand+model kombinasyonu var mı?
+      const hasExactCombo = availableDeviceInventory.some((row) => {
+        return (
+          normalizeName(row.brand) === nb && normalizeName(row.model) === nm
+        );
+      });
+
+      if (hasExactCombo) {
+        // Bu satır için stokta net eşleşme var; uyarı gerekmez.
+        return null;
+      }
+
+      // 2) En azından aynı normalized marka için stok modellerini listeleyelim.
+      const sameBrandRows = availableDeviceInventory.filter(
+        (row) => normalizeName(row.brand) === nb,
+      );
+      const candidateModels = Array.from(
+        new Set(
+          sameBrandRows
+            .map((row) => row.model)
+            .filter((m): m is string => !!m)
+            .map((m) => m.trim()),
+        ),
+      ).sort((a, b) => a.localeCompare(b));
+
+      return {
+        index,
+        brand,
+        model,
+        candidateModels,
+      };
+    })
+    .filter((x): x is UnmatchedDeviceInfo => x !== null);
+
   return (
     <div className="space-y-3">
       {/* Flow selector */}
@@ -263,44 +328,6 @@ export function NewPatientDevicesSection({
           Stok listesi alınırken bir hata oluştu. Cihaz seçimi şu an
           yapılamıyor.
         </p>
-      )}
-
-      {/* Charger selection (rechargeable) */}
-      {showChargerSelect && (
-        <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
-          <label className="mb-1 block text-[11px] font-medium text-slate-600">
-            Şarj Aleti (opsiyonel)
-          </label>
-          <select
-            value={chargerInventoryItemId ?? ''}
-            onChange={(e) =>
-              onChangeChargerInventoryItemId(
-                e.target.value ? e.target.value : null,
-              )
-            }
-            className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            disabled={availableChargerInventory.length === 0}
-          >
-            <option value="">
-              {availableChargerInventory.length > 0
-                ? 'Şarj aleti seç...'
-                : 'Stokta şarj aleti yok'}
-            </option>
-            {availableChargerInventory.map((row) => (
-              <option key={row.id} value={row.id}>
-                {(row.serial_no || row.barcode || 'Seri yok') +
-                  ' • ' +
-                  row.brand +
-                  ' ' +
-                  row.model}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-[11px] text-slate-400">
-            Seçilirse, hasta kaydı sonrası bu satır da hastaya "satıldı" olarak
-            işaretlenir.
-          </p>
-        </div>
       )}
 
       {/* Battery box */}
@@ -419,37 +446,97 @@ export function NewPatientDevicesSection({
         </div>
       )}
 
+      {/* Device rows uyarı mesajı (normalize edilemeyen trial modelleri) */}
+      {showDeviceRows && unmatchedDevices.length > 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+          <p className="font-medium">
+            Uyarı: Bazı cihaz satırları stoktaki marka/model ile otomatik
+            eşleşmedi.
+          </p>
+          <ul className="mt-1 list-disc space-y-1 pl-4">
+            {unmatchedDevices.map((u) => (
+              <li key={u.index}>
+                Cihaz #{u.index + 1}:{' '}
+                <span className="font-semibold">
+                  Marka &quot;{u.brand || '-'}&quot;, Model &quot;
+                  {u.model || '-'}&quot;.
+                </span>{' '}
+                {u.candidateModels.length > 0 ? (
+                  <>
+                    Stoktaki olası modeller:{' '}
+                    <span className="font-semibold">
+                      {u.candidateModels.join(', ')}
+                    </span>
+                    . Bu satırda lütfen marka/model alanlarını stoktan manuel
+                    olarak seç.
+                  </>
+                ) : (
+                  <>
+                    Bu kombinasyon için stokta eşleşen bir marka/model
+                    bulunamadı. Bu satırda stoktan uygun marka ve modeli elle
+                    seç.
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Device rows */}
       {showDeviceRows && (
         <>
           {items.map((item, index) => {
             // Inventory modelleri (şu satırın markasına göre filtrelenmiş)
-            const inventoryModels = availableDeviceInventory
-              .filter((row) => !item.brand || row.brand === item.brand)
+            const inventoryModelsRaw = availableDeviceInventory
+              .filter((row) => {
+                if (!item.brand) return true;
+                return (
+                  normalizeName(row.brand) === normalizeName(item.brand)
+                );
+              })
               .map((row) => row.model)
-              .filter((m): m is string => !!m)
-              .map((m) => m.trim());
+              .filter((m): m is string => !!m);
 
-            // Bu satır için model seçenekleri:
-            // - Stok modelleri
-            // - Trial'dan gelen model değeri (stokta olmasa bile)
-            const modelOptions = Array.from(
-              new Set([
-                ...inventoryModels,
-                ...(item.model ? [item.model.trim()] : []),
-              ]),
-            ).sort((a, b) => a.localeCompare(b));
+            // Model seçeneklerini de normalize key'e göre dedupe et.
+            const modelMap = new Map<string, string>();
+            for (const m of inventoryModelsRaw) {
+              const key = normalizeName(m);
+              if (!key) continue;
+              if (!modelMap.has(key)) {
+                modelMap.set(key, m.trim());
+              }
+            }
+            if (item.model) {
+              const key = normalizeName(item.model);
+              if (key && !modelMap.has(key)) {
+                modelMap.set(key, item.model.trim());
+              }
+            }
+            const modelOptions = Array.from(modelMap.values()).sort((a, b) =>
+              a.localeCompare(b),
+            );
 
             // Bu satır hariç seçilmiş inventory id'leri
             const otherSelectedIds = selectedInventoryIds.filter(
               (id) => id !== item.inventoryItemId,
             );
 
-            // Seri numarası / stok seçenekleri (devices only)
+            // Seri numarası / stok seçenekleri (devices only) – normalize eşitliğe göre filtreler.
             const serialOptions = availableDeviceInventory.filter((row) => {
               if (otherSelectedIds.includes(row.id)) return false;
-              if (item.brand && row.brand !== item.brand) return false;
-              if (item.model && row.model !== item.model) return false;
+              if (
+                item.brand &&
+                normalizeName(row.brand) !== normalizeName(item.brand)
+              ) {
+                return false;
+              }
+              if (
+                item.model &&
+                normalizeName(row.model) !== normalizeName(item.model)
+              ) {
+                return false;
+              }
               return true;
             });
 
