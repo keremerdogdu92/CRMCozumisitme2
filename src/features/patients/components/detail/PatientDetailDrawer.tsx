@@ -43,6 +43,7 @@ type PatientDetailDrawerProps = {
     sgkPrescriptionReceived: boolean;
     sgkRecordedToSystem: boolean;
     sgkPrescriptionNo: string;
+    sgkRecordedToSystemAt: string | null;
   }) => void;
   isSaving: boolean;
   errorMsg?: string;
@@ -81,6 +82,14 @@ export function PatientDetailDrawer({
   );
   const [activeTab, setActiveTab] =
     useState<PatientDetailTabId>(initialTab);
+
+  // Sisteme işlendiği tarih (timestamptz) – DB’den gelen değer.
+  const [sgkRecordedToSystemAt, setSgkRecordedToSystemAt] = useState<
+    string | null
+  >(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((patient as any).sgk_recorded_to_system_at as string | null) ?? null,
+  );
 
   // Invoice state is handled locally here and synced with Supabase
   // via updatePatientInvoiceStatus.
@@ -185,6 +194,12 @@ export function PatientDetailDrawer({
     setInvoiceIssuedAt(
       (patient.invoice_issued_at as string | null) ?? null,
     );
+
+    // DB’den gelen sisteme işlendiği tarih (varsa) ile senkronize et.
+    setSgkRecordedToSystemAt(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((patient as any).sgk_recorded_to_system_at as string | null) ?? null,
+    );
   }, [
     patient.id,
     patient.sgk_flag,
@@ -202,6 +217,9 @@ export function PatientDetailDrawer({
       sgkPrescriptionReceived: sgkFlag ? sgkPrescriptionReceived : false,
       sgkRecordedToSystem: sgkFlag ? sgkRecordedToSystem : false,
       sgkPrescriptionNo,
+      // SGK kapalıysa veya "sisteme işlendi" işaretli değilse tarih NULL gider.
+      sgkRecordedToSystemAt:
+        sgkFlag && sgkRecordedToSystem ? sgkRecordedToSystemAt ?? null : null,
     });
   };
 
@@ -313,10 +331,13 @@ export function PatientDetailDrawer({
               if (!value) {
                 setSgkPrescriptionReceived(false);
                 setSgkRecordedToSystem(false);
+                setSgkRecordedToSystemAt(null);
               }
             }}
             onChangeSgkPrescriptionReceived={setSgkPrescriptionReceived}
             onChangeSgkRecordedToSystem={setSgkRecordedToSystem}
+            sgkRecordedToSystemAt={sgkRecordedToSystemAt}
+            onChangeSgkRecordedToSystemAt={setSgkRecordedToSystemAt}
             sgkPrescriptionNo={sgkPrescriptionNo}
             onChangeSgkPrescriptionNo={setSgkPrescriptionNo}
             invoiceIssued={invoiceIssued}
