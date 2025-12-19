@@ -1,15 +1,53 @@
 // src/features/patients/api/api.patients.update.ts
-// Update helpers for SGK fields and invoice status on patients.
+// Update helpers for SGK fields, SGK profile info and invoice status on patients.
 
 import { supabaseClient } from '../../../utils/supabaseClient';
 import type { PatientSgkUpdateInput, PatientPaymentMethod } from '../types';
 import { parseMoneyToNumber } from './api.core';
 
+type PatientSgkUpdateWithRecordedAt = PatientSgkUpdateInput & {
+  sgkRecordedToSystemAt?: string | null;
+};
+
+function normalizeRecordedAt(
+  sgkFlag: boolean,
+  sgkRecordedToSystem: boolean,
+  rawValue: string | null | undefined,
+): string | null {
+  if (!sgkFlag || !sgkRecordedToSystem) {
+    return null;
+  }
+
+  if (!rawValue || rawValue.trim().length === 0) {
+    return new Date().toISOString();
+  }
+
+  const value = rawValue.trim();
+
+  // "yyyy-MM-dd" formatı için hızlı yol.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const d = new Date(value + 'T00:00:00.000Z');
+    if (!Number.isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+  }
+
+  // Diğer tarih formatları (ISO vb.) için fallback.
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString();
+  }
+
+  // Hiçbiri parse edilemezse son çare: now.
+  return new Date().toISOString();
+}
+
 /**
  * Update SGK-related fields for a given patient.
+ * Artık sgk_recorded_to_system_at kolonunu da günceller.
  */
 export async function updatePatientSgkFields(
-  params: PatientSgkUpdateInput,
+  params: PatientSgkUpdateWithRecordedAt,
 ): Promise<void> {
   const {
     id,
@@ -17,14 +55,24 @@ export async function updatePatientSgkFields(
     sgkPrescriptionReceived,
     sgkRecordedToSystem,
     sgkPrescriptionNo,
+    sgkRecordedToSystemAt,
   } = params;
+
+  const effectiveRecordedAt = normalizeRecordedAt(
+    sgkFlag,
+    sgkRecordedToSystem,
+    sgkRecordedToSystemAt,
+  );
 
   const { error } = await supabaseClient
     .from('patients')
     .update({
       sgk_flag: sgkFlag,
-      sgk_prescription_received: sgkFlag ? sgkPrescriptionReceived : false,
+      sgk_prescription_received: sgkFlag
+        ? sgkPrescriptionReceived
+        : false,
       sgk_recorded_to_system: sgkFlag ? sgkRecordedToSystem : false,
+      sgk_recorded_to_system_at: effectiveRecordedAt,
       sgk_prescription_no: sgkPrescriptionNo.trim() || null,
     })
     .eq('id', id);
@@ -39,63 +87,55 @@ export async function updatePatientSgkFields(
 }
 
 /**
- * Update SGK profile-based reimbursement info for a given patient.
- * Used from the SGK tab "Düzenle" bölümü.
- *
- * - sgkProfileId: SGK profil kodu (ör: 'SGK_YETISKIN_EMEKLI'), boşsa NULL.
- * - sgkExpectedReimbursement: TR formatında toplam beklenen ödeme (örn: "8.478,40"),
- *   boşsa NULL.
- * - sgkExpectedMonth: "yyyy-MM" formatında beklenen ödeme ayı, boşsa NULL.
+ * Update SGK profile-based expected reimbursement info.
+ * Kullanım: SGK profili sekmesindeki "SGK Profilini Kaydet" butonu.
  */
 export async function updatePatientSgkProfileInfo(params: {
   id: string;
   sgkProfileId: string | null;
   sgkExpectedReimbursement: string | null;
-  sgkExpectedMonth: string | null;
+  sgkExpectedMonth: string | null; // "yyyy-MM" veya null
 }): Promise<void> {
-  const { id, sgkProfileId, sgkExpectedReimbursement, sgkExpectedMonth } = params;
+  const {
+    id,
+    sgkProfileId,
+    sgkExpectedReimbursement,
+    sgkExpectedMonth,
+  } = params;
 
-  const updatePayload: Record<string, unknown> = {};
-
-  // sgk_profile
-  if (typeof sgkProfileId !== 'undefined') {
-    const trimmed = sgkProfileId ? sgkProfileId.trim() : '';
-    updatePayload.sgk_profile = trimmed.length > 0 ? trimmed : null;
+  // Beklenen tutarı TR formatlı string'ten number'a çevir.
+  let expectedAmount: number | null = null;
+  if (sgkExpectedReimbursement && sgkExpectedReimbursement.trim().length > 0) {
+    const parsed = parseMoneyToNumber(sgkExpectedReimbursement);
+    expectedAmount =
+      parsed != null && !Number.isNaN(parsed) ? parsed : null;
   }
 
-  // sgk_expected_reimbursement
-  if (typeof sgkExpectedReimbursement !== 'undefined') {
-    const raw = sgkExpectedReimbursement ?? '';
-    if (!raw.trim()) {
-      updatePayload.sgk_expected_reimbursement = null;
-    } else {
-      updatePayload.sgk_expected_reimbursement = parseMoneyToNumber(
-        raw,
-        'SGK_EXPECTED_REIMBURSEMENT',
-      );
-    }
-  }
-
-  // sgk_expected_reimbursement_month
-  if (typeof sgkExpectedMonth !== 'undefined') {
-    const raw = sgkExpectedMonth ?? '';
-    if (!raw.trim()) {
-      updatePayload.sgk_expected_reimbursement_month = null;
-    } else {
-      const [yearStr, monthStr] = raw.split('-');
-      const year = Number(yearStr);
-      const month = Number(monthStr);
-      if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
-        throw new Error('SGK_EXPECTED_MONTH: Geçerli bir ay seçin (yyyy-AA).');
-      }
-      const date = new Date(Date.UTC(year, month - 1, 15));
-      updatePayload.sgk_expected_reimbursement_month = date.toISOString().slice(0, 10);
+  // "yyyy-MM" → "yyyy-MM-15" (date kolonuna yazılacak).
+  let expectedMonthDate: string | null = null;
+  if (sgkExpectedMonth && sgkExpectedMonth.trim().length > 0) {
+    const [yearStr, monthStr] = sgkExpectedMonth.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    if (
+      Number.isFinite(year) &&
+      Number.isFinite(month) &&
+      month >= 1 &&
+      month <= 12
+    ) {
+      const d = new Date(Date.UTC(year, month - 1, 15));
+      // Supabase tarafında date kolonu olduğu için sadece YYYY-MM-DD kısmını bırakmak yeterli.
+      expectedMonthDate = d.toISOString().slice(0, 10);
     }
   }
 
   const { error } = await supabaseClient
     .from('patients')
-    .update(updatePayload)
+    .update({
+      sgk_profile: sgkProfileId,
+      sgk_expected_reimbursement: expectedAmount,
+      sgk_expected_reimbursement_month: expectedMonthDate,
+    })
     .eq('id', id);
 
   if (error) {
