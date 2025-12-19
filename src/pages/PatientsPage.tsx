@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import {
   PATIENTS_QUERY_KEY,
   fetchPatients,
@@ -25,17 +25,35 @@ type PatientDetailTabId =
   | 'payments'
   | 'audiogram';
 
+type PatientsPageLocationState = {
+  fromTrial?: {
+    trialId: string;
+    fullName: string;
+    phone: string | null;
+    referenceId: string | null;
+    referenceName?: string | null;
+    note?: string | null;
+  };
+  fromTrialDevices?: {
+    side: string | null;
+    brand: string | null;
+    model: string | null;
+  }[];
+} | undefined;
+
 export default function PatientsPage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
+  const location = useLocation() as { state?: PatientsPageLocationState };
 
   // Optional: if PatientsPage is opened from a Trial context,
   // ?trialId=<uuid> can be passed in the URL.
   const linkedTrialId = searchParams.get('trialId');
+  const openedFromTrial = !!location.state?.fromTrial;
 
   const [search, setSearch] = useState('');
   const [sgkFilter, setSgkFilter] = useState<'all' | 'sgk' | 'non-sgk'>('all');
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState<boolean>(openedFromTrial);
   const [detailPatient, setDetailPatient] = useState<PatientRow | null>(null);
   const [detailInitialTab, setDetailInitialTab] =
     useState<PatientDetailTabId>('info');
