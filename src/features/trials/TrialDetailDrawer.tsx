@@ -145,9 +145,27 @@ export function TrialDetailDrawer({
       note: trial.note ?? '',
     };
 
-    navigate('/patients', {
+    // Map trial devices → lightweight payload for new patient device drafts.
+    const devicePayload =
+      typedDevices.length > 0
+        ? typedDevices
+            .filter(
+              (d) =>
+                (d.brand && d.brand.trim().length > 0) ||
+                (d.model && d.model.trim().length > 0),
+            )
+            .slice(0, 2)
+            .map((d) => ({
+              side: d.side ?? '',
+              brand: d.brand ?? '',
+              model: d.model ?? '',
+            }))
+        : [];
+
+    navigate(`/patients?trialId=${trial.id}`, {
       state: {
         fromTrial,
+        fromTrialDevices: devicePayload,
       },
     });
   };
