@@ -14,6 +14,11 @@
 //   basic fields (name/phone/reference) are prefilled.
 // - If trial has 1–2 devices, device rows are pre-populated with side/brand/model
 //   so that only serial number (inventory item) needs to be selected.
+//
+// Patch v3.1 (multi-device + bilateral support):
+// - fromTrialDevices artık 2 satırla sınırlı değil; seçilen tüm satırlar dolduruluyor.
+// - Trial tarafında "Çift" satırları sağ/sol olarak iki satıra bölündükten sonra
+//   burada doğrudan deviceDrafts olarak açılıyor.
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -114,9 +119,9 @@ export function NewPatientFormCard({
                 (d.brand && d.brand.trim().length > 0) ||
                 (d.model && d.model.trim().length > 0),
             )
-            .slice(0, 2)
             .map((d) => ({
               inventoryItemId: null,
+              // Trial tarafında side string; burada union'a cast ediyoruz.
               side: (d.side ?? '') as NewPatientDeviceDraft['side'],
               brand: d.brand?.trim() ?? '',
               model: d.model?.trim() ?? '',
@@ -141,10 +146,9 @@ export function NewPatientFormCard({
       if (mappedDevices.length > 0) {
         return {
           ...nextBase,
-          sgkDeviceCount:
-            mappedDevices.length >= 2
-              ? '2'
-              : (nextBase.sgkDeviceCount ?? '1'),
+          // SGK cihaz adedi varsayılanı: 1/2. Birden fazla satır olsa da
+          // burada sadece 1 veya 2 kulaklık SGK adedini tetiklemek için kullanılıyor.
+          sgkDeviceCount: mappedDevices.length >= 2 ? '2' : '1',
         };
       }
 
