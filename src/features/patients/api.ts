@@ -1,5 +1,3 @@
-// değişiklik
-
 // src/features/patients/api.ts
 // Barrel module for Patients feature API:
 // - Re-exports query keys, fetch/search helpers and mutations.
@@ -18,9 +16,14 @@ import {
 } from './api/api.core';
 import type { PatientForReference } from './api/api.core';
 
-// Mutations on patients table
+// Low-level create + options type (new file)
 import {
-  createPatient,
+  createPatient as createPatientCore,
+  type CreatePatientOptions,
+} from './api/api.patients.create';
+
+// Mutations on patients table (SGK, invoice status)
+import {
   updatePatientSgkFields as updatePatientSgkFieldsInner,
   updatePatientInvoiceStatus as updatePatientInvoiceStatusInner,
 } from './api/api.patients';
@@ -41,17 +44,21 @@ import {
 /**
  * UI-level helper used by PatientsPage.
  *
- * Takes a NewPatientForm and uses the low-level createPatient(...)
- * without any special options (invoice_issued = false by default).
+ * Takes a NewPatientForm and uses the low-level createPatient(...).
  *
  * React Query infers:
  *   - variables: NewPatientForm
  *   - result:    PatientRow
+ *
+ * Options:
+ *   - linkedTrialId?: when provided, backend RPC will link the trial
+ *     to the newly created patient and delete the trial.
  */
 export async function createPatientFromForm(
   input: NewPatientForm,
+  options?: CreatePatientOptions,
 ): Promise<PatientRow> {
-  return createPatient(input);
+  return createPatientCore(input, options);
 }
 
 // Re-exported symbols used across the app.
@@ -74,3 +81,4 @@ export const updatePatientInvoiceStatus = updatePatientInvoiceStatusInner;
 
 // Types used by References feature.
 export type { PatientForReference };
+export type { CreatePatientOptions };
