@@ -9,6 +9,8 @@
 // - For deviceFlowType === 'battery_only': allow saving with empty payment rows (SGK-only battery patient).
 // - Payment UI stays visible, but required constraints are relaxed for battery_only.
 
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import type { NewPatientForm, BatteryLineDraft } from '../../types';
 import { InlineCreateCard } from '../../../../components/layout/InlineCreateCard';
 import { FormSection } from '../../../../components/layout/FormSection';
@@ -18,7 +20,10 @@ import { NewPatientPaymentSection } from './NewPatientPaymentSection';
 import { PatientSenetPlanFormCard } from '../billing/PatientSenetPlanFormCard';
 import { NewPatientDevicesSection } from './NewPatientDevicesSection';
 import { Button } from '../../../../components/ui/Button';
-import { useNewPatientForm, formatCurrencyTry } from '../../hooks/useNewPatientForm';
+import {
+  useNewPatientForm,
+  formatCurrencyTry,
+} from '../../hooks/useNewPatientForm';
 
 type NewPatientFormCardProps = {
   open: boolean;
@@ -28,6 +33,17 @@ type NewPatientFormCardProps = {
   errorMessage?: string;
 };
 
+type FromTrialState = {
+  fromTrial?: {
+    trialId: string;
+    fullName: string;
+    phone: string | null;
+    referenceId: string | null;
+    referenceName?: string | null;
+    note?: string | null;
+  };
+};
+
 export function NewPatientFormCard({
   open,
   onToggle,
@@ -35,6 +51,11 @@ export function NewPatientFormCard({
   isSubmitting,
   errorMessage,
 }: NewPatientFormCardProps) {
+  const location = useLocation() as { state?: FromTrialState };
+  const fromTrial = location.state?.fromTrial;
+
+  const [fromTrialApplied, setFromTrialApplied] = useState(false);
+
   const {
     formState,
     setFormState,
@@ -62,6 +83,24 @@ export function NewPatientFormCard({
     onSubmit,
     externalErrorMessage: errorMessage,
   });
+
+  // Eğer form deneme (trial) detayından açıldıysa, ilk render'da temel alanları doldur.
+  useEffect(() => {
+    if (!fromTrial || fromTrialApplied) return;
+
+    setFormState((s) => ({
+      ...s,
+      fullName: fromTrial.fullName || s.fullName,
+      phone: fromTrial.phone ?? s.phone,
+      referenceId: fromTrial.referenceId,
+      referenceName:
+        fromTrial.referenceName != null && fromTrial.referenceName !== ''
+          ? fromTrial.referenceName
+          : s.referenceName,
+    }));
+
+    setFromTrialApplied(true);
+  }, [fromTrial, fromTrialApplied, setFormState]);
 
   const deviceFlowType = formState.deviceFlowType ?? 'rechargeable_device';
   const isBatteryOnly = deviceFlowType === 'battery_only';
@@ -262,7 +301,9 @@ export function NewPatientFormCard({
                 sgkPrescriptionReceived={formState.sgkPrescriptionReceived}
                 sgkRecordedToSystem={formState.sgkRecordedToSystem}
                 sgkProfileId={formState.sgkProfileId ?? ''}
-                sgkExpectedReimbursement={formState.sgkExpectedReimbursement ?? ''}
+                sgkExpectedReimbursement={
+                  formState.sgkExpectedReimbursement ?? ''
+                }
                 sgkExpectedMonth={formState.sgkExpectedMonth ?? ''}
                 sgkPrescriptionNo={formState.sgkPrescriptionNo ?? ''}
                 sgkDeviceCount={formState.sgkDeviceCount ?? '1'}
@@ -270,13 +311,19 @@ export function NewPatientFormCard({
                   setFormState((s) => ({
                     ...s,
                     sgkFlag: value,
-                    sgkPrescriptionReceived: value ? s.sgkPrescriptionReceived : false,
-                    sgkRecordedToSystem: value ? s.sgkRecordedToSystem : false,
+                    sgkPrescriptionReceived: value
+                      ? s.sgkPrescriptionReceived
+                      : false,
+                    sgkRecordedToSystem: value
+                      ? s.sgkRecordedToSystem
+                      : false,
                     sgkProfileId: value ? s.sgkProfileId ?? '' : '',
-                    sgkExpectedReimbursement: value ? s.sgkExpectedReimbursement ?? '' : '',
+                    sgkExpectedReimbursement: value
+                      ? s.sgkExpectedReimbursement ?? ''
+                      : '',
                     sgkExpectedMonth: value ? s.sgkExpectedMonth ?? '' : '',
                     sgkPrescriptionNo: value ? s.sgkPrescriptionNo ?? '' : '',
-                    sgkDeviceCount: value ? (s.sgkDeviceCount ?? '1') : '1',
+                    sgkDeviceCount: value ? s.sgkDeviceCount ?? '1' : '1',
                     sgkPillPrescription: value ? !!s.sgkPillPrescription : false,
                   }))
                 }
@@ -385,9 +432,9 @@ export function NewPatientFormCard({
           {hasSenetPayment && (
             <div className="mt-3 space-y-3">
               <p className="text-[11px] text-slate-600">
-                Aşağıdaki alanlar bu yeni hasta için senet planı taslağını tutar.
-                Hasta kaydından sonra bu bilgiler detay ekranındaki Ödemeler
-                sekmesinde de düzenlenebilir.
+                Aşağıdaki alanlar bu yeni hasta için senet planı taslağını
+                tutar. Hasta kaydından sonra bu bilgiler detay ekranındaki
+                Ödemeler sekmesinde de düzenlenebilir.
               </p>
 
               <PatientSenetPlanFormCard
