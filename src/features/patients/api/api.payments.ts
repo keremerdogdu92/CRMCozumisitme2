@@ -39,7 +39,8 @@ export async function fetchPatientPaymentsByPatientId(
       amount,
       method,
       note,
-      created_at
+      created_at,
+      created_by
     `,
     )
     .eq('patient_id', patientId)
@@ -58,6 +59,8 @@ export async function fetchPatientPaymentsByPatientId(
     method: (row.method as string | null) ?? null,
     note: (row.note as string | null) ?? null,
     created_at: row.created_at as string,
+    // Keep nullable for backward compatibility / older rows
+    created_by: (row.created_by as string | null) ?? null,
   }));
 }
 
