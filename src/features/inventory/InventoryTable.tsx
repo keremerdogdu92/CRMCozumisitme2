@@ -1,5 +1,11 @@
 // src/features/inventory/InventoryTable.tsx
-// Table view for inventory items with filters, column visibility toggles and sorting.
+// Table view for inventory items with filters, column visibility toggles,
+// sorting and export to CSV / XLSX (Excel).
+//
+// Export behavior:
+// - Uses currently visible columns
+// - Exports filtered + sorted rows (yani ekranda gördüğün listeyi)
+// - Para alanları ham sayı (₺ işareti yok), Excel içinde formatlamaya uygun
 
 import { useMemo } from 'react';
 import type {
@@ -11,6 +17,10 @@ import { useTablePreferences } from '../../components/table/useTablePreferences'
 import { TableColumnsControl } from '../../components/table/TableColumnsControl';
 import type { TableColumnDef } from '../../components/table/tableTypes';
 import { useCurrentProfile } from '../auth/useCurrentProfile';
+import {
+  exportToCsvFile,
+  exportToXlsxFile,
+} from '../../utils/csvUtils';
 
 type Props = {
   items: InventoryItemRow[];
@@ -45,6 +55,7 @@ const INVENTORY_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (i) => i.created_at ?? null,
+    exportAccessor: (i) => i.created_at ?? null,
   },
   {
     id: 'sold_at',
@@ -52,6 +63,7 @@ const INVENTORY_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (i) => i.sold_at ?? null,
+    exportAccessor: (i) => i.sold_at ?? null,
   },
   {
     id: 'sold_patient_name',
@@ -59,6 +71,7 @@ const INVENTORY_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (i) => i.sold_patient_name ?? '',
+    exportAccessor: (i) => i.sold_patient_name ?? '',
   },
   {
     id: 'brand',
@@ -66,6 +79,7 @@ const INVENTORY_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (i) => i.brand ?? '',
+    exportAccessor: (i) => i.brand ?? '',
   },
   {
     id: 'model',
@@ -73,6 +87,7 @@ const INVENTORY_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (i) => i.model ?? '',
+    exportAccessor: (i) => i.model ?? '',
   },
   {
     id: 'item_type',
@@ -80,6 +95,7 @@ const INVENTORY_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (i) => i.item_type,
+    exportAccessor: (i) => i.item_type,
   },
   {
     id: 'ear_side',
@@ -87,6 +103,7 @@ const INVENTORY_COLUMNS: TableColumnDef<
     sortable: false,
     isDefaultVisible: true,
     accessor: (i) => i.ear_side ?? 'none',
+    exportAccessor: (i) => i.ear_side ?? 'none',
   },
   {
     id: 'barcode',
@@ -94,6 +111,7 @@ const INVENTORY_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (i) => i.barcode ?? '',
+    exportAccessor: (i) => i.barcode ?? '',
   },
   {
     id: 'serial_no',
@@ -101,6 +119,7 @@ const INVENTORY_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (i) => i.serial_no ?? '',
+    exportAccessor: (i) => i.serial_no ?? '',
   },
   {
     id: 'purchase_price',
@@ -108,6 +127,7 @@ const INVENTORY_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (i) => i.purchase_price ?? 0,
+    exportAccessor: (i) => i.purchase_price ?? null,
   },
   {
     id: 'device_price',
@@ -115,6 +135,7 @@ const INVENTORY_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (i) => i.device_price ?? 0,
+    exportAccessor: (i) => i.device_price ?? null,
   },
   {
     id: 'status',
@@ -123,6 +144,7 @@ const INVENTORY_COLUMNS: TableColumnDef<
     isDefaultVisible: true,
     accessor: (i) =>
       i.status === 'in_stock' ? 0 : i.status === 'sold' ? 1 : 2,
+    exportAccessor: (i) => i.status,
   },
 ];
 
@@ -177,12 +199,17 @@ export function InventoryTable({
       const matchesType =
         typeFilter === 'all' || item.item_type === typeFilter;
 
+      const brand = (item.brand ?? '').toLowerCase();
+      const model = (item.model ?? '').toLowerCase();
+      const barcode = (item.barcode ?? '').toLowerCase();
+      const serial = (item.serial_no ?? '').toLowerCase();
+
       const matchesSearch =
         !term ||
-        item.brand.toLowerCase().includes(term) ||
-        item.model.toLowerCase().includes(term) ||
-        (item.barcode ?? '').toLowerCase().includes(term) ||
-        (item.serial_no ?? '').toLowerCase().includes(term);
+        brand.includes(term) ||
+        model.includes(term) ||
+        barcode.includes(term) ||
+        serial.includes(term);
 
       return matchesStatus && matchesType && matchesSearch;
     });
@@ -238,6 +265,68 @@ export function InventoryTable({
 
     return result;
   }, [filtered, prefsState.sortBy, prefsState.sortDir]);
+
+  const handleExport = (type: 'csv' | 'xlsx') => {
+    if (visibleColumns.length === 0) return;
+
+    const headers = visibleColumns.map(
+      (col) => col.exportLabel ?? col.label,
+    );
+
+    const rows = sorted.map((item) =>
+      visibleColumns.map((col) => {
+        const id = col.id as InventoryTableColumnId;
+        const customExport =
+          col.exportAccessor?.(item as any as InventoryItemRow);
+        if (customExport !== undefined) return customExport;
+
+        switch (id) {
+          case 'created_at':
+            return item.created_at ?? null;
+          case 'sold_at':
+            return item.sold_at ?? null;
+          case 'sold_patient_name':
+            return item.sold_patient_name ?? '';
+          case 'brand':
+            return item.brand ?? '';
+          case 'model':
+            return item.model ?? '';
+          case 'item_type':
+            return item.item_type;
+          case 'ear_side':
+            return item.ear_side ?? 'none';
+          case 'barcode':
+            return item.barcode ?? '';
+          case 'serial_no':
+            return item.serial_no ?? '';
+          case 'purchase_price':
+            return item.purchase_price ?? null;
+          case 'device_price':
+            return item.device_price ?? null;
+          case 'status':
+            return item.status;
+          default:
+            return '';
+        }
+      }),
+    );
+
+    const baseFileName = 'inventory_export';
+
+    if (type === 'csv') {
+      exportToCsvFile({
+        fileName: baseFileName,
+        headers,
+        rows,
+      });
+    } else {
+      exportToXlsxFile({
+        fileName: baseFileName,
+        headers,
+        rows,
+      });
+    }
+  };
 
   if (items.length === 0) {
     return (
@@ -295,6 +384,22 @@ export function InventoryTable({
               isColumnVisible={isColumnVisible}
               toggleColumn={toggleColumn}
             />
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handleExport('csv')}
+                className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              >
+                CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExport('xlsx')}
+                className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              >
+                Excel
+              </button>
+            </div>
           </div>
         </div>
 
@@ -352,6 +457,22 @@ export function InventoryTable({
             isColumnVisible={isColumnVisible}
             toggleColumn={toggleColumn}
           />
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleExport('csv')}
+              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            >
+              CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExport('xlsx')}
+              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            >
+              Excel
+            </button>
+          </div>
         </div>
       </div>
 
