@@ -79,6 +79,7 @@ export async function fetchPatients(): Promise<PatientRow[]> {
         'satisfaction_10',
         'sgk_prescription_received',
         'sgk_recorded_to_system',
+        'sgk_recorded_to_system_at',
         'national_id',
         'address',
         'kin_phone',
@@ -130,6 +131,8 @@ export async function fetchPatients(): Promise<PatientRow[]> {
         (row.sgk_prescription_received as boolean | null | undefined) ?? null,
       sgk_recorded_to_system:
         (row.sgk_recorded_to_system as boolean | null | undefined) ?? null,
+      sgk_recorded_to_system_at:
+        (row.sgk_recorded_to_system_at as string | null | undefined) ?? null,
 
       // Identity / address / relative
       national_id: (row.national_id as string | null | undefined) ?? null,
