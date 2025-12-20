@@ -72,7 +72,7 @@ function toCsvCell(value: unknown): string {
 
 function triggerDownload(blob: Blob, fileName: string) {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
-    // In non-browser environments do nothing.
+    // Non-browser environment: do nothing.
     return;
   }
 
@@ -118,7 +118,6 @@ export function exportToXlsxFile(options: ExportArrayOptions): void {
 
   if (!headers || headers.length === 0) return;
   if (typeof window === 'undefined') {
-    // Avoid running in non-browser environments.
     return;
   }
 
