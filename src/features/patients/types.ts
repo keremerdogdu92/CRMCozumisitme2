@@ -11,6 +11,8 @@
 // v2.11:
 // - Adds sgk_recorded_to_system_at (optional) to PatientRow to mirror DB column.
 //   * Used to show "sisteme işlendiği tarih" in patient detail SGK tab.
+// - Extends PatientSgkUpdateInput to include sgkRecordedToSystemAt so UI can
+//   persist the manual/system date into DB.
 
 export type PatientPaymentMethod =
   | 'Tim'
@@ -123,6 +125,16 @@ export type PatientSgkUpdateInput = {
   sgkPrescriptionReceived: boolean;
   sgkRecordedToSystem: boolean;
   sgkPrescriptionNo: string;
+
+  /**
+   * Optional explicit timestamp for "sisteme işlendi" info.
+   * - When sgkRecordedToSystem = true:
+   *   - If provided, DB will be set to this value.
+   *   - If omitted, backend may fall back to now().
+   * - When sgkRecordedToSystem = false:
+   *   - DB will usually be set to NULL (clear).
+   */
+  sgkRecordedToSystemAt?: string | null;
 };
 
 export type PatientPaymentRow = {
@@ -133,6 +145,7 @@ export type PatientPaymentRow = {
   method: string | null;
   note: string | null;
   created_at: string;
+  created_by: string | null;
 };
 
 export type PatientInstallmentPlanRow = {
