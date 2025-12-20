@@ -21,6 +21,10 @@
 //   * which brand/model came from trial,
 //   * suggested candidate models from stock (same normalized brand).
 //   The user is directed to manually select the correct brand/model from stock.
+//
+// Patch v3.3 (hyphen-insensitive matching):
+// - normalizeName now treats '-', '–', '—', '_', '/' and '.' gibi işaretleri boşluk gibi ele alır.
+//   Böylece REACH R-Li 80 ile REACH R Li 80 aynı model kabul edilir.
 
 import { useEffect } from 'react';
 import type {
@@ -98,13 +102,19 @@ function createEmptyBatteryLine(): BatteryLineDraft {
 
 /**
  * Normalizes brand/model names for comparison:
+ * - replaces common separators (- _ / . and long dashes) with spaces
  * - trims
  * - collapses internal whitespace
- * - uppercases (TR locale) so "Widex", "WIDEX" vb. aynı kabul edilir.
+ * - uppercases (TR locale)
+ *
+ * Böylece "REACH R-Li 80" ve "REACH R Li 80" aynı kabul edilir.
  */
 function normalizeName(value: string | null | undefined): string {
   if (!value) return '';
-  const trimmed = value.trim();
+  const replaced = value
+    // tire, uzun tire, alt tire, slash ve noktayı boşluk gibi ele al
+    .replace(/[-–—_/.,]+/g, ' ');
+  const trimmed = replaced.trim();
   if (!trimmed) return '';
   const collapsed = trimmed.replace(/\s+/g, ' ');
   return collapsed.toLocaleUpperCase('tr-TR');
@@ -154,7 +164,7 @@ export function NewPatientDevicesSection({
       const normalizedBrand = normalizeName(item.brand);
       const normalizedModel = normalizeName(item.model);
 
-      // Marka eşleme (case/whitespace insensitive)
+      // Marka eşleme (case/whitespace/punctuation insensitive)
       if (normalizedBrand) {
         const brandCandidate = availableDeviceInventory.find(
           (row) => normalizeName(row.brand) === normalizedBrand,
@@ -251,26 +261,20 @@ export function NewPatientDevicesSection({
       const brand = item.brand?.trim() ?? '';
       const model = item.model?.trim() ?? '';
 
-      // Boş brand/model için uyarı göstermiyoruz; kullanıcı zaten elle seçecek.
       if (!brand || !model) return null;
 
       const nb = normalizeName(brand);
       const nm = normalizeName(model);
       if (!nb || !nm) return null;
 
-      // 1) Birebir (normalize) brand+model kombinasyonu var mı?
       const hasExactCombo = availableDeviceInventory.some((row) => {
         return (
           normalizeName(row.brand) === nb && normalizeName(row.model) === nm
         );
       });
 
-      if (hasExactCombo) {
-        // Bu satır için stokta net eşleşme var; uyarı gerekmez.
-        return null;
-      }
+      if (hasExactCombo) return null;
 
-      // 2) En azından aynı normalized marka için stok modellerini listeleyelim.
       const sameBrandRows = availableDeviceInventory.filter(
         (row) => normalizeName(row.brand) === nb,
       );
@@ -498,7 +502,7 @@ export function NewPatientDevicesSection({
               .map((row) => row.model)
               .filter((m): m is string => !!m);
 
-            // Model seçeneklerini de normalize key'e göre dedupe et.
+            // Model seçeneklerini normalize key'e göre dedupe et.
             const modelMap = new Map<string, string>();
             for (const m of inventoryModelsRaw) {
               const key = normalizeName(m);
@@ -544,7 +548,6 @@ export function NewPatientDevicesSection({
               const trimmed = brand.trim();
               onChangeRow(index, {
                 brand: trimmed,
-                // Marka değişince model ve inventory seçimleri resetlenir.
                 model: '',
                 inventoryItemId: null,
                 listPrice: '',
@@ -555,7 +558,6 @@ export function NewPatientDevicesSection({
               const trimmed = model.trim();
               onChangeRow(index, {
                 model: trimmed,
-                // Model değişince seri seçimleri resetlenir.
                 inventoryItemId: null,
                 listPrice: '',
               });
@@ -758,6 +760,45 @@ export function NewPatientDevicesSection({
             </button>
           </div>
         </>
+      )}
+
+      {/* Charger selection (rechargeable) – en sonda da dursa olur, UX tercihi:
+          İstersen üstteki versiyona geri alabiliriz. */}
+      {showChargerSelect && (
+        <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
+          <label className="mb-1 block text-[11px] font-medium text-slate-600">
+            Şarj Aleti (opsiyonel)
+          </label>
+          <select
+            value={chargerInventoryItemId ?? ''}
+            onChange={(e) =>
+              onChangeChargerInventoryItemId(
+                e.target.value ? e.target.value : null,
+              )
+            }
+            className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            disabled={availableChargerInventory.length === 0}
+          >
+            <option value="">
+              {availableChargerInventory.length > 0
+                ? 'Şarj aleti seç...'
+                : 'Stokta şarj aleti yok'}
+            </option>
+            {availableChargerInventory.map((row) => (
+              <option key={row.id} value={row.id}>
+                {(row.serial_no || row.barcode || 'Seri yok') +
+                  ' • ' +
+                  row.brand +
+                  ' ' +
+                  row.model}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Seçilirse, hasta kaydı sonrası bu satır da hastaya &quot;satıldı&quot;
+            olarak işaretlenir.
+          </p>
+        </div>
       )}
     </div>
   );
