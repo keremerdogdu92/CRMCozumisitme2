@@ -14,7 +14,7 @@ export type TableColumnDef<TRow> = {
   sortable?: boolean; // can user sort by this column?
   accessor?: (row: TRow) => unknown; // optional value accessor for sorting
 
-  // Optional export helpers (if not provided, export can fall back to label/id).
+  // Optional export helpers.
   exportLabel?: string;
   exportAccessor?: (row: TRow) => string | number | null | undefined;
 };
