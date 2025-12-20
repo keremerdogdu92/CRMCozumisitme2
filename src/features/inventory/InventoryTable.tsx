@@ -4,8 +4,8 @@
 //
 // Export behavior:
 // - Uses currently visible columns
-// - Exports filtered + sorted rows (yani ekranda gördüğün listeyi)
-// - Para alanları ham sayı (₺ işareti yok), Excel içinde formatlamaya uygun
+// - Exports filtered + sorted rows
+// - Money fields are exported as raw numbers (no currency symbol)
 
 import { useMemo } from 'react';
 import type {
@@ -21,6 +21,7 @@ import {
   exportToCsvFile,
   exportToXlsxFile,
 } from '../../utils/csvUtils';
+import { TableExportButtons } from '../../components/table/TableExportButtons';
 
 type Props = {
   items: InventoryItemRow[];
@@ -340,7 +341,7 @@ export function InventoryTable({
   if (sorted.length === 0) {
     return (
       <div className="space-y-3">
-        {/* Filters row yine gösterilsin */}
+        {/* Filters row with export controls */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="text-slate-500">Durum:</span>
@@ -384,22 +385,10 @@ export function InventoryTable({
               isColumnVisible={isColumnVisible}
               toggleColumn={toggleColumn}
             />
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => handleExport('csv')}
-                className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              >
-                CSV
-              </button>
-              <button
-                type="button"
-                onClick={() => handleExport('xlsx')}
-                className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              >
-                Excel
-              </button>
-            </div>
+            <TableExportButtons
+              onExportCsv={() => handleExport('csv')}
+              onExportXlsx={() => handleExport('xlsx')}
+            />
           </div>
         </div>
 
@@ -413,7 +402,7 @@ export function InventoryTable({
 
   return (
     <div className="space-y-3">
-      {/* Filters row */}
+      {/* Filters row with export controls */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-slate-500">Durum:</span>
@@ -457,22 +446,10 @@ export function InventoryTable({
             isColumnVisible={isColumnVisible}
             toggleColumn={toggleColumn}
           />
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => handleExport('csv')}
-              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            >
-              CSV
-            </button>
-            <button
-              type="button"
-              onClick={() => handleExport('xlsx')}
-              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            >
-              Excel
-            </button>
-          </div>
+          <TableExportButtons
+            onExportCsv={() => handleExport('csv')}
+            onExportXlsx={() => handleExport('xlsx')}
+          />
         </div>
       </div>
 
