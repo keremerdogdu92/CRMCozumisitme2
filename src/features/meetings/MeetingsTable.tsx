@@ -1,6 +1,11 @@
 // src/features/meetings/MeetingsTable.tsx
 // Meetings list table with meeting_type + subject info, filters,
-// column visibility toggles and sorting.
+// column visibility toggles, sorting and export (CSV / Excel).
+//
+// Patch v2.2:
+// - ADD: Export buttons (CSV + XLSX) using visible columns + filtered + sorted rows.
+// - Uses shared csvUtils + TableExportButtons component.
+// - Keeps hook order stable (no new hooks added).
 //
 // Patch v2.1:
 // - FIX (critical): Prevents React error #310 by ensuring hooks are called in a stable order.
@@ -15,6 +20,11 @@ import { useCurrentProfile } from '../auth/useCurrentProfile';
 import { useTablePreferences } from '../../components/table/useTablePreferences';
 import { TableColumnsControl } from '../../components/table/TableColumnsControl';
 import type { TableColumnDef } from '../../components/table/tableTypes';
+import {
+  exportToCsvFile,
+  exportToXlsxFile,
+} from '../../utils/csvUtils';
+import { TableExportButtons } from '../../components/table/TableExportButtons';
 
 function formatDate(value: string | null): string {
   if (!value) return '-';
@@ -80,6 +90,7 @@ const MEETING_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (m) => m.at ?? null,
+    exportAccessor: (m) => m.at ?? null,
   },
   {
     id: 'meeting_type',
@@ -87,6 +98,7 @@ const MEETING_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (m) => m.meeting_type,
+    exportAccessor: (m) => formatMeetingType(m.meeting_type),
   },
   {
     id: 'subject_name',
@@ -94,6 +106,7 @@ const MEETING_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (m) => m.subject_name ?? '',
+    exportAccessor: (m) => m.subject_name ?? '',
   },
   {
     id: 'subject',
@@ -101,6 +114,7 @@ const MEETING_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (m) => m.subject ?? '',
+    exportAccessor: (m) => m.subject ?? '',
   },
   {
     id: 'next_at',
@@ -108,6 +122,7 @@ const MEETING_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (m) => m.next_at ?? null,
+    exportAccessor: (m) => m.next_at ?? null,
   },
   {
     id: 'satisfaction_10',
@@ -115,6 +130,7 @@ const MEETING_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (m) => m.satisfaction_10 ?? -1,
+    exportAccessor: (m) => m.satisfaction_10 ?? null,
   },
   {
     id: 'note',
@@ -122,6 +138,7 @@ const MEETING_COLUMNS: TableColumnDef<
     sortable: false,
     isDefaultVisible: true,
     accessor: (m) => m.note ?? '',
+    exportAccessor: (m) => m.note ?? '',
   },
 ];
 
@@ -139,7 +156,11 @@ export function MeetingsTable() {
     toggleColumn,
     setSort,
     isColumnVisible,
-  } = useTablePreferences<MeetingRow>('meetings-table', MEETING_COLUMNS, userId);
+  } = useTablePreferences<MeetingRow>(
+    'meetings-table',
+    MEETING_COLUMNS,
+    userId,
+  );
 
   // NOTE: Even during loading/error, we compute with safe defaults so hooks remain stable.
   const safeData: MeetingRow[] = (data ?? []) as MeetingRow[];
@@ -218,6 +239,59 @@ export function MeetingsTable() {
     return result;
   }, [filteredRows, prefsState.sortBy, prefsState.sortDir]);
 
+  const handleExport = (type: 'csv' | 'xlsx') => {
+    if (visibleColumns.length === 0 || sortedRows.length === 0) return;
+
+    const headers = visibleColumns.map(
+      (col) => col.exportLabel ?? col.label,
+    );
+
+    const rowsForExport = sortedRows.map((m) =>
+      visibleColumns.map((col) => {
+        const id = col.id as MeetingTableColumnId;
+
+        if (col.exportAccessor) {
+          return col.exportAccessor(m as any);
+        }
+
+        switch (id) {
+          case 'at':
+            return m.at ?? null;
+          case 'meeting_type':
+            return formatMeetingType(m.meeting_type);
+          case 'subject_name':
+            return m.subject_name ?? '';
+          case 'subject':
+            return m.subject ?? '';
+          case 'next_at':
+            return m.next_at ?? null;
+          case 'satisfaction_10':
+            return m.satisfaction_10 ?? null;
+          case 'note':
+            return m.note ?? '';
+          default:
+            return '';
+        }
+      }),
+    );
+
+    const baseFileName = 'meetings_export';
+
+    if (type === 'csv') {
+      exportToCsvFile({
+        fileName: baseFileName,
+        headers,
+        rows: rowsForExport,
+      });
+    } else {
+      exportToXlsxFile({
+        fileName: baseFileName,
+        headers,
+        rows: rowsForExport,
+      });
+    }
+  };
+
   // After all hooks are called, it is safe to early-return.
   if (isLoading) {
     return <p className="text-xs text-slate-500">Görüşmeler yükleniyor...</p>;
@@ -242,7 +316,7 @@ export function MeetingsTable() {
 
   return (
     <div className="space-y-2">
-      {/* Filter bar + sütun kontrolü */}
+      {/* Filter bar + sütun kontrolü + export butonları */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] text-slate-500">
           Toplam <span className="font-semibold">{visibleRows.length}</span>{' '}
@@ -281,6 +355,10 @@ export function MeetingsTable() {
             columns={MEETING_COLUMNS}
             isColumnVisible={isColumnVisible}
             toggleColumn={toggleColumn}
+          />
+          <TableExportButtons
+            onExportCsv={() => handleExport('csv')}
+            onExportXlsx={() => handleExport('xlsx')}
           />
         </div>
       </div>
