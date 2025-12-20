@@ -50,7 +50,7 @@ SELECT
   p.satisfaction_10,
   p.sgk_prescription_received,
   p.sgk_recorded_to_system,
-  p.is_battery_patient,
+  p.sgk_recorded_to_system_at,
   p.national_id,
   p.address,
   p.kin_phone,
@@ -70,7 +70,8 @@ SELECT
   da.device_ear_side_summary,
   p.sgk_profile,
   p.sgk_expected_reimbursement,
-  p.sgk_expected_reimbursement_month
+  p.sgk_expected_reimbursement_month,
+  p.is_battery_patient
 FROM
   public.patients AS p
   LEFT JOIN public."references" AS r
@@ -87,5 +88,6 @@ WHERE
 --
 -- Migration note:
 -- - If you ever change the view column order/names, prefer:
---   DROP VIEW ...; then CREATE VIEW ...;
+--   DROP VIEW public.patient_list_with_device;
+--   then CREATE VIEW public.patient_list_with_device AS ...
 --   to avoid Postgres 42P16 errors.
