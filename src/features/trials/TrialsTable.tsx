@@ -1,6 +1,13 @@
 // src/features/trials/TrialsTable.tsx 
 // Tabular list view for trial rows with column visibility toggles and sorting.
 // Preferences are stored per user via useTablePreferences(userId).
+//
+// Patch v2.1:
+// - Existing: sorting + column visibility controls.
+// Patch v2.2:
+// - ADD: Export buttons (CSV + XLSX) next to column visibility control.
+// - Export respects current visible columns and current sorted order.
+// - Uses shared csv/xlsx helpers (exportToCsvFile / exportToXlsxFile).
 
 import { useMemo } from 'react';
 import type { TrialRow } from './types';
@@ -8,6 +15,11 @@ import { useTablePreferences } from '../../components/table/useTablePreferences'
 import { TableColumnsControl } from '../../components/table/TableColumnsControl';
 import type { TableColumnDef } from '../../components/table/tableTypes';
 import { useCurrentProfile } from '../auth/useCurrentProfile';
+import { TableExportButtons } from '../../components/table/TableExportButtons';
+import {
+  exportToCsvFile,
+  exportToXlsxFile,
+} from '../../utils/csvUtils';
 
 type TrialsTableProps = {
   items: TrialRow[];
@@ -131,7 +143,8 @@ export function TrialsTable({ items, onSelectRow }: TrialsTableProps) {
     if (!col || !col.sortable) return items;
 
     const accessor =
-      col.accessor ?? ((row: TrialRow) => (row as any)[col.id as keyof TrialRow]);
+      col.accessor ??
+      ((row: TrialRow) => (row as any)[col.id as keyof TrialRow]);
 
     const sorted = [...items];
     sorted.sort((a, b) => {
@@ -173,6 +186,57 @@ export function TrialsTable({ items, onSelectRow }: TrialsTableProps) {
     return sorted;
   }, [items, prefsState.sortBy, prefsState.sortDir]);
 
+  const handleExport = (type: 'csv' | 'xlsx') => {
+    if (!sortedItems.length) return;
+
+    const exportableColumns = visibleColumns.filter(
+      (c) => c.id !== 'actions',
+    );
+
+    if (!exportableColumns.length) return;
+
+    const headers = exportableColumns.map((col) => col.label);
+
+    const rowsForExport = sortedItems.map((t) =>
+      exportableColumns.map((col) => {
+        switch (col.id as TrialTableColumnId) {
+          case 'created_at':
+            return formatShortDate(t.created_at);
+          case 'full_name':
+            return t.full_name ?? '';
+          case 'phone':
+            return t.phone ?? '';
+          case 'first_meet_at':
+            return formatShortDate(t.first_meet_at);
+          case 'next_meet_at':
+            return formatShortDate(t.next_meet_at);
+          case 'reference':
+            return t.reference_id ? 'Var' : 'Yok';
+          case 'note':
+            return t.note ?? '';
+          default:
+            return '';
+        }
+      }),
+    );
+
+    const baseFileName = 'trials_export';
+
+    if (type === 'csv') {
+      exportToCsvFile({
+        fileName: baseFileName,
+        headers,
+        rows: rowsForExport,
+      });
+    } else {
+      exportToXlsxFile({
+        fileName: baseFileName,
+        headers,
+        rows: rowsForExport,
+      });
+    }
+  };
+
   if (sortedItems.length === 0) {
     return (
       <div className="text-sm text-slate-500">
@@ -183,133 +247,155 @@ export function TrialsTable({ items, onSelectRow }: TrialsTableProps) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-      {/* Toolbar: sağ üstte sütun kontrolü */}
-      <div className="flex items-center justify-end px-4 py-2">
-        <TableColumnsControl
-          columns={TRIAL_COLUMNS}
-          isColumnVisible={isColumnVisible}
-          toggleColumn={toggleColumn}
-        />
+    <div className="space-y-2">
+      {/* Toolbar: sol sayım, sağda sütun kontrolü + export */}
+      <div className="flex items-center justify-between px-1 md:px-0">
+        <p className="text-[11px] text-slate-500">
+          Toplam{' '}
+          <span className="font-semibold">{sortedItems.length}</span>{' '}
+          deneme kaydı var.
+        </p>
+        <div className="flex items-center gap-2">
+          <TableColumnsControl
+            columns={TRIAL_COLUMNS}
+            isColumnVisible={isColumnVisible}
+            toggleColumn={toggleColumn}
+          />
+          <TableExportButtons
+            onExportCsv={() => handleExport('csv')}
+            onExportXlsx={() => handleExport('xlsx')}
+          />
+        </div>
       </div>
 
-      <table className="min-w-full text-sm">
-        <thead className="bg-slate-50">
-          <tr>
-            {visibleColumns.map((col) => {
-              const isSorted = prefsState.sortBy === col.id;
-              const showSortIcon = col.sortable;
-
-              let alignClass = 'text-left';
-              if (col.id === 'actions') alignClass = 'text-right';
-
-              return (
-                <th
-                  key={col.id}
-                  className={`px-4 py-2 font-medium text-slate-600 ${alignClass} ${
-                    col.sortable ? 'cursor-pointer select-none' : ''
-                  }`}
-                  onClick={() => col.sortable && setSort(col.id)}
-                >
-                  <span className="inline-flex items-center gap-1">
-                    {col.label}
-                    {showSortIcon && isSorted && (
-                      <span className="text-[10px]">
-                        {prefsState.sortDir === 'asc' ? '▲' : '▼'}
-                      </span>
-                    )}
-                  </span>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {sortedItems.map((t) => (
-            <tr key={t.id} className="border-t border-slate-100">
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50">
+            <tr>
               {visibleColumns.map((col) => {
-                switch (col.id as TrialTableColumnId) {
-                  case 'created_at':
-                    return (
-                      <td
-                        key={col.id}
-                        className="px-4 py-2 text-slate-700 whitespace-nowrap"
-                      >
-                        {formatDate(t.created_at)}
-                      </td>
-                    );
-                  case 'full_name':
-                    return (
-                      <td key={col.id} className="px-4 py-2 text-slate-800">
-                        {t.full_name ?? '-'}
-                      </td>
-                    );
-                  case 'phone':
-                    return (
-                      <td
-                        key={col.id}
-                        className="px-4 py-2 text-slate-700 whitespace-nowrap"
-                      >
-                        {t.phone ?? '-'}
-                      </td>
-                    );
-                  case 'first_meet_at':
-                    return (
-                      <td
-                        key={col.id}
-                        className="px-4 py-2 text-slate-700 whitespace-nowrap"
-                      >
-                        {formatDate(t.first_meet_at)}
-                      </td>
-                    );
-                  case 'next_meet_at':
-                    return (
-                      <td
-                        key={col.id}
-                        className="px-4 py-2 text-slate-700 whitespace-nowrap"
-                      >
-                        {formatDate(t.next_meet_at)}
-                      </td>
-                    );
-                  case 'reference':
-                    return (
-                      <td key={col.id} className="px-4 py-2 text-slate-700">
-                        {t.reference_id ? 'Var' : 'Yok'}
-                      </td>
-                    );
-                  case 'note':
-                    return (
-                      <td key={col.id} className="px-4 py-2 text-slate-700">
-                        {t.note
-                          ? t.note.length > 60
-                            ? `${t.note.slice(0, 60)}…`
-                            : t.note
-                          : '-'}
-                      </td>
-                    );
-                  case 'actions':
-                    return (
-                      <td
-                        key={col.id}
-                        className="px-4 py-2 text-right whitespace-nowrap"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => onSelectRow(t)}
-                          className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                        >
-                          Detay
-                        </button>
-                      </td>
-                    );
-                  default:
-                    return null;
-                }
+                const isSorted = prefsState.sortBy === col.id;
+                const showSortIcon = col.sortable;
+
+                let alignClass = 'text-left';
+                if (col.id === 'actions') alignClass = 'text-right';
+
+                return (
+                  <th
+                    key={col.id}
+                    className={`px-4 py-2 font-medium text-slate-600 ${alignClass} ${
+                      col.sortable ? 'cursor-pointer select-none' : ''
+                    }`}
+                    onClick={() => col.sortable && setSort(col.id)}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {col.label}
+                      {showSortIcon && isSorted && (
+                        <span className="text-[10px]">
+                          {prefsState.sortDir === 'asc' ? '▲' : '▼'}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                );
               })}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {sortedItems.map((t) => (
+              <tr key={t.id} className="border-t border-slate-100">
+                {visibleColumns.map((col) => {
+                  switch (col.id as TrialTableColumnId) {
+                    case 'created_at':
+                      return (
+                        <td
+                          key={col.id}
+                          className="px-4 py-2 text-slate-700 whitespace-nowrap"
+                        >
+                          {formatDate(t.created_at)}
+                        </td>
+                      );
+                    case 'full_name':
+                      return (
+                        <td
+                          key={col.id}
+                          className="px-4 py-2 text-slate-800"
+                        >
+                          {t.full_name ?? '-'}
+                        </td>
+                      );
+                    case 'phone':
+                      return (
+                        <td
+                          key={col.id}
+                          className="px-4 py-2 text-slate-700 whitespace-nowrap"
+                        >
+                          {t.phone ?? '-'}
+                        </td>
+                      );
+                    case 'first_meet_at':
+                      return (
+                        <td
+                          key={col.id}
+                          className="px-4 py-2 text-slate-700 whitespace-nowrap"
+                        >
+                          {formatDate(t.first_meet_at)}
+                        </td>
+                      );
+                    case 'next_meet_at':
+                      return (
+                        <td
+                          key={col.id}
+                          className="px-4 py-2 text-slate-700 whitespace-nowrap"
+                        >
+                          {formatDate(t.next_meet_at)}
+                        </td>
+                      );
+                    case 'reference':
+                      return (
+                        <td
+                          key={col.id}
+                          className="px-4 py-2 text-slate-700"
+                        >
+                          {t.reference_id ? 'Var' : 'Yok'}
+                        </td>
+                      );
+                    case 'note':
+                      return (
+                        <td
+                          key={col.id}
+                          className="px-4 py-2 text-slate-700"
+                        >
+                          {t.note
+                            ? t.note.length > 60
+                              ? `${t.note.slice(0, 60)}…`
+                              : t.note
+                            : '-'}
+                        </td>
+                      );
+                    case 'actions':
+                      return (
+                        <td
+                          key={col.id}
+                          className="px-4 py-2 text-right whitespace-nowrap"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => onSelectRow(t)}
+                            className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            Detay
+                          </button>
+                        </td>
+                      );
+                    default:
+                      return null;
+                  }
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
