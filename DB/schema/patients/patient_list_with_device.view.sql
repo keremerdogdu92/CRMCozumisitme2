@@ -50,7 +50,6 @@ SELECT
   p.satisfaction_10,
   p.sgk_prescription_received,
   p.sgk_recorded_to_system,
-  p.sgk_recorded_to_system_at,
   p.national_id,
   p.address,
   p.kin_phone,
@@ -71,7 +70,8 @@ SELECT
   p.sgk_profile,
   p.sgk_expected_reimbursement,
   p.sgk_expected_reimbursement_month,
-  p.is_battery_patient
+  p.is_battery_patient,
+  p.sgk_recorded_to_system_at
 FROM
   public.patients AS p
   LEFT JOIN public."references" AS r
