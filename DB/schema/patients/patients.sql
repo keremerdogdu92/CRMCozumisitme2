@@ -1,6 +1,7 @@
 -- db/schema/patients/patients.sql
 -- Summary: Supabase table definition for `patients`, updated to include `sgk_recorded_to_system_at` (timestamptz).
 -- Notes:
+-- - `sgk_recorded_to_system_at` is a nullable timestamptz with no default.
 -- - TODO: `sgk_recorded_to_system_at` should be set when `sgk_recorded_to_system` is toggled to true (not implemented here).
 -- - Source of truth: Supabase table editor / migrations.
 
@@ -21,10 +22,6 @@ CREATE TABLE public.patients (
   last_visit_at timestamptz NULL,
   sgk_prescription_received boolean NOT NULL DEFAULT false,
   sgk_recorded_to_system boolean NOT NULL DEFAULT false,
-
-  -- New: timestamp for when sgk_recorded_to_system was recorded as true.
-  sgk_recorded_to_system_at timestamptz NULL,
-
   payment_method text NULL,
   sale_total_amount numeric(12, 2) NULL,
   card_fee_rate numeric(5, 2) NULL,
@@ -37,19 +34,24 @@ CREATE TABLE public.patients (
   sgk_expected_reimbursement numeric(10, 2) NULL,
   sgk_expected_reimbursement_month date NULL,
 
-  -- Battery patient marker:
-  -- True if patient ever received SGK battery prescription delivery.
-  -- This is used for reporting and UX (optional filters later).
-  is_battery_patient boolean NOT NULL DEFAULT false,
-
   -- Soft delete columns
   deleted_at timestamptz NULL,
   deleted_by uuid NULL,
   delete_reason text NULL,
 
+  -- Battery patient marker:
+  -- True if patient ever received SGK battery prescription delivery.
+  -- This is used for reporting and UX (optional filters later).
+  is_battery_patient boolean NOT NULL DEFAULT false,
+
+  -- New: timestamp for when sgk_recorded_to_system was recorded as true.
+  sgk_recorded_to_system_at timestamptz NULL,
+
   CONSTRAINT patients_pkey PRIMARY KEY (id),
+
   CONSTRAINT patients_org_id_fkey FOREIGN KEY (org_id)
     REFERENCES public.orgs (id) ON DELETE CASCADE,
+
   CONSTRAINT patients_reference_id_fkey FOREIGN KEY (reference_id)
     REFERENCES public."references" (id) ON DELETE SET NULL,
 
@@ -72,10 +74,12 @@ CREATE TABLE public.patients (
   CONSTRAINT patients_satisfaction_10_check CHECK (
     satisfaction_10 >= 1 AND satisfaction_10 <= 10
   ),
+
   CONSTRAINT patients_sgk_flow CHECK (
     (sgk_processed IS NOT TRUE OR sgk_docs_received IS TRUE)
     AND (sgk_docs_received IS NOT TRUE OR sgk_flag IS TRUE)
   ),
+
   CONSTRAINT patients_deleted_by_fkey FOREIGN KEY (deleted_by)
     REFERENCES auth.users (id) ON DELETE SET NULL
 ) TABLESPACE pg_default;
