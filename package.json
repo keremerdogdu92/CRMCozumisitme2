@@ -1,9 +1,3 @@
-// package.json
-// Summary: Project manifest for crmcozumisitme2 React + Vite app.
-// Patch v2.1:
-// - ADD: "xlsx" runtime dependency for table export (CSV/XLSX) helpers.
-// - ADD: "@types/xlsx" dev dependency for TypeScript support in csvUtils.
-
 {
   "name": "crmcozumisitme2",
   "version": "0.1.0",
