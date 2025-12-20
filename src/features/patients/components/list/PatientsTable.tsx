@@ -1,6 +1,11 @@
 // src/features/patients/components/list/PatientsTable.tsx
 // Patients listing table with responsive layout: mobile cards + desktop table.
-// Desktop table supports column visibility toggling and basic sorting.
+// Desktop table supports column visibility toggling, basic sorting and export (CSV / XLSX).
+//
+// Patch v2.1:
+// - ADD: Table export buttons (CSV + XLSX) on desktop toolbar, next to column visibility control.
+// - Export respects current visible columns and current sorted order.
+// - Uses shared csvUtils helpers (exportToCsvFile / exportToXlsxFile).
 
 import { useMemo } from 'react';
 import type { PatientRow } from '../../types';
@@ -9,6 +14,11 @@ import { useTablePreferences } from '../../../../components/table/useTablePrefer
 import { TableColumnsControl } from '../../../../components/table/TableColumnsControl';
 import type { TableColumnDef } from '../../../../components/table/tableTypes';
 import { useCurrentProfile } from '../../../auth/useCurrentProfile';
+import { TableExportButtons } from '../../../../components/table/TableExportButtons';
+import {
+  exportToCsvFile,
+  exportToXlsxFile,
+} from '../../../../utils/csvUtils';
 
 type PatientsTableProps = {
   patients: PatientRow[];
@@ -266,6 +276,69 @@ export function PatientsTable({
     return sorted;
   }, [patients, prefsState.sortBy, prefsState.sortDir]);
 
+  const handleExport = (type: 'csv' | 'xlsx') => {
+    if (sortedPatients.length === 0) return;
+
+    // "İşlemler" kolonunu export'a dahil etmiyoruz
+    const exportableColumns = visibleColumns.filter(
+      (col) => col.id !== 'actions',
+    );
+
+    if (exportableColumns.length === 0) return;
+
+    const headers = exportableColumns.map((col) => col.label);
+
+    const rowsForExport = sortedPatients.map((p) => {
+      const deviceLabel = getDeviceLabel(p);
+      const deviceEarLabel = getDeviceEarLabel(p);
+
+      return exportableColumns.map((col) => {
+        switch (col.id as PatientTableColumnId) {
+          case 'created_at':
+            return p.created_at ?? null;
+          case 'full_name':
+            return p.full_name;
+          case 'national_id':
+            return p.national_id ?? '';
+          case 'phone':
+            return p.phone ?? '';
+          case 'device':
+            return deviceLabel;
+          case 'ear':
+            return deviceEarLabel;
+          case 'sale_total_amount':
+            return p.sale_total_amount ?? null;
+          case 'satisfaction_10':
+            return p.satisfaction_10 ?? null;
+          case 'last_visit_at':
+            return p.last_visit_at ?? null;
+          case 'sgk':
+            return p.sgk_flag ? 'Evet' : 'Hayır';
+          case 'invoice':
+            return p.invoice_issued ? 'Kesildi' : 'Yok';
+          default:
+            return '';
+        }
+      });
+    });
+
+    const baseFileName = 'patients_export';
+
+    if (type === 'csv') {
+      exportToCsvFile({
+        fileName: baseFileName,
+        headers,
+        rows: rowsForExport,
+      });
+    } else {
+      exportToXlsxFile({
+        fileName: baseFileName,
+        headers,
+        rows: rowsForExport,
+      });
+    }
+  };
+
   if (sortedPatients.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-500 sm:text-sm">
@@ -425,13 +498,24 @@ export function PatientsTable({
 
       {/* Desktop: classic table (md ve üzeri) */}
       <ResponsiveTableShell className="hidden md:block">
-        {/* Toolbar: sağ üstte sütun kontrolü */}
-        <div className="flex items-center justify-end px-4 py-2">
-          <TableColumnsControl
-            columns={PATIENT_COLUMNS}
-            isColumnVisible={isColumnVisible}
-            toggleColumn={toggleColumn}
-          />
+        {/* Toolbar: left count + right column control + export buttons */}
+        <div className="flex items-center justify-between px-4 py-2">
+          <p className="text-[11px] text-slate-500">
+            Toplam{' '}
+            <span className="font-semibold">{sortedPatients.length}</span> hasta
+            kaydı var.
+          </p>
+          <div className="flex items-center gap-2">
+            <TableColumnsControl
+              columns={PATIENT_COLUMNS}
+              isColumnVisible={isColumnVisible}
+              toggleColumn={toggleColumn}
+            />
+            <TableExportButtons
+              onExportCsv={() => handleExport('csv')}
+              onExportXlsx={() => handleExport('xlsx')}
+            />
+          </div>
         </div>
 
         <table className="min-w-full text-xs lg:text-sm">
@@ -625,7 +709,7 @@ export function PatientsTable({
                         return (
                           <td
                             key={col.id}
-                            className="px-4 py-2 text-right whitespace-nowrap"
+                            className="whitespace-nowrap px-4 py-2 text-right"
                           >
                             <div className="inline-flex items-center gap-2">
                               <button
