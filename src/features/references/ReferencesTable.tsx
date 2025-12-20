@@ -1,6 +1,13 @@
 // src/features/references/ReferencesTable.tsx
 // Tabular list view for references with group, phone, commission and follow-up info.
-// Supports column visibility toggles and client-side sorting.
+// Supports column visibility toggles, client-side sorting and export (CSV / XLSX).
+//
+// Patch v2.1:
+// - Existing: sorting + column visibility, reminder calculations.
+// Patch v2.2:
+// - ADD: Table export buttons (CSV + XLSX) next to column visibility control.
+// - Export respects current visible columns and current sorted order.
+// - Uses shared csvUtils helpers (exportToCsvFile / exportToXlsxFile).
 
 import { useMemo } from 'react';
 import type { ReferenceRow } from './types';
@@ -8,6 +15,11 @@ import { useCurrentProfile } from '../auth/useCurrentProfile';
 import { useTablePreferences } from '../../components/table/useTablePreferences';
 import { TableColumnsControl } from '../../components/table/TableColumnsControl';
 import type { TableColumnDef } from '../../components/table/tableTypes';
+import { TableExportButtons } from '../../components/table/TableExportButtons';
+import {
+  exportToCsvFile,
+  exportToXlsxFile,
+} from '../../utils/csvUtils';
 
 type ReferencesTableProps = {
   items: ReferenceRow[];
@@ -299,6 +311,61 @@ export function ReferencesTable({
     return result;
   }, [items, prefsState.sortBy, prefsState.sortDir]);
 
+  const handleExport = (type: 'csv' | 'xlsx') => {
+    if (!sortedItems.length) return;
+
+    const exportableColumns = visibleColumns; // burada "İşlemler" toggle tablosunda yok, ekstra th.
+
+    if (!exportableColumns.length) return;
+
+    const headers = exportableColumns.map((col) => col.label);
+
+    const rowsForExport = sortedItems.map((r) =>
+      exportableColumns.map((col) => {
+        switch (col.id as ReferenceTableColumnId) {
+          case 'created_at':
+            return r.created_at ?? '';
+          case 'full_name':
+            return r.full_name ?? '';
+          case 'group':
+            return renderGroup(r.group);
+          case 'phone':
+            return r.phone ?? '';
+          case 'commission':
+            return renderCommission(r);
+          case 'last_meet_at':
+            return r.last_meet_at ?? '';
+          case 'next_meet_at':
+            return r.next_meet_at ?? '';
+          case 'reminder':
+            return computeReminderStatus(r).label;
+          case 'status':
+            return renderStatus(r);
+          case 'note':
+            return r.note ?? '';
+          default:
+            return '';
+        }
+      }),
+    );
+
+    const baseFileName = 'references_export';
+
+    if (type === 'csv') {
+      exportToCsvFile({
+        fileName: baseFileName,
+        headers,
+        rows: rowsForExport,
+      });
+    } else {
+      exportToXlsxFile({
+        fileName: baseFileName,
+        headers,
+        rows: rowsForExport,
+      });
+    }
+  };
+
   if (items.length === 0) {
     return (
       <div className="text-sm text-slate-500">
@@ -310,18 +377,24 @@ export function ReferencesTable({
 
   return (
     <div className="space-y-2">
-      {/* Üst bar: kayıt sayısı + sütun kontrolü */}
+      {/* Üst bar: kayıt sayısı + sütun kontrolü + export */}
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] text-slate-500">
           Toplam{' '}
-          <span className="font-semibold">{items.length}</span> referans
-          kaydı var.
+          <span className="font-semibold">{sortedItems.length}</span>{' '}
+          referans kaydı var.
         </p>
-        <TableColumnsControl
-          columns={REFERENCE_COLUMNS}
-          isColumnVisible={isColumnVisible}
-          toggleColumn={toggleColumn}
-        />
+        <div className="flex items-center gap-2">
+          <TableColumnsControl
+            columns={REFERENCE_COLUMNS}
+            isColumnVisible={isColumnVisible}
+            toggleColumn={toggleColumn}
+          />
+          <TableExportButtons
+            onExportCsv={() => handleExport('csv')}
+            onExportXlsx={() => handleExport('xlsx')}
+          />
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
