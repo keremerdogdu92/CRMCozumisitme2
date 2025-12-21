@@ -7,6 +7,7 @@ import type {
   MeetingSatisfactionQuestion,
   MeetingSatisfactionAnswer,
   SaveMeetingSatisfactionInput,
+  SatisfactionScore,
 } from './meetingSatisfactionTypes';
 
 /**
@@ -24,7 +25,7 @@ export async function fetchActiveSatisfactionLists(): Promise<MeetingSatisfactio
     console.error('fetchActiveSatisfactionLists error', error);
     throw error;
   }
-  return data ?? [];
+  return (data ?? []) as MeetingSatisfactionQuestionList[];
 }
 
 /**
@@ -44,7 +45,7 @@ export async function fetchQuestionsForList(
     console.error('fetchQuestionsForList error', error);
     throw error;
   }
-  return data ?? [];
+  return (data ?? []) as MeetingSatisfactionQuestion[];
 }
 
 /**
@@ -62,7 +63,7 @@ export async function fetchAnswersForMeeting(
     console.error('fetchAnswersForMeeting error', error);
     throw error;
   }
-  return data ?? [];
+  return (data ?? []) as MeetingSatisfactionAnswer[];
 }
 
 /**
@@ -90,8 +91,13 @@ export async function saveMeetingSatisfaction(
     return;
   }
 
+  type AnswerInput = {
+    questionId: string;
+    score: SatisfactionScore;
+  };
+
   // 2) Insert new answers
-  const rows = answers.map((a) => ({
+  const rows = answers.map((a: AnswerInput) => ({
     meeting_id: meetingId,
     patient_id: patientId,
     list_id: listId,
@@ -128,6 +134,10 @@ export async function fetchMeetingSatisfactionAverage(
 
   if (!data || data.length === 0) return null;
 
-  const sum = data.reduce((acc, row) => acc + (row.score ?? 0), 0);
+  const sum = data.reduce(
+    (acc, row: { score: SatisfactionScore | null }) =>
+      acc + (row.score ?? 0),
+    0,
+  );
   return sum / data.length;
 }
