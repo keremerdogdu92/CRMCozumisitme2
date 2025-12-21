@@ -17,6 +17,50 @@ export const SATISFACTION_OPTIONS: {
   { value: 5, label: 'Çok memnunum' },
 ];
 
+// -----------------------------------------------------------------------------
+// DB-backed types (Supabase tablolari ile uyumlu tipler)
+// - meeting_satisfaction_question_lists
+// - meeting_satisfaction_questions
+// - meeting_satisfaction_answers
+// -----------------------------------------------------------------------------
+
+export interface MeetingSatisfactionQuestionList {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
+
+export interface MeetingSatisfactionQuestion {
+  id: string;
+  list_id: string;
+  question_text: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface MeetingSatisfactionAnswer {
+  id: string;
+  meeting_id: string;
+  patient_id: string;
+  list_id: string;
+  question_id: string;
+  score: SatisfactionScore | null;
+}
+
+export interface SaveMeetingSatisfactionInput {
+  meetingId: string;
+  patientId: string;
+  listId: string;
+  answers: {
+    questionId: string;
+    score: SatisfactionScore;
+  }[];
+}
+
+// -----------------------------------------------------------------------------
+// Lokal soru havuzu (DB dışı, opsiyonel kullanım için)
+// -----------------------------------------------------------------------------
+
 export type QuestionGroup = 'service' | 'device' | 'communication';
 
 export interface MeetingSatisfactionQuestionDef {
