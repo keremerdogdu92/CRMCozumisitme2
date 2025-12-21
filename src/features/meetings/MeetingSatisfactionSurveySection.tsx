@@ -16,7 +16,6 @@ import {
 import {
   SATISFACTION_OPTIONS,
   type MeetingSatisfactionQuestion,
-  type MeetingSatisfactionQuestionWithAnswer,
   type SatisfactionScore,
 } from './meetingSatisfactionTypes';
 import { useCurrentProfile } from '../auth/useCurrentProfile';
@@ -31,17 +30,20 @@ interface MeetingSatisfactionSurveySectionProps {
   onRequireMeetingId?: () => void;
 }
 
+type QuestionWithAnswer = {
+  question: MeetingSatisfactionQuestion;
+  score: SatisfactionScore | null;
+};
+
 export function MeetingSatisfactionSurveySection(
   props: MeetingSatisfactionSurveySectionProps,
 ) {
   const { meetingId, patientId, onRequireMeetingId } = props;
   const queryClient = useQueryClient();
-  const profile = useCurrentProfile();
+  const { data: profile } = useCurrentProfile();
 
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<
-    MeetingSatisfactionQuestionWithAnswer[]
-  >([]);
+  const [questions, setQuestions] = useState<QuestionWithAnswer[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
 
   // Fetch lists
@@ -53,7 +55,8 @@ export function MeetingSatisfactionSurveySection(
   // If we already have a meetingId, load existing answers to pre-fill.
   const { data: existingAnswers, isLoading: loadingExisting } = useQuery({
     queryKey: ['meeting-satisfaction-answers', meetingId],
-    queryFn: () => (meetingId ? fetchAnswersForMeeting(meetingId) : Promise.resolve([])),
+    queryFn: () =>
+      meetingId ? fetchAnswersForMeeting(meetingId) : Promise.resolve([]),
     enabled: !!meetingId,
   });
 
@@ -64,12 +67,15 @@ export function MeetingSatisfactionSurveySection(
     async function loadQuestions(listId: string) {
       setLoadingQuestions(true);
       try {
-        const qs: MeetingSatisfactionQuestion[] = await fetchQuestionsForList(listId);
+        const qs: MeetingSatisfactionQuestion[] =
+          await fetchQuestionsForList(listId);
 
         if (cancelled) return;
 
-        const mapped: MeetingSatisfactionQuestionWithAnswer[] = qs.map((q) => {
-          const existing = existingAnswers?.find((a) => a.question_id === q.id);
+        const mapped: QuestionWithAnswer[] = qs.map((q) => {
+          const existing = existingAnswers?.find(
+            (a) => a.question_id === q.id,
+          );
           return {
             question: q,
             score: (existing?.score as SatisfactionScore | undefined) ?? null,
@@ -130,7 +136,7 @@ export function MeetingSatisfactionSurveySection(
 
     const filledAnswers = questions.filter(
       (q) => q.score != null,
-    ) as MeetingSatisfactionQuestionWithAnswer[];
+    ) as QuestionWithAnswer[];
 
     const payload = {
       meetingId,
@@ -145,7 +151,8 @@ export function MeetingSatisfactionSurveySection(
     await mutation.mutateAsync(payload);
   }
 
-  const disabled = loadingLists || loadingQuestions || mutation.isPending;
+  const disabled =
+    loadingLists || loadingQuestions || loadingExisting || mutation.isPending;
 
   return (
     <div className="mt-6 space-y-4 rounded-lg border border-gray-200 p-4">
@@ -162,9 +169,7 @@ export function MeetingSatisfactionSurveySection(
 
       {/* List selector */}
       <div className="space-y-1">
-        <label className="text-xs font-medium text-gray-700">
-          Anket tipi
-        </label>
+        <label className="text-xs font-medium text-gray-700">Anket tipi</label>
         <select
           className="w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm"
           value={selectedListId ?? ''}
@@ -209,7 +214,9 @@ export function MeetingSatisfactionSurveySection(
                           ? 'border-blue-500 bg-blue-50 font-semibold'
                           : 'border-gray-300 bg-white',
                       ].join(' ')}
-                      onClick={() => handleScoreChange(qa.question.id, opt.value)}
+                      onClick={() =>
+                        handleScoreChange(qa.question.id, opt.value)
+                      }
                       disabled={disabled}
                     >
                       {opt.value}. {opt.label}
