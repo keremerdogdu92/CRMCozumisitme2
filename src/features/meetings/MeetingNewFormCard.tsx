@@ -1,6 +1,9 @@
 // src/features/meetings/MeetingNewFormCard.tsx
 // Inline card with form to create a new meeting.
 // v2.5 – refactored: subject search + payment section moved to separate components.
+// v2.7 – satisfaction: 5-question survey (1–5 scale) instead of manual 1–10 input.
+//        - Anket soruları meetingSatisfactionTypes.ts içindeki havuzdan geliyor.
+//        - Cevapların ortalaması alınarak 1–10 skalasına çevrilip meetings.satisfaction_10'a yazılıyor.
 
 import { useState, FormEvent, useEffect } from 'react';
 import { useCreateMeetingMutation } from './api';
@@ -12,6 +15,13 @@ import type {
 import { useCurrentProfile } from '../auth/useCurrentProfile';
 import { MeetingSubjectSearchField } from './MeetingSubjectSearchField';
 import { MeetingPaymentSection } from './MeetingPaymentSection';
+import {
+  SATISFACTION_OPTIONS,
+  type SatisfactionScore,
+  type MeetingSatisfactionQuestionWithAnswer,
+  getSurveyQuestionsForPatient,
+  markQuestionsAnsweredForPatient,
+} from './meetingSatisfactionTypes';
 
 const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string }[] = [
   { value: 'patient', label: 'Hasta' },
@@ -52,6 +62,13 @@ export function MeetingNewFormCard() {
   const [form, setForm] = useState<NewMeetingForm>(EMPTY_FORM);
   const [accessories, setAccessories] = useState<MeetingAccessoryDraft[]>([]);
   const [showAccessories, setShowAccessories] = useState(false);
+
+  // Memnuniyet anketi state
+  const [surveyQuestions, setSurveyQuestions] = useState<
+    MeetingSatisfactionQuestionWithAnswer[]
+  >([]);
+  const [surveyError, setSurveyError] = useState<string | null>(null);
+
   const { mutateAsync, isPending, isError, error } =
     useCreateMeetingMutation();
 
@@ -73,6 +90,8 @@ export function MeetingNewFormCard() {
         paymentAmount: '',
         paymentNote: '',
       }));
+      setSurveyQuestions([]);
+      setSurveyError(null);
     }
   }, [isAdmin, form.meetingType]);
 
@@ -80,15 +99,56 @@ export function MeetingNewFormCard() {
     if (form.meetingType !== 'patient') {
       setAccessories([]);
       setShowAccessories(false);
+      setSurveyQuestions([]);
+      setSurveyError(null);
     }
   }, [form.meetingType]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    await mutateAsync({ ...form, accessories });
+
+    // 1) Anketten ortalama memnuniyet skoru hesapla (1–5)
+    let satisfaction10 = '';
+
+    if (surveyQuestions.length > 0) {
+      const answered = surveyQuestions.filter((q) => q.score != null);
+
+      if (answered.length > 0) {
+        const total = answered.reduce(
+          (sum, q) => sum + (q.score as SatisfactionScore),
+          0,
+        );
+        const avg5 = total / answered.length; // 1–5 aralığında
+
+        // 1–5 → 1–10 map: (avg5 / 5) * 10
+        const mapped10 = Math.round((avg5 / 5) * 10);
+        const clamped10 = Math.min(10, Math.max(1, mapped10));
+        satisfaction10 = String(clamped10);
+      }
+    }
+
+    await mutateAsync({
+      ...form,
+      satisfaction10,
+      accessories,
+    });
+
+    // 2) Soruları "bu hasta için soruldu" olarak işaretle
+    if (form.subjectId && surveyQuestions.length > 0) {
+      const answeredIds = surveyQuestions
+        .filter((q) => q.score != null)
+        .map((q) => q.id);
+      if (answeredIds.length > 0) {
+        markQuestionsAnsweredForPatient(form.subjectId, answeredIds);
+      }
+    }
+
+    // 3) Formu sıfırla
     setForm(EMPTY_FORM);
     setAccessories([]);
     setShowAccessories(false);
+    setSurveyQuestions([]);
+    setSurveyError(null);
   };
 
   const handleSubjectSelect = (id: string, name: string) => {
@@ -97,6 +157,9 @@ export function MeetingNewFormCard() {
       subjectId: id,
       subjectName: name,
     }));
+    // Kişi değişince yeni anket hazırlansın diye eski soruları temizle
+    setSurveyQuestions([]);
+    setSurveyError(null);
   };
 
   const showPaymentSection =
@@ -135,6 +198,32 @@ export function MeetingNewFormCard() {
     setAccessories((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handlePrepareSurvey = () => {
+    if (!form.subjectId) {
+      setSurveyError('Anket için önce görüşme yapılan kişiyi seçin.');
+      return;
+    }
+    const questions = getSurveyQuestionsForPatient(form.subjectId);
+    setSurveyQuestions(questions);
+    setSurveyError(null);
+  };
+
+  const handleSurveyAnswerChange = (
+    questionId: string,
+    score: SatisfactionScore,
+  ) => {
+    setSurveyQuestions((prev) =>
+      prev.map((q) =>
+        q.id === questionId
+          ? {
+              ...q,
+              score,
+            }
+          : q,
+      ),
+    );
+  };
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="mb-2 text-sm font-semibold text-slate-900">
@@ -155,18 +244,21 @@ export function MeetingNewFormCard() {
             <select
               className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
               value={form.meetingType}
-              onChange={(e) =>
+              onChange={(e) => {
+                const nextType = e.target.value as MeetingType;
                 setForm((f) => ({
                   ...f,
-                  meetingType: e.target.value as MeetingType,
+                  meetingType: nextType,
                   // Reset subject & payment when type changes
                   subjectId: null,
                   subjectName: '',
                   hasPayment: false,
                   paymentAmount: '',
                   paymentNote: '',
-                }))
-              }
+                }));
+                setSurveyQuestions([]);
+                setSurveyError(null);
+              }}
             >
               {visibleTypeOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -239,24 +331,73 @@ export function MeetingNewFormCard() {
           </div>
         </div>
 
-        {/* Satisfaction */}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-700">
-              Memnuniyet (1–10)
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={10}
-              className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-              value={form.satisfaction10}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, satisfaction10: e.target.value }))
-              }
-              placeholder="Boş bırakılabilir"
-            />
-          </div>
+        {/* Satisfaction survey – 5 questions (1–5) */}
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-700">
+            Memnuniyet Anketi (1–5)
+          </label>
+          <p className="text-[11px] text-slate-500">
+            1: Hiç memnun değilim · 2: Memnun değilim · 3: Normal · 4:
+            Memnunum · 5: Çok memnunum
+          </p>
+
+          {!form.subjectId && (
+            <p className="mt-1 text-[11px] text-orange-600">
+              Anketi başlatmak için önce görüşme yapılan kişiyi seçin.
+            </p>
+          )}
+
+          {form.subjectId && surveyQuestions.length === 0 && (
+            <button
+              type="button"
+              className="mt-2 inline-flex items-center rounded-md border border-primary-500 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-50"
+              onClick={handlePrepareSurvey}
+              disabled={isPending}
+            >
+              5 soruluk memnuniyet anketini başlat
+            </button>
+          )}
+
+          {surveyError && (
+            <p className="mt-1 text-[11px] text-red-600">{surveyError}</p>
+          )}
+
+          {surveyQuestions.length > 0 && (
+            <div className="mt-2 space-y-2 rounded-md border border-slate-200 p-3">
+              {surveyQuestions.map((q, index) => (
+                <div
+                  key={q.id}
+                  className="rounded-md bg-slate-50 p-2"
+                >
+                  <p className="text-[11px] font-medium text-slate-800">
+                    {index + 1}. {q.text}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {SATISFACTION_OPTIONS.map((opt) => {
+                      const active = q.score === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          className={`rounded-md border px-2 py-1 text-[11px] ${
+                            active
+                              ? 'border-primary-500 bg-primary-50 font-semibold text-primary-800'
+                              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                          }`}
+                          onClick={() =>
+                            handleSurveyAnswerChange(q.id, opt.value)
+                          }
+                          disabled={isPending}
+                        >
+                          {opt.value}. {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Payment (senet) – only for patient meetings with selected person */}
@@ -291,7 +432,7 @@ export function MeetingNewFormCard() {
               <div className="mt-2 space-y-2 rounded-md border border-slate-200 p-3">
                 {accessories.length === 0 && (
                   <p className="text-[11px] text-slate-500">
-                    Bu g�r��me i�in aksesuar eklenmedi.
+                    Bu görüşme için aksesuar eklenmedi.
                   </p>
                 )}
 
@@ -325,7 +466,7 @@ export function MeetingNewFormCard() {
                           <input
                             type="text"
                             className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                            placeholder="Aksesuar ad�"
+                            placeholder="Aksesuar adı"
                             value={acc.customName}
                             onChange={(e) =>
                               handleAccessoryChange(index, {
@@ -355,7 +496,7 @@ export function MeetingNewFormCard() {
 
                       <div>
                         <label className="mb-1 block text-[11px] text-slate-600">
-                          Hastadan al�nan (TL)
+                          Hastadan alınan (TL)
                         </label>
                         <input
                           type="text"
@@ -388,7 +529,7 @@ export function MeetingNewFormCard() {
                   className="text-[11px] text-primary-600 underline"
                   onClick={handleAddAccessory}
                 >
-                  Aksesuar sat�r� ekle
+                  Aksesuar satırı ekle
                 </button>
               </div>
             )}
