@@ -189,7 +189,7 @@ export function MeetingPaymentSection({
             </label>
             <input
               type="text"
-              className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
+              className="w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm text-amber-950 placeholder:text-amber-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
               value={form.paymentAmount}
               onChange={(e) =>
                 onChange({
@@ -209,7 +209,7 @@ export function MeetingPaymentSection({
             </label>
             <input
               type="text"
-              className="w-full rounded-md border border-amber-300 px-2 py-1 text-xs"
+              className="w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm text-amber-950 placeholder:text-amber-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
               value={form.paymentNote}
               onChange={(e) =>
                 onChange({
