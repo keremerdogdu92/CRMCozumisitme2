@@ -1,8 +1,14 @@
 // src/pages/ReferencesPage.tsx
 // References page: list, inline create form and detail drawer orchestration.
+//
+// Patch v2.2:
+// - ADD: focusId query param desteği (ör. /references?focusId=<uuid>).
+//   * Eğer focusId varsa, filtre sadece bu ID'li referansı gösterir.
+//   * ReferencesTable'a focusedId geçilerek satır highlight edilir.
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { ReferenceNewFormCard } from '../features/references/ReferenceNewFormCard';
 import { ReferencesTable } from '../features/references/ReferencesTable';
 import { ReferenceDetailDrawer } from '../features/references/ReferenceDetailDrawer';
@@ -33,6 +39,8 @@ const initialFormState: NewReferenceForm = {
 
 export default function ReferencesPage() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+
   const [search, setSearch] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formState, setFormState] = useState<NewReferenceForm>(initialFormState);
@@ -62,7 +70,14 @@ export default function ReferencesPage() {
 
   const references = data ?? [];
 
+  // Meetings üzerinden derin link desteği: /references?focusId=<referenceId>
+  const focusId = searchParams.get('focusId');
+
   const filtered = references.filter((r) => {
+    if (focusId) {
+      return r.id === focusId;
+    }
+
     const term = search.trim().toLowerCase();
     if (!term) return true;
 
@@ -113,6 +128,11 @@ export default function ReferencesPage() {
           <p className="mt-1 text-xs text-slate-500">
             Toplam {totalCount} kayıt
           </p>
+          {focusId && (
+            <p className="mt-1 text-[11px] text-primary-700">
+              Görüşmeden gelindi. Sadece seçilen referans kaydı gösteriliyor.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -122,6 +142,7 @@ export default function ReferencesPage() {
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            disabled={!!focusId}
           />
 
           <button
@@ -162,7 +183,11 @@ export default function ReferencesPage() {
       )}
 
       {/* References table */}
-      <ReferencesTable items={filtered} onSelectRow={(r) => setDetailRef(r)} />
+      <ReferencesTable
+        items={filtered}
+        onSelectRow={(r) => setDetailRef(r)}
+        focusedId={focusId}
+      />
 
       {/* Detail drawer */}
       <ReferenceDetailDrawer
