@@ -2,6 +2,12 @@
 // Meetings list table with meeting_type + subject info, filters,
 // column visibility toggles, sorting and export (CSV / Excel).
 //
+// Patch v2.3:
+// - ADD: "İşlemler" kolonu.
+// - ADD: Satır bazlı "Hastaya git / Denemeye git / Referansa git" navigasyon butonu.
+//   * meeting_type + subject_id'ye göre ilgili sayfaya ?focusId=<uuid> ile yönlendirir.
+// - Export'ta "İşlemler" kolonu hariç tutulur.
+//
 // Patch v2.2:
 // - ADD: Export buttons (CSV + XLSX) using visible columns + filtered + sorted rows.
 // - Uses shared csvUtils + TableExportButtons component.
@@ -14,6 +20,7 @@
 // - No behavior change intended for normal UI flow.
 
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMeetingsQuery } from './api';
 import type { MeetingRow, MeetingType } from './types';
 import { useCurrentProfile } from '../auth/useCurrentProfile';
@@ -79,7 +86,8 @@ type MeetingTableColumnId =
   | 'subject'
   | 'next_at'
   | 'satisfaction_10'
-  | 'note';
+  | 'note'
+  | 'actions';
 
 const MEETING_COLUMNS: TableColumnDef<
   MeetingRow & { _colId?: MeetingTableColumnId }
@@ -140,6 +148,12 @@ const MEETING_COLUMNS: TableColumnDef<
     accessor: (m) => m.note ?? '',
     exportAccessor: (m) => m.note ?? '',
   },
+  {
+    id: 'actions',
+    label: 'İşlemler',
+    sortable: false,
+    isDefaultVisible: true,
+  },
 ];
 
 export function MeetingsTable() {
@@ -147,6 +161,7 @@ export function MeetingsTable() {
   const { data: profile } = useCurrentProfile();
   const isAdmin = profile?.role === 'admin';
   const userId = profile?.id ?? null;
+  const navigate = useNavigate();
 
   const [typeFilter, setTypeFilter] = useState<MeetingType | 'all'>('all');
 
@@ -240,14 +255,21 @@ export function MeetingsTable() {
   }, [filteredRows, prefsState.sortBy, prefsState.sortDir]);
 
   const handleExport = (type: 'csv' | 'xlsx') => {
-    if (visibleColumns.length === 0 || sortedRows.length === 0) return;
+    if (sortedRows.length === 0) return;
 
-    const headers = visibleColumns.map(
+    // "İşlemler" kolonunu export'a dahil etmiyoruz
+    const exportableColumns = visibleColumns.filter(
+      (col) => col.id !== 'actions',
+    );
+
+    if (exportableColumns.length === 0) return;
+
+    const headers = exportableColumns.map(
       (col) => col.exportLabel ?? col.label,
     );
 
     const rowsForExport = sortedRows.map((m) =>
-      visibleColumns.map((col) => {
+      exportableColumns.map((col) => {
         const id = col.id as MeetingTableColumnId;
 
         if (col.exportAccessor) {
@@ -375,6 +397,8 @@ export function MeetingsTable() {
                 let alignClass = 'text-left';
                 if (col.id === 'satisfaction_10') {
                   alignClass = 'text-center';
+                } else if (col.id === 'actions') {
+                  alignClass = 'text-right';
                 }
 
                 return (
@@ -450,6 +474,66 @@ export function MeetingsTable() {
                       return (
                         <td key={col.id} className="px-3 py-2 text-slate-600">
                           {short}
+                        </td>
+                      );
+                    }
+                    case 'actions': {
+                      if (!m.subject_id) {
+                        return (
+                          <td
+                            key={col.id}
+                            className="px-3 py-2 text-right text-slate-400"
+                          >
+                            -
+                          </td>
+                        );
+                      }
+
+                      let label = '';
+                      let path = '';
+
+                      switch (m.meeting_type) {
+                        case 'patient':
+                          label = 'Hastaya git';
+                          path = `/patients?focusId=${encodeURIComponent(
+                            m.subject_id,
+                          )}`;
+                          break;
+                        case 'trial':
+                          label = 'Denemeye git';
+                          path = `/trials?focusId=${encodeURIComponent(
+                            m.subject_id,
+                          )}`;
+                          break;
+                        case 'reference':
+                          label = 'Referansa git';
+                          path = `/references?focusId=${encodeURIComponent(
+                            m.subject_id,
+                          )}`;
+                          break;
+                        default:
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-right text-slate-400"
+                            >
+                              -
+                            </td>
+                          );
+                      }
+
+                      return (
+                        <td
+                          key={col.id}
+                          className="px-3 py-2 text-right"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => navigate(path)}
+                            className="inline-flex items-center rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            {label}
+                          </button>
                         </td>
                       );
                     }
