@@ -12,6 +12,7 @@ import { ImportFixCenterSection } from '../features/patients/import/ImportFixCen
 import { InventoryImportCard } from '../features/inventory/InventoryImportCard';
 import { DeviceCatalogImportCard } from '../features/inventory/deviceCatalog/DeviceCatalogImportCard';
 import { OrgSettingsCard } from '../features/settings/OrgSettingsCard';
+import { MeetingSatisfactionSettingsCard } from '../features/meetings/MeetingSatisfactionSettingsCard';
 
 export default function SettingsPage() {
   // Inventory import kartını default açık yapıyoruz
@@ -33,6 +34,9 @@ export default function SettingsPage() {
       <div className="space-y-4">
         {/* Organization / Offer Settings */}
         <OrgSettingsCard />
+
+        {/* Meeting satisfaction survey settings */}
+        <MeetingSatisfactionSettingsCard />
 
         {/* Patients import (v2) */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
