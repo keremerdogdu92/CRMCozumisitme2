@@ -6,6 +6,13 @@
 // - No Supabase calls
 // - No React Query
 // So that it is easy to unit test and reuse in other contexts.
+//
+// v2.0:
+// - Adds optional CatalogPriceMap support: if both purchase_price and list_price
+//   are empty in CSV, and a catalog entry exists for (brand, model, item_type),
+//   prices are filled from catalog.
+// - If both prices are empty in CSV AND catalog entry is missing, row becomes
+//   blocking error: "fiyat eksik, katalogta da yok".
 
 import type { InventoryItemType, InventoryStatus } from './types';
 import { parsePriceOrNull } from './inventoryPriceUtils';
@@ -46,6 +53,31 @@ export type InventoryImportBuildResult = {
 };
 
 /**
+ * Catalog price lookup tipi:
+ * - Anahtar: normalize edilmiş "brand::model::item_type"
+ * - Değer: katalogdaki purchase_price/list_price (number | null)
+ */
+export type CatalogPriceMapEntry = {
+  purchase_price: number | null;
+  list_price: number | null;
+};
+
+export type CatalogPriceMap = Record<string, CatalogPriceMapEntry>;
+
+/**
+ * Tek bir katalog anahtarı üret:
+ * - brand/model trim + lowercase
+ * - item_type olduğu gibi (zaten normalize edilmiş: "hearing_aid" | "charger")
+ */
+export function makeCatalogPriceKey(
+  brand: string,
+  model: string,
+  itemType: InventoryItemType,
+): string {
+  return `${brand.trim().toLowerCase()}::${model.trim().toLowerCase()}::${itemType}`;
+}
+
+/**
  * Normalize item_type from CSV.
  *
  * Supported (case-insensitive):
@@ -56,7 +88,7 @@ export type InventoryImportBuildResult = {
  * - Burada hata fırlatılırsa bu blocking kabul edilir
  *   (item_type kritik alan → satır import edilmez).
  */
-function normalizeItemType(raw: string): InventoryItemType {
+export function normalizeItemType(raw: string): InventoryItemType {
   const v = raw.trim().toLowerCase();
   if (!v) {
     throw new Error('item_type alanı boş olamaz.');
@@ -161,6 +193,7 @@ function isParsablePurchaseDate(raw: string): boolean {
  *   * model (veya device_model) eksik
  *   * item_type boş veya geçersiz
  *   * serial_no boş
+ *   * purchase_price ve list_price CSV'de boş + katalogta da bu model için fiyat bulunamıyor
  *
  * - Diğer tüm parsing sorunları:
  *   * Satır valid kalır (valid = true),
@@ -174,8 +207,9 @@ export function buildInventoryImportPayload(args: {
   orgId: string;
   jobId: string;
   csvObjects: CsvRowObj[];
-}): InventoryImportBuildResult {
-  const { orgId, jobId, csvObjects } = args;
+  catalogPriceMap?: CatalogPriceMap;
+}: InventoryImportBuildResult {
+  const { orgId, jobId, csvObjects, catalogPriceMap } = args;
 
   const totalRows = csvObjects.length;
   let importedCount = 0;
@@ -284,6 +318,44 @@ export function buildInventoryImportPayload(args: {
         warnings.push(
           'purchase_date formatı geçersiz, tarih yok sayıldı (beklenen: dd.MM.yyyy veya yyyy-MM-dd).',
         );
+      }
+    }
+
+    // 7) Hem CSV'de hem de hesaplanan değerlerde fiyat boşsa → katalogtan doldurmayı dene
+    if (
+      valid &&
+      purchasePrice == null &&
+      listPrice == null &&
+      catalogPriceMap
+    ) {
+      const key = makeCatalogPriceKey(rawBrand, rawModel, itemType);
+      const catalog = catalogPriceMap[key];
+
+      if (catalog) {
+        purchasePrice =
+          typeof catalog.purchase_price === 'number'
+            ? catalog.purchase_price
+            : null;
+        listPrice =
+          typeof catalog.list_price === 'number'
+            ? catalog.list_price
+            : null;
+
+        if (purchasePrice === null && listPrice === null) {
+          // Katalog satırı var ama her iki fiyat da null → blocking error
+          valid = false;
+          blockingError =
+            'CSV satırında purchase_price ve list_price boş, ve katalogta da bu model için fiyat değeri yok.';
+        } else {
+          warnings.push(
+            'purchase_price ve list_price CSV’de boş olduğu için katalog fiyatları ile dolduruldu.',
+          );
+        }
+      } else {
+        // Katalogta hiç satır yok → blocking error
+        valid = false;
+        blockingError =
+          'CSV satırında purchase_price ve list_price boş, ve katalogta bu marka+model+item_type için fiyat bulunamadı.';
       }
     }
 
