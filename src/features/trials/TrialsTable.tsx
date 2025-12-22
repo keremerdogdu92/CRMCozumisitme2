@@ -10,6 +10,10 @@
 // - Uses shared csv/xlsx helpers (exportToCsvFile / exportToXlsxFile).
 // Patch v2.3:
 // - ADD: focusedId desteği. focusId ile gelen kayıt satırı listede highlight edilir.
+// Patch v2.4 (responsive polish):
+// - ADD: Mobile card view (md altı) → deneme listesini telefon ekranında daha okunur hale getirir.
+// - Desktop/tablet tablosu ResponsiveTableShell içine alındı.
+// - Toolbar mobile-first düzene çekildi.
 
 import { useMemo } from 'react';
 import type { TrialRow } from './types';
@@ -22,6 +26,7 @@ import {
   exportToCsvFile,
   exportToXlsxFile,
 } from '../../utils/csvUtils';
+import { ResponsiveTableShell } from '../../components/layout/ResponsiveTableShell';
 
 type TrialsTableProps = {
   items: TrialRow[];
@@ -250,7 +255,7 @@ export function TrialsTable({
 
   if (sortedItems.length === 0) {
     return (
-      <div className="text-sm text-slate-500">
+      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-500 sm:text-sm">
         Filtreye uyan deneme kaydı bulunamadı. Aramayı temizleyebilir veya yeni
         deneme ekleyebilirsiniz.
       </div>
@@ -258,15 +263,15 @@ export function TrialsTable({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {/* Toolbar: sol sayım, sağda sütun kontrolü + export */}
-      <div className="flex items-center justify-between px-1 md:px-0">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[11px] text-slate-500">
           Toplam{' '}
           <span className="font-semibold">{sortedItems.length}</span> deneme
           kaydı var.
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           <TableColumnsControl
             columns={TRIAL_COLUMNS}
             isColumnVisible={isColumnVisible}
@@ -279,146 +284,241 @@ export function TrialsTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table className="min-w-full text-sm">
-          <thead className="bg-slate-50">
-            <tr>
-              {visibleColumns.map((col) => {
-                const isSorted = prefsState.sortBy === col.id;
-                const showSortIcon = col.sortable;
+      {/* Mobile: card list (md altı) */}
+      <div className="space-y-3 md:hidden">
+        {sortedItems.map((t) => {
+          const isFocused = focusedId && t.id === focusedId;
 
-                let alignClass = 'text-left';
-                if (col.id === 'actions') alignClass = 'text-right';
+          const noteText =
+            t.note && t.note.length > 100
+              ? `${t.note.slice(0, 100)}…`
+              : t.note ?? '';
+
+          return (
+            <div
+              key={t.id}
+              className={
+                'rounded-lg border px-3 py-3 shadow-sm ' +
+                (isFocused
+                  ? 'border-primary-300 bg-primary-50/70'
+                  : 'border-slate-200 bg-white')
+              }
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-900">
+                    {t.full_name ?? '-'}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    Kayıt: {formatShortDate(t.created_at)}
+                  </p>
+                </div>
+                {t.reference_id ? (
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                    Referanslı
+                  </span>
+                ) : (
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                    Referans yok
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-700">
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Telefon
+                  </span>
+                  <span className="font-medium">
+                    {t.phone && t.phone.trim().length > 0 ? t.phone : '-'}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    İlk görüşme
+                  </span>
+                  <span className="font-medium">
+                    {formatShortDate(t.first_meet_at)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Sonraki randevu
+                  </span>
+                  <span className="font-medium">
+                    {formatShortDate(t.next_meet_at)}
+                  </span>
+                </div>
+              </div>
+
+              {noteText && (
+                <div className="mt-2">
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Not
+                  </span>
+                  <span className="text-[11px] text-slate-600">
+                    {noteText}
+                  </span>
+                </div>
+              )}
+
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => onSelectRow(t)}
+                  className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Detay
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop / tablet: klasik tablo (md ve üzeri) */}
+      <ResponsiveTableShell className="hidden md:block">
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+          <table className="min-w-full text-xs md:text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                {visibleColumns.map((col) => {
+                  const isSorted = prefsState.sortBy === col.id;
+                  const showSortIcon = col.sortable;
+
+                  let alignClass = 'text-left';
+                  if (col.id === 'actions') alignClass = 'text-right';
+
+                  return (
+                    <th
+                      key={col.id}
+                      className={`px-4 py-2 font-medium text-slate-600 ${alignClass} ${
+                        col.sortable ? 'cursor-pointer select-none' : ''
+                      }`}
+                      onClick={() => col.sortable && setSort(col.id)}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {col.label}
+                        {showSortIcon && isSorted && (
+                          <span className="text-[10px]">
+                            {prefsState.sortDir === 'asc' ? '▲' : '▼'}
+                          </span>
+                        )}
+                      </span>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedItems.map((t) => {
+                const isFocused = focusedId && t.id === focusedId;
 
                 return (
-                  <th
-                    key={col.id}
-                    className={`px-4 py-2 font-medium text-slate-600 ${alignClass} ${
-                      col.sortable ? 'cursor-pointer select-none' : ''
-                    }`}
-                    onClick={() => col.sortable && setSort(col.id)}
+                  <tr
+                    key={t.id}
+                    className={
+                      'border-t border-slate-100 ' +
+                      (isFocused
+                        ? 'bg-primary-50/70'
+                        : 'hover:bg-slate-50')
+                    }
                   >
-                    <span className="inline-flex items-center gap-1">
-                      {col.label}
-                      {showSortIcon && isSorted && (
-                        <span className="text-[10px]">
-                          {prefsState.sortDir === 'asc' ? '▲' : '▼'}
-                        </span>
-                      )}
-                    </span>
-                  </th>
+                    {visibleColumns.map((col) => {
+                      switch (col.id as TrialTableColumnId) {
+                        case 'created_at':
+                          return (
+                            <td
+                              key={col.id}
+                              className="whitespace-nowrap px-4 py-2 text-slate-700"
+                            >
+                              {formatDate(t.created_at)}
+                            </td>
+                          );
+                        case 'full_name':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-4 py-2 text-slate-800"
+                            >
+                              {t.full_name ?? '-'}
+                            </td>
+                          );
+                        case 'phone':
+                          return (
+                            <td
+                              key={col.id}
+                              className="whitespace-nowrap px-4 py-2 text-slate-700"
+                            >
+                              {t.phone ?? '-'}
+                            </td>
+                          );
+                        case 'first_meet_at':
+                          return (
+                            <td
+                              key={col.id}
+                              className="whitespace-nowrap px-4 py-2 text-slate-700"
+                            >
+                              {formatDate(t.first_meet_at)}
+                            </td>
+                          );
+                        case 'next_meet_at':
+                          return (
+                            <td
+                              key={col.id}
+                              className="whitespace-nowrap px-4 py-2 text-slate-700"
+                            >
+                              {formatDate(t.next_meet_at)}
+                            </td>
+                          );
+                        case 'reference':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-4 py-2 text-slate-700"
+                            >
+                              {t.reference_id ? 'Var' : 'Yok'}
+                            </td>
+                          );
+                        case 'note':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-4 py-2 text-slate-700"
+                            >
+                              {t.note
+                                ? t.note.length > 60
+                                  ? `${t.note.slice(0, 60)}…`
+                                  : t.note
+                                : '-'}
+                            </td>
+                          );
+                        case 'actions':
+                          return (
+                            <td
+                              key={col.id}
+                              className="whitespace-nowrap px-4 py-2 text-right"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => onSelectRow(t)}
+                                className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                              >
+                                Detay
+                              </button>
+                            </td>
+                          );
+                        default:
+                          return null;
+                      }
+                    })}
+                  </tr>
                 );
               })}
-            </tr>
-          </thead>
-          <tbody>
-            {sortedItems.map((t) => {
-              const isFocused = focusedId && t.id === focusedId;
-
-              return (
-                <tr
-                  key={t.id}
-                  className={
-                    'border-t border-slate-100 ' +
-                    (isFocused
-                      ? 'bg-primary-50/70'
-                      : 'hover:bg-slate-50')
-                  }
-                >
-                  {visibleColumns.map((col) => {
-                    switch (col.id as TrialTableColumnId) {
-                      case 'created_at':
-                        return (
-                          <td
-                            key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-slate-700"
-                          >
-                            {formatDate(t.created_at)}
-                          </td>
-                        );
-                      case 'full_name':
-                        return (
-                          <td
-                            key={col.id}
-                            className="px-4 py-2 text-slate-800"
-                          >
-                            {t.full_name ?? '-'}
-                          </td>
-                        );
-                      case 'phone':
-                        return (
-                          <td
-                            key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-slate-700"
-                          >
-                            {t.phone ?? '-'}
-                          </td>
-                        );
-                      case 'first_meet_at':
-                        return (
-                          <td
-                            key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-slate-700"
-                          >
-                            {formatDate(t.first_meet_at)}
-                          </td>
-                        );
-                      case 'next_meet_at':
-                        return (
-                          <td
-                            key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-slate-700"
-                          >
-                            {formatDate(t.next_meet_at)}
-                          </td>
-                        );
-                      case 'reference':
-                        return (
-                          <td
-                            key={col.id}
-                            className="px-4 py-2 text-slate-700"
-                          >
-                            {t.reference_id ? 'Var' : 'Yok'}
-                          </td>
-                        );
-                      case 'note':
-                        return (
-                          <td
-                            key={col.id}
-                            className="px-4 py-2 text-slate-700"
-                          >
-                            {t.note
-                              ? t.note.length > 60
-                                ? `${t.note.slice(0, 60)}…`
-                                : t.note
-                              : '-'}
-                          </td>
-                        );
-                      case 'actions':
-                        return (
-                          <td
-                            key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-right"
-                          >
-                            <button
-                              type="button"
-                              onClick={() => onSelectRow(t)}
-                              className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                            >
-                              Detay
-                            </button>
-                          </td>
-                        );
-                      default:
-                        return null;
-                    }
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+            </tbody>
+          </table>
+        </div>
+      </ResponsiveTableShell>
     </div>
   );
 }
