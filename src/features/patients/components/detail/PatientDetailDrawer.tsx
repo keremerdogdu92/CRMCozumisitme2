@@ -92,28 +92,45 @@ export function PatientDetailDrawer({
   );
 
   // Invoice state is handled locally here and synced with Supabase
-  // via updatePatientInvoiceStatus.
+  // via updatePatientInvoiceStatus, triggered explicitly from the SGK tab.
   const [invoiceIssued, setInvoiceIssued] = useState<boolean>(
     patient.invoice_issued === true,
   );
   const [invoiceIssuedAt, setInvoiceIssuedAt] = useState<string | null>(
     (patient.invoice_issued_at as string | null) ?? null,
   );
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
   const invoiceMutation = useMutation({
-    mutationFn: (nextValue: boolean) =>
+    mutationFn: (params: {
+      invoiceIssued: boolean;
+      invoiceIssuedAt: string | null;
+    }) =>
       updatePatientInvoiceStatus({
         id: patient.id,
-        invoiceIssued: nextValue,
+        invoiceIssued: params.invoiceIssued,
+        invoiceIssuedAt: params.invoiceIssuedAt,
       }),
     onSuccess: (data) => {
       setInvoiceIssued(!!data.invoice_issued);
       setInvoiceIssuedAt(data.invoice_issued_at);
+      setInvoiceError(null);
       void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
     },
-    onError: () => {
+    onError: (err) => {
+      console.error(
+        'Failed to update patient invoice status (DETAIL_DRAWER):',
+        err,
+      );
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Fatura bilgileri güncellenirken beklenmeyen bir hata oluştu.';
+      setInvoiceError(message);
+
+      // Revert to last known patient-level values for safety.
       setInvoiceIssued(patient.invoice_issued === true);
       setInvoiceIssuedAt(
         (patient.invoice_issued_at as string | null) ?? null,
@@ -196,6 +213,7 @@ export function PatientDetailDrawer({
     setInvoiceIssuedAt(
       (patient.invoice_issued_at as string | null) ?? null,
     );
+    setInvoiceError(null);
 
     setSgkRecordedToSystemAt(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -215,9 +233,13 @@ export function PatientDetailDrawer({
     });
   };
 
-  const handleChangeInvoiceIssued = (nextValue: boolean) => {
-    setInvoiceIssued(nextValue);
-    invoiceMutation.mutate(nextValue);
+  const handleSaveInvoice = (params: {
+    invoiceIssued: boolean;
+    invoiceIssuedAt: string | null;
+  }) => {
+    setInvoiceIssued(params.invoiceIssued);
+    setInvoiceIssuedAt(params.invoiceIssuedAt);
+    invoiceMutation.mutate(params);
   };
 
   const handleSoftDeletePatient = (row: PatientRow) => {
@@ -333,7 +355,9 @@ export function PatientDetailDrawer({
             onChangeSgkPrescriptionNo={setSgkPrescriptionNo}
             invoiceIssued={invoiceIssued}
             invoiceIssuedAt={invoiceIssuedAt}
-            onChangeInvoiceIssued={handleChangeInvoiceIssued}
+            invoiceIsSaving={invoiceMutation.isPending}
+            invoiceSaveError={invoiceError}
+            onSaveInvoice={handleSaveInvoice}
           />
         )}
 
