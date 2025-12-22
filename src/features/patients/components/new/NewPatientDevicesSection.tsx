@@ -25,6 +25,9 @@
 // Patch v3.3 (hyphen-insensitive matching):
 // - normalizeName now treats '-', '–', '—', '_', '/' and '.' gibi işaretleri boşluk gibi ele alır.
 //   Böylece REACH R-Li 80 ile REACH R Li 80 aynı model kabul edilir.
+//
+// Patch v3.4 (list price hidden from UI):
+// - Hides manual "Liste Fiyatı" input in device rows. listPrice remains internal-only.
 
 import { useEffect } from 'react';
 import type {
@@ -714,24 +717,9 @@ export function NewPatientDevicesSection({
                   </div>
                 </div>
 
-                {/* Liste fiyatı + not */}
+                {/* Not (liste fiyatı alanı gizlendi) */}
                 <div className="grid gap-2 md:grid-cols-12">
-                  <div className="md:col-span-4">
-                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                      Liste Fiyatı (tek cihaz)
-                    </label>
-                    <input
-                      type="text"
-                      value={item.listPrice}
-                      onChange={(e) =>
-                        onChangeRow(index, { listPrice: e.target.value })
-                      }
-                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      placeholder="Örn. 25.000"
-                    />
-                  </div>
-
-                  <div className="md:col-span-8">
+                  <div className="md:col-span-12">
                     <label className="mb-1 block text-[11px] font-medium text-slate-600">
                       Not
                     </label>
