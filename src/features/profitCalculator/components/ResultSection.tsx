@@ -41,8 +41,8 @@ export const ResultSection: React.FC<ResultSectionProps> = ({
       : 0;
 
   return (
-    <section className="border rounded-lg p-4 space-y-4">
-      <h2 className="font-semibold">5. Sonuç</h2>
+    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="text-sm font-semibold text-slate-900">6. Sonuç</h2>
 
       {totalDeviceCost == null && (
         <p className="text-sm text-red-600">
@@ -57,8 +57,8 @@ export const ResultSection: React.FC<ResultSectionProps> = ({
       {hasResult && (
         <>
           {/* Özet kısım: satış fiyatı + kart sonrası net kâr ve oranlar */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1 text-sm">
+          <div className="grid grid-cols-1 gap-4 text-sm text-slate-800 md:grid-cols-2">
+            <div className="space-y-1">
               <div>
                 <span className="font-medium">Önerilen Satış Fiyatı:</span>{" "}
                 <span className="font-semibold">
@@ -82,7 +82,7 @@ export const ResultSection: React.FC<ResultSectionProps> = ({
               </div>
             </div>
 
-            <div className="space-y-1 text-sm">
+            <div className="space-y-1">
               <div>
                 K / (Cihaz + aksesuar maliyeti)
                 {effectiveCardFee > 0 ? " (kart sonrası)" : ""}:{" "}
@@ -101,7 +101,7 @@ export const ResultSection: React.FC<ResultSectionProps> = ({
           </div>
 
           {/* Detaylı döküm */}
-          <div className="mt-4 border-t pt-4 text-sm space-y-1">
+          <div className="mt-4 space-y-1 border-t pt-4 text-sm text-slate-800">
             <div>
               Cihaz maliyeti (C):{" "}
               {result!.deviceCost.toLocaleString("tr-TR", {
@@ -179,7 +179,7 @@ export const ResultSection: React.FC<ResultSectionProps> = ({
                         maximumFractionDigits: 2,
                       })}{" "}
                       TL{" "}
-                      <span className="text-gray-700">
+                      <span className="text-slate-700">
                         ({result!.discountPercent!.toFixed(1)} %)
                       </span>
                     </div>
