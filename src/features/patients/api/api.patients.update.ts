@@ -43,46 +43,6 @@ function normalizeRecordedAt(
 }
 
 /**
- * Normalize invoice issuance timestamp based on UI inputs.
- * - When invoiceIssued is false → always returns null (clear).
- * - When invoiceIssued is true:
- *   - If rawValue is empty → now().
- *   - If rawValue is "yyyy-MM-dd" → converted to UTC midnight ISO.
- *   - Otherwise, tries Date(...) parsing and falls back to now() on failure.
- */
-function normalizeInvoiceIssuedAt(
-  invoiceIssued: boolean,
-  rawValue: string | null | undefined,
-): string | null {
-  if (!invoiceIssued) {
-    return null;
-  }
-
-  if (!rawValue || rawValue.trim().length === 0) {
-    return new Date().toISOString();
-  }
-
-  const value = rawValue.trim();
-
-  // "yyyy-MM-dd" quick path
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const d = new Date(value + 'T00:00:00.000Z');
-    if (!Number.isNaN(d.getTime())) {
-      return d.toISOString();
-    }
-  }
-
-  // Fallback to generic Date parsing (ISO etc.)
-  const parsed = new Date(value);
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString();
-  }
-
-  // Last resort: now
-  return new Date().toISOString();
-}
-
-/**
  * Update SGK-related fields for a given patient.
  * Artık sgk_recorded_to_system_at kolonunu da günceller.
  */
@@ -189,15 +149,45 @@ export async function updatePatientSgkProfileInfo(params: {
 }
 
 /**
+ * Fatura tarihi normalizasyonu.
+ * - invoiceIssued = false → her zaman null (tarih temizlenir).
+ * - invoiceIssued = true:
+ *   - raw boş ise → now().
+ *   - "yyyy-MM-dd" ise → o günün 00:00 UTC ISO'su.
+ *   - Diğer parse edilebilir değerler → Date(raw).toISOString().
+ *   - Parse edilemezse → now().
+ */
+function normalizeInvoiceIssuedAt(
+  invoiceIssued: boolean,
+  rawValue: string | null | undefined,
+): string | null {
+  if (!invoiceIssued) return null;
+
+  if (!rawValue || rawValue.trim().length === 0) {
+    return new Date().toISOString();
+  }
+
+  const value = rawValue.trim();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const d = new Date(value + 'T00:00:00.000Z');
+    if (!Number.isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+  }
+
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString();
+  }
+
+  return new Date().toISOString();
+}
+
+/**
  * Update invoice status for a given patient.
- * - When invoiceIssued = true:
- *   - If invoiceIssuedAt is empty → uses now().
- *   - If invoiceIssuedAt is "yyyy-MM-dd" → stores that day (UTC midnight).
- *   - Otherwise tries to parse the provided value as a date.
- * - When invoiceIssued = false:
- *   - invoice_issued_at is cleared (NULL).
- *
- * Returns the latest invoice_issued/invoice_issued_at values from DB.
+ * - UI'dan gelen checkbox + tarih kombinasyonunu DB'ye yazar.
+ * - Tarih "yyyy-MM-dd" veya ISO benzeri bir değer olabilir.
  */
 export async function updatePatientInvoiceStatus(params: {
   id: string;
@@ -209,16 +199,16 @@ export async function updatePatientInvoiceStatus(params: {
 }> {
   const { id, invoiceIssued, invoiceIssuedAt } = params;
 
-  const nextIssuedAt = normalizeInvoiceIssuedAt(
+  const effectiveIssuedAt = normalizeInvoiceIssuedAt(
     invoiceIssued,
-    invoiceIssuedAt ?? null,
+    invoiceIssuedAt,
   );
 
   const { data, error } = await supabaseClient
     .from('patients')
     .update({
       invoice_issued: invoiceIssued,
-      invoice_issued_at: invoiceIssued ? nextIssuedAt : null,
+      invoice_issued_at: effectiveIssuedAt,
     })
     .eq('id', id)
     .select('invoice_issued, invoice_issued_at')
@@ -233,7 +223,9 @@ export async function updatePatientInvoiceStatus(params: {
   }
 
   return {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     invoice_issued: !!(data as any).invoice_issued,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     invoice_issued_at:
       ((data as any).invoice_issued_at as string | null) ?? null,
   };
