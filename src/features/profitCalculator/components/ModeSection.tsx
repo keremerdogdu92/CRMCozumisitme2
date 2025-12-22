@@ -19,15 +19,19 @@ export const ModeSection: React.FC<ModeSectionProps> = ({
   const setMode = (mode: ProfitCalcMode) => onChange("mode", mode);
 
   return (
-    <section className="border rounded-lg p-4 space-y-4">
-      <h2 className="font-semibold">4. Hesaplama Modu</h2>
+    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="text-sm font-semibold text-slate-900">
+        5. Hesaplama Modu
+      </h2>
 
       <div className="flex flex-wrap gap-2 text-sm">
         <button
           type="button"
           className={
-            "px-3 py-1 border rounded " +
-            (inputs.mode === "price" ? "bg-gray-900 text-white" : "bg-white")
+            "rounded-md border px-3 py-1 " +
+            (inputs.mode === "price"
+              ? "border-slate-900 bg-slate-900 text-white"
+              : "border-slate-300 bg-white text-slate-800")
           }
           onClick={() => setMode("price")}
         >
@@ -36,10 +40,10 @@ export const ModeSection: React.FC<ModeSectionProps> = ({
         <button
           type="button"
           className={
-            "px-3 py-1 border rounded " +
+            "rounded-md border px-3 py-1 " +
             (inputs.mode === "targetOnCost"
-              ? "bg-gray-900 text-white"
-              : "bg-white")
+              ? "border-slate-900 bg-slate-900 text-white"
+              : "border-slate-300 bg-white text-slate-800")
           }
           onClick={() => setMode("targetOnCost")}
         >
@@ -48,10 +52,10 @@ export const ModeSection: React.FC<ModeSectionProps> = ({
         <button
           type="button"
           className={
-            "px-3 py-1 border rounded " +
+            "rounded-md border px-3 py-1 " +
             (inputs.mode === "targetOnRevenue"
-              ? "bg-gray-900 text-white"
-              : "bg-white")
+              ? "border-slate-900 bg-slate-900 text-white"
+              : "border-slate-300 bg-white text-slate-800")
           }
           onClick={() => setMode("targetOnRevenue")}
         >
@@ -60,16 +64,16 @@ export const ModeSection: React.FC<ModeSectionProps> = ({
       </div>
 
       {inputs.mode === "price" && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="mb-1 block text-sm font-medium text-slate-700">
               Satış fiyatı (TL)
             </label>
             <input
               type="number"
               min={0}
               step={1}
-              className="w-full border rounded px-2 py-1 text-sm"
+              className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               value={inputs.salePrice ?? ""}
               onChange={(e) =>
                 onChange(
@@ -83,16 +87,16 @@ export const ModeSection: React.FC<ModeSectionProps> = ({
       )}
 
       {inputs.mode === "targetOnCost" && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="mb-1 block text-sm font-medium text-slate-700">
               Cihaza göre kâr hedefi (%)
             </label>
             <input
               type="number"
               min={0}
               step={1}
-              className="w-full border rounded px-2 py-1 text-sm"
+              className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               value={inputs.targetOnCostPercent * 100}
               onChange={(e) =>
                 onChange(
@@ -101,7 +105,7 @@ export const ModeSection: React.FC<ModeSectionProps> = ({
                 )
               }
             />
-            <p className="text-xs text-gray-600 mt-1">
+            <p className="mt-1 text-xs text-slate-600">
               Örnek: %100 girersen, net kâr Cihaz+aksesuar toplam maliyetine
               eşit olsun demektir.
             </p>
@@ -110,9 +114,9 @@ export const ModeSection: React.FC<ModeSectionProps> = ({
       )}
 
       {inputs.mode === "targetOnRevenue" && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="mb-1 block text-sm font-medium text-slate-700">
               Ciroya göre kâr hedefi (%)
             </label>
             <input
@@ -120,7 +124,7 @@ export const ModeSection: React.FC<ModeSectionProps> = ({
               min={0}
               max={100}
               step={1}
-              className="w-full border rounded px-2 py-1 text-sm"
+              className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               value={inputs.targetOnRevenuePercent * 100}
               onChange={(e) =>
                 onChange(
@@ -129,7 +133,7 @@ export const ModeSection: React.FC<ModeSectionProps> = ({
                 )
               }
             />
-            <p className="text-xs text-gray-600 mt-1">
+            <p className="mt-1 text-xs text-slate-600">
               Örnek: %20 girersen, net kârın satış fiyatının %20&apos;si
               olmasını hedeflersin.
             </p>
