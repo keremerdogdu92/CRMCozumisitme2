@@ -68,7 +68,7 @@ export async function createInventoryItem(input: NewInventoryItemForm): Promise<
   // - Eğer hem purchasePrice hem listPrice boş ise:
   //   → katalog view'undan (org_id + brand + model + item_type) için
   //     purchase_price + list_price çekilir.
-  // - Eğer CSV/forma en az bir tanesi dolu ise:
+  // - Eğer forma en az bir tanesi dolu ise:
   //   → kullanıcı girişi kullanılır (parsePriceOrNull).
   const hasPurchasePrice = purchasePrice.trim().length > 0;
   const hasListPrice = listPrice.trim().length > 0;
