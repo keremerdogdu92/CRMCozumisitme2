@@ -20,12 +20,13 @@ import {
 } from './api.satisfaction';
 
 type ListStatus = 'idle' | 'loading' | 'saving';
-
 type QuestionStatus = 'idle' | 'loading' | 'saving';
 
 export function MeetingSatisfactionSettingsCard() {
   const { data: profile } = useCurrentProfile();
   const orgId = profile?.org_id ?? null;
+  // Safe string for TS (we yine runtime’da orgId check yapıyoruz)
+  const safeOrgId: string = orgId ?? '';
 
   const [lists, setLists] = useState<MeetingSatisfactionQuestionList[]>([]);
   const [listsStatus, setListsStatus] = useState<ListStatus>('idle');
@@ -49,10 +50,11 @@ export function MeetingSatisfactionSettingsCard() {
   const [newQuestionSaving, setNewQuestionSaving] =
     useState<boolean>(false);
 
-  // Load all lists on mount
+  // Load all lists on mount / when orgId changes
   useEffect(() => {
     if (!orgId) return;
     void loadLists();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId]);
 
   async function loadLists(initialSelect: boolean = true) {
@@ -106,10 +108,11 @@ export function MeetingSatisfactionSettingsCard() {
   }
 
   const selectedList = useMemo(
-    () => lists.find((l) => l.id === selectedListId) ?? null,
+    () => lists.find((l) => l.id === selectedListId),
     [lists, selectedListId],
   );
 
+  // Eğer orgId yoksa, kartı disabled göster
   if (!orgId) {
     return (
       <section className="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -117,8 +120,8 @@ export function MeetingSatisfactionSettingsCard() {
           Memnuniyet Soruları
         </h3>
         <p className="mt-1 text-xs text-slate-600">
-          Oturumda geçerli bir organizasyon bulunamadı. Lütfen tekrar
-          giriş yapın veya sistem yöneticinize başvurun.
+          Oturumda geçerli bir organizasyon bulunamadı. Lütfen tekrar giriş
+          yapın veya sistem yöneticinize başvurun.
         </p>
       </section>
     );
@@ -126,16 +129,15 @@ export function MeetingSatisfactionSettingsCard() {
 
   async function handleCreateList(e: React.FormEvent) {
     e.preventDefault();
-    if (!newListName.trim()) return;
+    if (!orgId || !newListName.trim()) return;
 
     setNewListSaving(true);
     try {
       const created = await createSatisfactionList({
-        orgId,
+        orgId: safeOrgId,
         name: newListName,
       });
       setNewListName('');
-      // Reload lists and select the new one
       await loadLists(false);
       setSelectedListId(created.id);
     } catch (err) {
@@ -174,7 +176,7 @@ export function MeetingSatisfactionSettingsCard() {
 
   async function handleAddQuestion(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedList || !newQuestionText.trim()) return;
+    if (!orgId || !selectedList || !newQuestionText.trim()) return;
 
     setNewQuestionSaving(true);
     try {
@@ -186,7 +188,7 @@ export function MeetingSatisfactionSettingsCard() {
       const nextSort = maxSort + 10;
 
       const created = await createSatisfactionQuestion({
-        orgId,
+        orgId: safeOrgId,
         listId: selectedList.id,
         questionText: newQuestionText,
         sortOrder: nextSort,
@@ -206,7 +208,12 @@ export function MeetingSatisfactionSettingsCard() {
 
   async function handleUpdateQuestion(
     questionId: string,
-    patch: Partial<Pick<MeetingSatisfactionQuestion, 'question_text' | 'sort_order' | 'is_active'>>,
+    patch: Partial<
+      Pick<
+        MeetingSatisfactionQuestion,
+        'question_text' | 'sort_order' | 'is_active'
+      >
+    >,
   ) {
     const existing = questions.find((q) => q.id === questionId);
     if (!existing) return;
@@ -239,7 +246,6 @@ export function MeetingSatisfactionSettingsCard() {
         'MeetingSatisfactionSettingsCard handleUpdateQuestion error',
         err,
       );
-      // On error, reload from server to avoid stale state
       if (selectedListId) {
         void loadQuestions(selectedListId);
       }
