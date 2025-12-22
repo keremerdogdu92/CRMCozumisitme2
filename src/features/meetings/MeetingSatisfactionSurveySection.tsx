@@ -155,8 +155,8 @@ export function MeetingSatisfactionSurveySection(
     loadingLists || loadingQuestions || loadingExisting || mutation.isPending;
 
   return (
-    <div className="mt-6 space-y-4 rounded-lg border border-gray-200 p-4">
-      <div className="flex items-center justify-between">
+    <div className="mt-6 space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-sm font-semibold text-gray-800">
           Memnuniyet Anketi (5 soru)
         </h3>
@@ -171,7 +171,7 @@ export function MeetingSatisfactionSurveySection(
       <div className="space-y-1">
         <label className="text-xs font-medium text-gray-700">Anket tipi</label>
         <select
-          className="w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm"
+          className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           value={selectedListId ?? ''}
           onChange={(e) => setSelectedListId(e.target.value || null)}
           disabled={disabled || !lists || lists.length === 0}
