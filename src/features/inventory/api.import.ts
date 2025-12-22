@@ -4,6 +4,13 @@
 // Supabase erişimi, import_jobs yaşam döngüsü ve React Query entegrasyonu
 // bu dosyada kalır. Satır bazlı doğrulama ve payload inşası
 // inventoryImportUtils.ts içinde tutulur.
+//
+// v2.0:
+// - CSV satırlarında purchase_price + list_price tamamen boş ise,
+//   current_device_model_prices_public view'undan katalog fiyatlarını
+//   çekip doldurur.
+// - Eğer katalogta da bulunamazsa, satır blocking error olarak işaretlenir
+//   (import edilmeyen satır).
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
@@ -13,7 +20,11 @@ import { INVENTORY_QUERY_KEY } from './api.keys';
 import {
   buildInventoryImportPayload,
   type CsvRowObj,
+  type CatalogPriceMap,
+  makeCatalogPriceKey,
+  normalizeItemType,
 } from './inventoryImportUtils';
+import type { InventoryItemType } from './types';
 
 /**
  * Basit header normalizasyonu:
@@ -34,6 +45,9 @@ function normalizeHeaderKey(raw: string): string {
  * - Creates an import_jobs row.
  * - Stores every CSV row in inventory_import_rows with validation info.
  * - Inserts valid rows into inventory_items.
+ * - Boş fiyatlar için (purchase_price + list_price):
+ *   * current_device_model_prices_public üzerinden katalogtan doldurmayı dener.
+ *   * Katalogta yoksa satırı blocking error yapar.
  */
 export async function importInventoryFromCsv(
   file: File,
@@ -124,7 +138,104 @@ export async function importInventoryFromCsv(
 
   const jobId: string = jobData.id as string;
 
-  // 2) Build per-row payloads and counters using shared utility
+  // 2) Katalog fiyat haritasını hazırla (yalnızca her iki fiyat da boş olan satırlar için)
+  const catalogPriceMap: CatalogPriceMap = {};
+
+  const combosNeedingCatalog = new Set<string>();
+  const brandsForFilter = new Set<string>();
+  const modelsForFilter = new Set<string>();
+  const itemTypesForFilter = new Set<InventoryItemType>();
+
+  csvObjects.forEach((row) => {
+    const rawBrand = (row['brand'] ?? row['device_brand'] ?? '').trim();
+    const rawModel = (row['model'] ?? row['device_model'] ?? '').trim();
+    const rawItemType = (row['item_type'] ?? '').trim();
+    const hasPurchase =
+      (row['purchase_price'] ?? '').trim().length > 0;
+    const hasList =
+      (row['list_price'] ?? '').trim().length > 0 ||
+      (row['device_price'] ?? '').trim().length > 0;
+
+    // Marka/model/item_type yoksa veya zaten fiyat girilmişse → katalog lookup yok
+    if (!rawBrand || !rawModel || !rawItemType) return;
+    if (hasPurchase || hasList) return;
+
+    try {
+      const itemType = normalizeItemType(rawItemType);
+      const key = makeCatalogPriceKey(rawBrand, rawModel, itemType);
+      if (!combosNeedingCatalog.has(key)) {
+        combosNeedingCatalog.add(key);
+        brandsForFilter.add(rawBrand);
+        modelsForFilter.add(rawModel);
+        itemTypesForFilter.add(itemType);
+      }
+    } catch {
+      // Geçersiz item_type; blocking error olarak daha sonra util içinde ele alınacak.
+    }
+  });
+
+  if (combosNeedingCatalog.size > 0) {
+    // Supabase numeric alanları string döndürebildiği için basit bir converter
+    const toNumberOrNull = (v: unknown): number | null => {
+      if (v === null || v === undefined || v === '') return null;
+      const num = Number(v);
+      if (!Number.isFinite(num)) return null;
+      return Number(num.toFixed(2));
+    };
+
+    let query = supabaseClient
+      .from('current_device_model_prices_public')
+      .select('brand, model, item_type, list_price, purchase_price')
+      .eq('org_id', orgId);
+
+    const brandList = Array.from(brandsForFilter);
+    const modelList = Array.from(modelsForFilter);
+    const itemTypeList = Array.from(itemTypesForFilter);
+
+    if (brandList.length === 1) {
+      query = query.eq('brand', brandList[0]);
+    } else {
+      query = query.in('brand', brandList);
+    }
+
+    if (modelList.length === 1) {
+      query = query.eq('model', modelList[0]);
+    } else {
+      query = query.in('model', modelList);
+    }
+
+    if (itemTypeList.length === 1) {
+      query = query.eq('item_type', itemTypeList[0]);
+    } else {
+      query = query.in('item_type', itemTypeList);
+    }
+
+    const { data: catalogRows, error: catalogError } = await query;
+
+    if (catalogError) {
+      console.error(
+        'Failed to load catalog prices for inventory import:',
+        catalogError,
+      );
+      throw new Error('IMPORT_CATALOG: ' + catalogError.message);
+    }
+
+    for (const row of catalogRows ?? []) {
+      const brand = (row as any).brand as string | null;
+      const model = (row as any).model as string | null;
+      const itemType = (row as any).item_type as InventoryItemType | null;
+
+      if (!brand || !model || !itemType) continue;
+
+      const key = makeCatalogPriceKey(brand, model, itemType);
+      catalogPriceMap[key] = {
+        purchase_price: toNumberOrNull((row as any).purchase_price),
+        list_price: toNumberOrNull((row as any).list_price),
+      };
+    }
+  }
+
+  // 3) Build per-row payloads and counters using shared utility
   const {
     importRowsPayload,
     inventoryItemsPayload,
@@ -135,10 +246,11 @@ export async function importInventoryFromCsv(
     orgId,
     jobId,
     csvObjects,
+    catalogPriceMap,
   });
 
   try {
-    // 3) inventory_import_rows insert
+    // 4) inventory_import_rows insert
     if (importRowsPayload.length > 0) {
       const { error: rowsError } = await supabaseClient
         .from('inventory_import_rows')
@@ -150,7 +262,7 @@ export async function importInventoryFromCsv(
       }
     }
 
-    // 4) valid rows → inventory_items insert
+    // 5) valid rows → inventory_items insert
     if (inventoryItemsPayload.length > 0) {
       const { error: itemsError } = await supabaseClient
         .from('inventory_items')
@@ -165,7 +277,7 @@ export async function importInventoryFromCsv(
       }
     }
 
-    // 5) job update → completed
+    // 6) job update → completed
     const { error: updateError } = await supabaseClient
       .from('import_jobs')
       .update({
