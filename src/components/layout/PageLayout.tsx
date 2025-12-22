@@ -35,7 +35,7 @@ function getMaxWidthClasses(maxWidth: PageMaxWidth): string {
       return 'mx-auto w-full max-w-6xl';
     case 'full':
     default:
-      return 'w-full';
+      return 'w-full max-w-full';
   }
 }
 
@@ -68,7 +68,7 @@ export function PageLayout(props: PageLayoutProps) {
   } = props;
 
   const rootClasses = twMerge(
-    'flex flex-col gap-4',
+    'flex w-full flex-col gap-4',
     fillHeight && 'h-full',
     getPaddingClasses(padding),
     className,
@@ -76,11 +76,7 @@ export function PageLayout(props: PageLayoutProps) {
 
   return (
     <div className={rootClasses}>
-      {header && (
-        <div className={getMaxWidthClasses(maxWidth)}>
-          {header}
-        </div>
-      )}
+      {header && <div className={getMaxWidthClasses(maxWidth)}>{header}</div>}
       <div className={getMaxWidthClasses(maxWidth)}>{children}</div>
     </div>
   );
