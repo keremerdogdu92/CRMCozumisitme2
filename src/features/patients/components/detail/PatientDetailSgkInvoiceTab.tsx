@@ -26,9 +26,17 @@ type PatientDetailSgkInvoiceTabProps = {
   sgkPrescriptionNo: string;
   onChangeSgkPrescriptionNo: (value: string) => void;
 
+  // Saved invoice state coming from parent (DB-backed).
   invoiceIssued: boolean;
   invoiceIssuedAt: string | null;
-  onChangeInvoiceIssued: (value: boolean) => void;
+
+  // Invoice save integration (handled in parent).
+  invoiceIsSaving?: boolean;
+  invoiceSaveError?: string | null;
+  onSaveInvoice: (params: {
+    invoiceIssued: boolean;
+    invoiceIssuedAt: string | null;
+  }) => void;
 };
 
 type SgkDeviceCount = '1' | '2';
@@ -118,7 +126,9 @@ export function PatientDetailSgkInvoiceTab({
   onChangeSgkPrescriptionNo,
   invoiceIssued,
   invoiceIssuedAt,
-  onChangeInvoiceIssued,
+  invoiceIsSaving,
+  invoiceSaveError,
+  onSaveInvoice,
 }: PatientDetailSgkInvoiceTabProps) {
   const queryClient = useQueryClient();
 
@@ -143,8 +153,16 @@ export function PatientDetailSgkInvoiceTab({
     ),
   );
 
+  // Invoice local edit state:
+  // - invoiceIssuedLocal: checkbox state (editable).
+  // - invoiceDateInput: <input type="date"> value (yyyy-MM-dd).
+  const [invoiceIssuedLocal, setInvoiceIssuedLocal] = useState<boolean>(invoiceIssued);
+  const [invoiceDateInput, setInvoiceDateInput] = useState<string>(
+    toDateInputValue(invoiceIssuedAt),
+  );
+
   // Initial sync from patient row whenever *patient changes* (ID bazında)
-  // veya üst katmandan gelen sgkRecordedToSystemAt dışarıdan güncellenirse.
+  // veya üst katmandan gelen sgkRecordedToSystemAt / invoice fields dışarıdan güncellenirse.
   useEffect(() => {
     setIsEditing(false);
     setProfileError(null);
@@ -183,8 +201,13 @@ export function PatientDetailSgkInvoiceTab({
           (((patient as any).sgk_recorded_to_system_at as string | null) ?? null),
       ),
     );
+
+    // Invoice local state reset from saved values:
+    setInvoiceIssuedLocal(invoiceIssued);
+    setInvoiceDateInput(toDateInputValue(invoiceIssuedAt));
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patient.id, sgkRecordedToSystemAt]);
+  }, [patient.id, sgkRecordedToSystemAt, invoiceIssued, invoiceIssuedAt]);
 
   const findProfileNetToFirm = (profileId: string): number | null => {
     const profile = (SGK_PROFILES as SgkProfileInternal[]).find(
@@ -321,7 +344,53 @@ export function PatientDetailSgkInvoiceTab({
     }
   };
 
-  // --- Read-only summary values ---
+  // --- Invoice local handlers ---
+
+  const handleToggleInvoiceIssuedLocal = (checked: boolean) => {
+    if (!checked) {
+      // If there is an existing date in the input, confirm before clearing.
+      if (invoiceDateInput && invoiceDateInput.trim().length > 0) {
+        const confirmed = window.confirm(
+          [
+            '“Fatura kesildi mi?” işaretini kaldırırsanız fatura tarihi temizlenecek.',
+            '',
+            'Bu işlem kayıtlı fatura tarihini siler. Devam etmek istediğinize emin misiniz?',
+          ].join('\n'),
+        );
+        if (!confirmed) return;
+      }
+
+      setInvoiceIssuedLocal(false);
+      setInvoiceDateInput('');
+      return;
+    }
+
+    // First time marking as issued: default to today if no date yet.
+    setInvoiceIssuedLocal(true);
+    if (!invoiceDateInput || invoiceDateInput.trim().length === 0) {
+      setInvoiceDateInput(todayAsDateInput());
+    }
+  };
+
+  const handleInvoiceDateChange = (value: string) => {
+    setInvoiceDateInput(value);
+  };
+
+  const handleSaveInvoiceClick = () => {
+    // When invoice is marked as issued but date is empty, default to today.
+    let effectiveDate = invoiceDateInput;
+    if (invoiceIssuedLocal && (!effectiveDate || effectiveDate.trim().length === 0)) {
+      effectiveDate = todayAsDateInput();
+      setInvoiceDateInput(effectiveDate);
+    }
+
+    onSaveInvoice({
+      invoiceIssued: invoiceIssuedLocal,
+      invoiceIssuedAt: invoiceIssuedLocal ? effectiveDate || null : null,
+    });
+  };
+
+  // --- Read-only summary values (DB-backed) ---
 
   const invoiceStatusLabel = invoiceIssued ? 'Fatura kesildi' : 'Fatura henüz kesilmedi';
 
@@ -577,8 +646,8 @@ export function PatientDetailSgkInvoiceTab({
             <label className="flex items-center gap-2 text-xs text-slate-700">
               <input
                 type="checkbox"
-                checked={invoiceIssued}
-                onChange={(e) => onChangeInvoiceIssued(e.target.checked)}
+                checked={invoiceIssuedLocal}
+                onChange={(e) => handleToggleInvoiceIssuedLocal(e.target.checked)}
                 className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
               />
               <span>Fatura kesildi mi?</span>
@@ -592,10 +661,43 @@ export function PatientDetailSgkInvoiceTab({
               {invoiceStatusLabel}
             </span>
           </div>
+
+          {/* Saved invoice date summary (DB-backed) */}
           <div className="mt-1 flex justify-between gap-2 text-[11px] text-slate-600">
-            <span>Fatura Tarihi</span>
+            <span>Fatura Tarihi (kayıtlı)</span>
             <span>{invoiceDateDisplay}</span>
           </div>
+
+          {/* Editable invoice date + save button */}
+          <div className="mt-2 flex flex-col gap-1 text-[11px] text-slate-700">
+            <span>Düzenlenecek fatura tarihi</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="date"
+                value={invoiceDateInput}
+                onChange={(e) => handleInvoiceDateChange(e.target.value)}
+                disabled={!invoiceIssuedLocal}
+                className="w-40 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
+              />
+              <button
+                type="button"
+                onClick={handleSaveInvoiceClick}
+                disabled={!!invoiceIsSaving}
+                className="inline-flex items-center rounded-md bg-primary-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {invoiceIsSaving ? 'Kaydediliyor...' : 'Fatura Tarihini Kaydet'}
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Kutuyu işaretlediğinizde bugünün tarihi otomatik gelir. Gerekirse buradan
+              geri dönük bir tarih seçip &quot;Fatura Tarihini Kaydet&quot; butonuna
+              basın. Kutunun işaretini kaldırırsanız fatura tarihi temizlenir.
+            </p>
+            {invoiceSaveError && (
+              <p className="text-[11px] text-red-600">{invoiceSaveError}</p>
+            )}
+          </div>
+
           {!invoiceIssued && (
             <p className="mt-1 text-[11px] text-amber-700">
               Fatura henüz kesilmediyse hasta listesinde uyarı olarak görünecektir.
