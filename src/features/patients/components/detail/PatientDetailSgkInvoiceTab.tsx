@@ -143,14 +143,14 @@ export function PatientDetailSgkInvoiceTab({
     ),
   );
 
-  // Initial sync from patient row whenever patient changes.
+  // Initial sync from patient row whenever *patient changes* (ID bazında)
+  // veya üst katmandan gelen sgkRecordedToSystemAt dışarıdan güncellenirse.
   useEffect(() => {
     setIsEditing(false);
     setProfileError(null);
 
     setSgkProfileId(patient.sgk_profile ?? '');
 
-    // Expected reimbursement -> money-like string
     if (patient.sgk_expected_reimbursement != null) {
       setSgkExpectedReimbursement(
         formatMoneyLikeTR(Number(patient.sgk_expected_reimbursement)),
@@ -159,7 +159,6 @@ export function PatientDetailSgkInvoiceTab({
       setSgkExpectedReimbursement('');
     }
 
-    // Expected month -> "yyyy-MM" for <input type="month">
     if (patient.sgk_expected_reimbursement_month) {
       const d = new Date(patient.sgk_expected_reimbursement_month);
       if (!Number.isNaN(d.getTime())) {
@@ -177,7 +176,6 @@ export function PatientDetailSgkInvoiceTab({
     setSgkDeviceCount('1');
     setSgkPillPrescription(false);
 
-    // Sisteme işlendiği tarih input’unu da hasta satırından senkronize et.
     setSgkRecordedAtInput(
       toDateInputValue(
         sgkRecordedToSystemAt ??
@@ -185,13 +183,8 @@ export function PatientDetailSgkInvoiceTab({
           (((patient as any).sgk_recorded_to_system_at as string | null) ?? null),
       ),
     );
-  }, [
-    patient.id,
-    patient.sgk_profile,
-    patient.sgk_expected_reimbursement,
-    patient.sgk_expected_reimbursement_month,
-    sgkRecordedToSystemAt,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient.id, sgkRecordedToSystemAt]);
 
   const findProfileNetToFirm = (profileId: string): number | null => {
     const profile = (SGK_PROFILES as SgkProfileInternal[]).find(
@@ -230,7 +223,6 @@ export function PatientDetailSgkInvoiceTab({
       );
       if (!confirmed) return;
 
-      // SGK kapandığında yerel alanları da sıfırla.
       setSgkProfileId('');
       setSgkDeviceCount('1');
       setSgkPillPrescription(false);
@@ -241,7 +233,6 @@ export function PatientDetailSgkInvoiceTab({
       onChangeSgkRecordedToSystem(false);
       onChangeSgkPrescriptionReceived(false);
     } else {
-      // SGK açıldığında mevcut profil + varsayılanlarla yeniden hesapla.
       recomputeExpected(true, sgkProfileId, sgkDeviceCount, sgkPillPrescription);
       onChangeSgkFlag(true);
     }
@@ -286,7 +277,6 @@ export function PatientDetailSgkInvoiceTab({
       return;
     }
 
-    // İlk kez TRUE yapılırken tarih boşsa bugünün tarihi olarak set et.
     if (!sgkRecordedToSystem && !sgkRecordedAtInput) {
       const today = todayAsDateInput();
       setSgkRecordedAtInput(today);
@@ -319,7 +309,6 @@ export function PatientDetailSgkInvoiceTab({
 
       setIsEditing(false);
 
-      // Hasta listesi ve detaylar güncel kalsın.
       await queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
     } catch (err) {
       const message =
