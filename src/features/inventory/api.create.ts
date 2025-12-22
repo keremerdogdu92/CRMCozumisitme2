@@ -1,11 +1,12 @@
 // src/features/inventory/api.create.ts
 // Create-item Supabase mutation and React Query hook for Inventory.
 //
-// v2:
-// - If purchasePrice & listPrice are both empty on the form,
-//   auto-fill from current_device_model_prices_public based on
-//   org_id + brand + model + item_type.
-// - If user provides any price, use the manual values (old behavior).
+// v2.0:
+// - Eğer kullanıcı yeni stok eklerken hem purchasePrice hem listPrice alanını
+//   boş bırakırsa, current_device_model_prices_public view'undan
+//   (org_id + brand + model + item_type) kriteriyle katalog fiyatı çekilir.
+// - Katalogta fiyat bulunamazsa, kullanıcıya "lütfen manuel fiyat gir" diyen
+//   anlamlı bir hata döner.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
@@ -61,41 +62,66 @@ export async function createInventoryItem(input: NewInventoryItemForm): Promise<
     throw new Error('INVENTORY_NO_ORG: Profilde org_id bulunamadı.');
   }
 
-  const trimmedPurchase = purchasePrice.trim();
-  const trimmedList = listPrice.trim();
+  const orgId: string = profile.org_id as string;
+
+  // Fiyat alanları:
+  // - Eğer hem purchasePrice hem listPrice boş ise:
+  //   → katalog view'undan (org_id + brand + model + item_type) için
+  //     purchase_price + list_price çekilir.
+  // - Eğer CSV/forma en az bir tanesi dolu ise:
+  //   → kullanıcı girişi kullanılır (parsePriceOrNull).
+  const hasPurchasePrice = purchasePrice.trim().length > 0;
+  const hasListPrice = listPrice.trim().length > 0;
 
   let purchase_price: number | null = null;
   let list_price: number | null = null;
 
-  if (trimmedPurchase || trimmedList) {
-    // At least one price was manually entered → keep old behavior.
-    purchase_price = trimmedPurchase ? parsePriceOrNull(trimmedPurchase) : null;
-    list_price = trimmedList ? parsePriceOrNull(trimmedList) : null;
-  } else {
-    // Both price fields are empty → auto-fill from catalog view.
-    const { data: priceRow, error: priceError } = await supabaseClient
+  if (!hasPurchasePrice && !hasListPrice) {
+    // Katalogtan fiyatları çek
+    const { data: catalogRow, error: catalogError } = await supabaseClient
       .from('current_device_model_prices_public')
-      .select('list_price, purchase_price')
-      .eq('org_id', profile.org_id)
+      .select('purchase_price, list_price')
+      .eq('org_id', orgId)
       .eq('brand', brand.trim())
       .eq('model', model.trim())
       .eq('item_type', itemType as InventoryItemType)
       .maybeSingle();
 
-    if (priceError) {
-      console.error('Failed to load catalog price for inventory insert:', priceError);
-      throw new Error('INVENTORY_CATALOG_PRICE: ' + priceError.message);
+    if (catalogError) {
+      console.error(
+        'Failed to load catalog prices for inventory create:',
+        catalogError,
+      );
+      throw new Error('INVENTORY_CATALOG: ' + catalogError.message);
     }
 
-    if (!priceRow) {
-      // No catalog row for this brand/model/item_type/org → ask user to enter manually.
+    if (!catalogRow) {
       throw new Error(
-        'INVENTORY_CATALOG_PRICE: Bu marka/model için katalog fiyatı bulunamadı. Lütfen geliş ve liste fiyatlarını manuel girin.'
+        'Katalogta bu marka + model + ürün tipi için fiyat bulunamadı. ' +
+          'Lütfen geliş ve satış fiyatını manuel girin veya cihaz katalog fiyatlarını önce güncelleyin.',
       );
     }
 
-    purchase_price = priceRow.purchase_price ?? null;
-    list_price = priceRow.list_price ?? null;
+    const toNumberOrNull = (v: unknown): number | null => {
+      if (v === null || v === undefined || v === '') return null;
+      const num = Number(v);
+      if (!Number.isFinite(num)) return null;
+      return Number(num.toFixed(2));
+    };
+
+    purchase_price = toNumberOrNull((catalogRow as any).purchase_price);
+    list_price = toNumberOrNull((catalogRow as any).list_price);
+
+    if (purchase_price === null && list_price === null) {
+      throw new Error(
+        'Katalogta bu marka + model için purchase_price ve list_price değerleri boş görünüyor. ' +
+          'Lütfen fiyatları manuel girin veya cihaz katalog fiyatlarını güncelleyin.',
+      );
+    }
+  } else {
+    // Kullanıcının girdiği fiyatları kullan
+    purchase_price = parsePriceOrNull(purchasePrice);
+    list_price = parsePriceOrNull(listPrice);
   }
 
   // Form earSide → DB ear_side (charger and "none" → NULL)
@@ -107,7 +133,7 @@ export async function createInventoryItem(input: NewInventoryItemForm): Promise<
       : earSide; // right | left | bilateral
 
   const { error: insertError } = await supabaseClient.from('inventory_items').insert({
-    org_id: profile.org_id,
+    org_id: orgId,
     brand: brand.trim(),
     model: model.trim(),
     item_type: itemType as InventoryItemType,
