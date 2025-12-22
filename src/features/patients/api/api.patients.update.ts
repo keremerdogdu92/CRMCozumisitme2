@@ -43,6 +43,46 @@ function normalizeRecordedAt(
 }
 
 /**
+ * Normalize invoice issuance timestamp based on UI inputs.
+ * - When invoiceIssued is false → always returns null (clear).
+ * - When invoiceIssued is true:
+ *   - If rawValue is empty → now().
+ *   - If rawValue is "yyyy-MM-dd" → converted to UTC midnight ISO.
+ *   - Otherwise, tries Date(...) parsing and falls back to now() on failure.
+ */
+function normalizeInvoiceIssuedAt(
+  invoiceIssued: boolean,
+  rawValue: string | null | undefined,
+): string | null {
+  if (!invoiceIssued) {
+    return null;
+  }
+
+  if (!rawValue || rawValue.trim().length === 0) {
+    return new Date().toISOString();
+  }
+
+  const value = rawValue.trim();
+
+  // "yyyy-MM-dd" quick path
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const d = new Date(value + 'T00:00:00.000Z');
+    if (!Number.isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+  }
+
+  // Fallback to generic Date parsing (ISO etc.)
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString();
+  }
+
+  // Last resort: now
+  return new Date().toISOString();
+}
+
+/**
  * Update SGK-related fields for a given patient.
  * Artık sgk_recorded_to_system_at kolonunu da günceller.
  */
@@ -150,17 +190,29 @@ export async function updatePatientSgkProfileInfo(params: {
 
 /**
  * Update invoice status for a given patient.
- * Returns the latest invoice_issued/invoice_issued_at values.
+ * - When invoiceIssued = true:
+ *   - If invoiceIssuedAt is empty → uses now().
+ *   - If invoiceIssuedAt is "yyyy-MM-dd" → stores that day (UTC midnight).
+ *   - Otherwise tries to parse the provided value as a date.
+ * - When invoiceIssued = false:
+ *   - invoice_issued_at is cleared (NULL).
+ *
+ * Returns the latest invoice_issued/invoice_issued_at values from DB.
  */
 export async function updatePatientInvoiceStatus(params: {
   id: string;
   invoiceIssued: boolean;
+  invoiceIssuedAt?: string | null;
 }): Promise<{
   invoice_issued: boolean;
   invoice_issued_at: string | null;
 }> {
-  const { id, invoiceIssued } = params;
-  const nextIssuedAt = invoiceIssued ? new Date().toISOString() : null;
+  const { id, invoiceIssued, invoiceIssuedAt } = params;
+
+  const nextIssuedAt = normalizeInvoiceIssuedAt(
+    invoiceIssued,
+    invoiceIssuedAt ?? null,
+  );
 
   const { data, error } = await supabaseClient
     .from('patients')
