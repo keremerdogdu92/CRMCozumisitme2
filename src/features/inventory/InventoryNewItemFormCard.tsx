@@ -70,11 +70,11 @@ export function InventoryNewItemFormCard({
       errorMessage={errorMessage}
     >
       <form
-        className="grid gap-3 md:grid-cols-4 md:items-start"
+        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 sm:items-start"
         onSubmit={handleSubmit}
       >
         {/* Marka */}
-        <div className="md:col-span-1">
+        <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">
             Marka
           </label>
@@ -91,7 +91,7 @@ export function InventoryNewItemFormCard({
         </div>
 
         {/* Model */}
-        <div className="md:col-span-1">
+        <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">
             Model
           </label>
@@ -108,7 +108,7 @@ export function InventoryNewItemFormCard({
         </div>
 
         {/* Ürün tipi */}
-        <div className="md:col-span-1">
+        <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">
             Ürün Tipi
           </label>
@@ -138,7 +138,7 @@ export function InventoryNewItemFormCard({
         </div>
 
         {/* Kulak tarafı */}
-        <div className="md:col-span-1">
+        <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">
             Kulak Tarafı
           </label>
@@ -160,13 +160,14 @@ export function InventoryNewItemFormCard({
             ))}
           </select>
           <p className="mt-1 text-[11px] text-slate-500">
-            Yeni stok için kulak yönü boş bırakılabilir. Satış sırasında hastaya göre sağ / sol
-            atanacak. Şarj cihazı seçtiğinizde kulak tarafı otomatik olarak &quot;Yok&quot; olur.
+            Yeni stok için kulak yönü boş bırakılabilir. Satış sırasında hastaya
+            göre sağ / sol atanacak. Şarj cihazı seçtiğinizde kulak tarafı
+            otomatik olarak &quot;Yok&quot; olur.
           </p>
         </div>
 
         {/* Barkod + Seri no */}
-        <div className="md:col-span-2 grid gap-3 md:grid-cols-2">
+        <div className="sm:col-span-2 lg:col-span-2 grid gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">
               Barkod
@@ -198,7 +199,7 @@ export function InventoryNewItemFormCard({
         </div>
 
         {/* Fiyatlar */}
-        <div className="md:col-span-2 grid gap-3 md:grid-cols-2">
+        <div className="sm:col-span-2 lg:col-span-2 grid gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">
               Geliş Fiyatı
@@ -235,7 +236,7 @@ export function InventoryNewItemFormCard({
           </div>
         </div>
 
-        <div className="md:col-span-4 flex justify-end">
+        <div className="sm:col-span-2 lg:col-span-4 flex justify-end">
           <button
             type="submit"
             disabled={isSubmitting}
