@@ -33,13 +33,15 @@ export const DeviceSection: React.FC<DeviceSectionProps> = ({
   onBrandChange,
 }) => {
   return (
-    <section className="border rounded-lg p-4 space-y-4">
-      <h2 className="font-semibold">1. Cihaz</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="text-sm font-semibold text-slate-900">1. Cihaz</h2>
+      <div className="grid grid-cols-1 items-end gap-4 md:grid-cols-3">
         <div>
-          <label className="block text-sm font-medium mb-1">Marka</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Marka
+          </label>
           <select
-            className="w-full border rounded px-2 py-1 text-sm"
+            className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             value={inputs.selectedBrand}
             onChange={(e) => onBrandChange(e.target.value)}
           >
@@ -53,11 +55,11 @@ export const DeviceSection: React.FC<DeviceSectionProps> = ({
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">
+          <label className="mb-1 block text-sm font-medium text-slate-700">
             Cihaz modeli
           </label>
           <select
-            className="w-full border rounded px-2 py-1 text-sm"
+            className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             value={inputs.selectedModel}
             onChange={(e) => onChange("selectedModel", e.target.value)}
           >
@@ -71,7 +73,7 @@ export const DeviceSection: React.FC<DeviceSectionProps> = ({
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">
+          <label className="mb-1 block text-sm font-medium text-slate-700">
             Cihaz adedi
           </label>
           <input
@@ -79,7 +81,7 @@ export const DeviceSection: React.FC<DeviceSectionProps> = ({
             min={1}
             max={4}
             step={1}
-            className="w-full border rounded px-2 py-1 text-sm"
+            className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             value={inputs.deviceQuantity}
             onChange={(e) =>
               onChange(
@@ -88,7 +90,7 @@ export const DeviceSection: React.FC<DeviceSectionProps> = ({
               )
             }
           />
-          <p className="text-xs text-gray-600 mt-1">
+          <p className="mt-1 text-xs text-slate-600">
             Çoğu durumda 2 (sağ + sol kulak).
           </p>
         </div>
@@ -96,7 +98,7 @@ export const DeviceSection: React.FC<DeviceSectionProps> = ({
 
       <button
         type="button"
-        className="mt-2 text-xs text-blue-700 underline"
+        className="mt-2 text-xs text-primary-700 underline"
         onClick={onToggleDate}
       >
         Tarih ayarını {showDate ? "gizle" : "göster"} (opsiyonel)
@@ -104,19 +106,19 @@ export const DeviceSection: React.FC<DeviceSectionProps> = ({
 
       {showDate && (
         <div className="mt-2 max-w-xs">
-          <label className="block text-sm font-medium mb-1">
+          <label className="mb-1 block text-sm font-medium text-slate-700">
             Tarih (şimdilik sadece bilgi amaçlı)
           </label>
           <input
             type="date"
-            className="w-full border rounded px-2 py-1 text-sm"
+            className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             value={inputs.asOfDate}
             onChange={(e) => onChange("asOfDate", e.target.value)}
           />
         </div>
       )}
 
-      <div className="text-sm mt-2">
+      <div className="mt-2 text-sm text-slate-800">
         {deviceCostLoading ? (
           <span>Cihaz maliyeti yükleniyor...</span>
         ) : totalDeviceCost == null ? (
@@ -138,7 +140,7 @@ export const DeviceSection: React.FC<DeviceSectionProps> = ({
             {deviceUnitCost != null && (
               <>
                 {" "}
-                <span className="text-gray-600">
+                <span className="text-slate-600">
                   (adet başı{" "}
                   {deviceUnitCost.toLocaleString("tr-TR", {
                     maximumFractionDigits: 2,
