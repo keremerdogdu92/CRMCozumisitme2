@@ -6,6 +6,15 @@
 // - Uses currently visible columns
 // - Exports filtered + sorted rows
 // - Money fields are exported as raw numbers (no currency symbol)
+//
+// Patch v2.1:
+// - Existing: export buttons + column visibility + sorting + filters.
+//
+// Patch v2.2 (responsive polish):
+// - ADD: Mobile card view (md altı) → daha okunabilir stok listesi.
+// - Desktop/tablet için table görünümü ResponsiveTableShell içine alındı.
+// - Filter satırı mobile-first hale getirildi (daha iyi wrap ve spacing).
+// - Masaüstü davranışı ve export mantığı değişmedi.
 
 import { useMemo } from 'react';
 import type {
@@ -22,6 +31,7 @@ import {
   exportToXlsxFile,
 } from '../../utils/csvUtils';
 import { TableExportButtons } from '../../components/table/TableExportButtons';
+import { ResponsiveTableShell } from '../../components/layout/ResponsiveTableShell';
 
 type Props = {
   items: InventoryItemRow[];
@@ -331,7 +341,7 @@ export function InventoryTable({
 
   if (items.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
+      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-xs text-slate-500 sm:px-6 sm:py-6 sm:text-sm">
         Henüz stokta kayıtlı ürün yok. Üstteki formdan yeni cihaz veya aksesuar
         ekleyebilirsiniz.
       </div>
@@ -372,27 +382,29 @@ export function InventoryTable({
             </select>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
             <input
               type="text"
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Marka, model, barkod veya seri no ile ara..."
-              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 md:w-72"
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:w-72 sm:text-sm"
             />
-            <TableColumnsControl
-              columns={INVENTORY_COLUMNS}
-              isColumnVisible={isColumnVisible}
-              toggleColumn={toggleColumn}
-            />
-            <TableExportButtons
-              onExportCsv={() => handleExport('csv')}
-              onExportXlsx={() => handleExport('xlsx')}
-            />
+            <div className="flex items-center justify-end gap-2">
+              <TableColumnsControl
+                columns={INVENTORY_COLUMNS}
+                isColumnVisible={isColumnVisible}
+                toggleColumn={toggleColumn}
+              />
+              <TableExportButtons
+                onExportCsv={() => handleExport('csv')}
+                onExportXlsx={() => handleExport('xlsx')}
+              />
+            </div>
           </div>
         </div>
 
-        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-xs text-slate-500 sm:px-5 sm:py-4 sm:text-sm">
           Filtreye uyan stok kaydı bulunamadı. Aramayı veya filtreleri
           güncelleyebilirsiniz.
         </div>
@@ -433,27 +445,154 @@ export function InventoryTable({
           </select>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
           <input
             type="text"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Marka, model, barkod veya seri no ile ara..."
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 md:w-72"
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:w-72 sm:text-sm"
           />
-          <TableColumnsControl
-            columns={INVENTORY_COLUMNS}
-            isColumnVisible={isColumnVisible}
-            toggleColumn={toggleColumn}
-          />
-          <TableExportButtons
-            onExportCsv={() => handleExport('csv')}
-            onExportXlsx={() => handleExport('xlsx')}
-          />
+          <div className="flex items-center justify-end gap-2">
+            <TableColumnsControl
+              columns={INVENTORY_COLUMNS}
+              isColumnVisible={isColumnVisible}
+              toggleColumn={toggleColumn}
+            />
+            <TableExportButtons
+              onExportCsv={() => handleExport('csv')}
+              onExportXlsx={() => handleExport('xlsx')}
+            />
+          </div>
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      {/* Mobile: card list (md altı) */}
+      <div className="space-y-3 md:hidden">
+        {sorted.map((item) => {
+          const isSold = item.status === 'sold';
+
+          let earLabel = '-';
+          if (item.ear_side) {
+            earLabel =
+              item.ear_side === 'right'
+                ? 'Sağ'
+                : item.ear_side === 'left'
+                ? 'Sol'
+                : item.ear_side === 'bilateral'
+                ? 'Çift'
+                : 'Yok';
+          }
+
+          return (
+            <div
+              key={item.id}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-900">
+                    {(item.brand ?? '-').trim() || '-'}{' '}
+                    {item.model ? `· ${item.model}` : ''}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    Eklenme: {formatDate(item.created_at)}
+                    {isSold && item.sold_at
+                      ? ` · Satış: ${formatDate(item.sold_at)}`
+                      : ''}
+                  </p>
+                </div>
+                <span
+                  className={
+                    'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ' +
+                    (item.status === 'in_stock'
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : item.status === 'sold'
+                      ? 'bg-sky-50 text-sky-700'
+                      : 'bg-amber-50 text-amber-700')
+                  }
+                >
+                  {item.status === 'in_stock'
+                    ? 'Stokta'
+                    : item.status === 'sold'
+                    ? 'Satıldı'
+                    : 'Tamirde'}
+                </span>
+              </div>
+
+              <div className="mt-2 grid grid-cols-1 gap-2 text-[11px] text-slate-700 sm:grid-cols-2">
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Barkod
+                  </span>
+                  <span className="font-medium">
+                    {item.barcode && item.barcode.trim().length > 0
+                      ? item.barcode
+                      : '-'}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Seri No
+                  </span>
+                  <span className="font-medium">
+                    {item.serial_no && item.serial_no.trim().length > 0
+                      ? item.serial_no
+                      : '-'}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Tür
+                  </span>
+                  <span className="font-medium">
+                    {item.item_type === 'hearing_aid'
+                      ? 'İşitme cihazı'
+                      : 'Şarj cihazı / aksesuar'}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Kulak
+                  </span>
+                  <span className="font-medium">{earLabel}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Geliş Fiyatı
+                  </span>
+                  <span className="font-semibold">
+                    {formatMoney(item.purchase_price)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Satış Fiyatı (Cihaz)
+                  </span>
+                  <span className="font-semibold">
+                    {formatMoney(item.device_price)}
+                  </span>
+                </div>
+                {isSold && (
+                  <div className="sm:col-span-2">
+                    <span className="block text-[10px] uppercase text-slate-400">
+                      Satılan Hasta
+                    </span>
+                    <span className="font-medium">
+                      {item.sold_patient_name && item.sold_patient_name.trim()
+                        ? item.sold_patient_name
+                        : '-'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop / tablet: classic table (md ve üzeri) */}
+      <ResponsiveTableShell className="hidden md:block">
         <table className="min-w-full text-xs md:text-sm">
           <thead className="bg-slate-50">
             <tr>
@@ -472,7 +611,7 @@ export function InventoryTable({
                 return (
                   <th
                     key={col.id}
-                    className={`px-3 py-2 font-medium text-slate-600 ${alignClass} ${
+                    className={`px-3 py-2 text-[11px] font-medium text-slate-600 md:px-4 md:py-2.5 md:text-xs ${alignClass} ${
                       col.sortable ? 'cursor-pointer select-none' : ''
                     }`}
                     onClick={() => col.sortable && setSort(col.id)}
@@ -495,7 +634,7 @@ export function InventoryTable({
               const isSold = item.status === 'sold';
 
               let earLabel = '-';
-              if (isSold && item.ear_side) {
+              if (item.ear_side) {
                 earLabel =
                   item.ear_side === 'right'
                     ? 'Sağ'
@@ -514,7 +653,7 @@ export function InventoryTable({
                         return (
                           <td
                             key={col.id}
-                            className="whitespace-nowrap px-3 py-2 text-slate-700"
+                            className="whitespace-nowrap px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
                           >
                             {formatDate(item.created_at)}
                           </td>
@@ -523,32 +662,44 @@ export function InventoryTable({
                         return (
                           <td
                             key={col.id}
-                            className="whitespace-nowrap px-3 py-2 text-slate-700"
+                            className="whitespace-nowrap px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
                           >
                             {isSold ? formatDate(item.sold_at) : '-'}
                           </td>
                         );
                       case 'sold_patient_name':
                         return (
-                          <td key={col.id} className="px-3 py-2 text-slate-700">
+                          <td
+                            key={col.id}
+                            className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                          >
                             {isSold ? item.sold_patient_name ?? '-' : '-'}
                           </td>
                         );
                       case 'brand':
                         return (
-                          <td key={col.id} className="px-3 py-2 text-slate-800">
+                          <td
+                            key={col.id}
+                            className="px-3 py-2 text-slate-800 md:px-4 md:py-2.5"
+                          >
                             {item.brand}
                           </td>
                         );
                       case 'model':
                         return (
-                          <td key={col.id} className="px-3 py-2 text-slate-800">
+                          <td
+                            key={col.id}
+                            className="px-3 py-2 text-slate-800 md:px-4 md:py-2.5"
+                          >
                             {item.model}
                           </td>
                         );
                       case 'item_type':
                         return (
-                          <td key={col.id} className="px-3 py-2 text-slate-700">
+                          <td
+                            key={col.id}
+                            className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                          >
                             {item.item_type === 'hearing_aid'
                               ? 'İşitme cihazı'
                               : 'Şarj cihazı / aksesuar'}
@@ -556,19 +707,28 @@ export function InventoryTable({
                         );
                       case 'ear_side':
                         return (
-                          <td key={col.id} className="px-3 py-2 text-slate-700">
+                          <td
+                            key={col.id}
+                            className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                          >
                             {earLabel}
                           </td>
                         );
                       case 'barcode':
                         return (
-                          <td key={col.id} className="px-3 py-2 text-slate-700">
+                          <td
+                            key={col.id}
+                            className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                          >
                             {item.barcode ?? '-'}
                           </td>
                         );
                       case 'serial_no':
                         return (
-                          <td key={col.id} className="px-3 py-2 text-slate-700">
+                          <td
+                            key={col.id}
+                            className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                          >
                             {item.serial_no ?? '-'}
                           </td>
                         );
@@ -576,7 +736,7 @@ export function InventoryTable({
                         return (
                           <td
                             key={col.id}
-                            className="px-3 py-2 text-right text-slate-700"
+                            className="px-3 py-2 text-right text-slate-700 md:px-4 md:py-2.5"
                           >
                             {formatMoney(item.purchase_price)}
                           </td>
@@ -585,14 +745,17 @@ export function InventoryTable({
                         return (
                           <td
                             key={col.id}
-                            className="px-3 py-2 text-right text-slate-700"
+                            className="px-3 py-2 text-right text-slate-700 md:px-4 md:py-2.5"
                           >
                             {formatMoney(item.device_price)}
                           </td>
                         );
                       case 'status':
                         return (
-                          <td key={col.id} className="px-3 py-2 text-slate-700">
+                          <td
+                            key={col.id}
+                            className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                          >
                             {item.status === 'in_stock'
                               ? 'Stokta'
                               : item.status === 'sold'
@@ -609,7 +772,7 @@ export function InventoryTable({
             })}
           </tbody>
         </table>
-      </div>
+      </ResponsiveTableShell>
 
       <p className="text-[11px] text-slate-500">
         Not: Cihaz satış fiyatı (cihaz başına) device_price alanından
