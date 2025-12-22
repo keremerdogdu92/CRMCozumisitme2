@@ -28,22 +28,24 @@ export const AccessoriesSection: React.FC<AccessoriesSectionProps> = ({
   onRemoveAccessoryRow,
 }) => {
   return (
-    <section className="border rounded-lg p-4 space-y-4">
-      <h2 className="font-semibold">3. Aksesuar Maliyeti</h2>
-      <p className="text-sm text-gray-700">
-        Müşteri toplam fiyatı soruyor, aksesuarlar ayrıca fiyatlanmıyor. Burada
-        sadece bu satışa ait aksesuar{" "}
+    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="text-sm font-semibold text-slate-900">
+        3. Aksesuar Maliyeti
+      </h2>
+      <p className="text-xs text-slate-700">
+        Müşteri toplam fiyatı soruyor, aksesuarlar ayrıca fiyatlanmıyor.
+        Burada sadece bu satışa ait aksesuar{" "}
         <span className="font-semibold">maliyetlerini</span> ekle.
       </p>
 
       {/* Charger quick-add from price list */}
-      <div className="grid grid-cols-12 gap-2 items-end">
+      <div className="grid items-end grid-cols-12 gap-2">
         <div className="col-span-9 md:col-span-10">
-          <label className="block text-sm font-medium mb-1">
+          <label className="mb-1 block text-xs font-medium text-slate-700">
             Şarj aleti hızlı ekleme (listeye kayıtlı olanlar)
           </label>
           <select
-            className="w-full border rounded px-2 py-1 text-sm"
+            className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             value={selectedChargerModel}
             onChange={(e) => onSelectedChargerModelChange(e.target.value)}
           >
@@ -58,7 +60,7 @@ export const AccessoriesSection: React.FC<AccessoriesSectionProps> = ({
         <div className="col-span-3 md:col-span-2">
           <button
             type="button"
-            className="w-full text-sm px-3 py-1 border rounded"
+            className="w-full rounded-md border border-slate-300 px-3 py-1 text-sm text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             onClick={onAddChargerFromSelection}
             disabled={!selectedChargerModel}
           >
@@ -69,9 +71,12 @@ export const AccessoriesSection: React.FC<AccessoriesSectionProps> = ({
 
       <div className="space-y-2">
         {accessories.map((acc) => (
-          <div key={acc.id} className="grid grid-cols-12 gap-2 items-center">
+          <div
+            key={acc.id}
+            className="grid grid-cols-12 items-center gap-2 text-sm"
+          >
             <input
-              className="col-span-4 border rounded px-2 py-1 text-sm"
+              className="col-span-4 rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Ad (isteğe bağlı)"
               value={acc.name}
               onChange={(e) =>
@@ -82,7 +87,7 @@ export const AccessoriesSection: React.FC<AccessoriesSectionProps> = ({
               type="number"
               min={0}
               step={1}
-              className="col-span-3 border rounded px-2 py-1 text-sm"
+              className="col-span-3 rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Birim maliyet"
               value={acc.unitCost}
               onChange={(e) =>
@@ -95,7 +100,7 @@ export const AccessoriesSection: React.FC<AccessoriesSectionProps> = ({
               type="number"
               min={1}
               step={1}
-              className="col-span-2 border rounded px-2 py-1 text-sm"
+              className="col-span-2 rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Adet"
               value={acc.quantity}
               onChange={(e) =>
@@ -104,7 +109,7 @@ export const AccessoriesSection: React.FC<AccessoriesSectionProps> = ({
                 })
               }
             />
-            <div className="col-span-2 text-sm text-right">
+            <div className="col-span-2 text-right text-sm text-slate-800">
               {(acc.unitCost * acc.quantity || 0).toLocaleString("tr-TR", {
                 maximumFractionDigits: 2,
               })}{" "}
@@ -112,7 +117,7 @@ export const AccessoriesSection: React.FC<AccessoriesSectionProps> = ({
             </div>
             <button
               type="button"
-              className="col-span-1 text-xs text-red-600"
+              className="col-span-1 text-xs text-red-600 hover:underline"
               onClick={() => onRemoveAccessoryRow(acc.id)}
             >
               Sil
@@ -123,13 +128,13 @@ export const AccessoriesSection: React.FC<AccessoriesSectionProps> = ({
 
       <button
         type="button"
-        className="text-sm px-3 py-1 border rounded"
+        className="rounded-md border border-slate-300 px-3 py-1 text-sm text-slate-800 hover:bg-slate-50"
         onClick={onAddAccessoryRow}
       >
         + Aksesuar satırı ekle
       </button>
 
-      <div className="text-sm mt-2">
+      <div className="mt-2 text-sm text-slate-800">
         Toplam aksesuar maliyeti:{" "}
         <span className="font-semibold">
           {accessoriesTotal.toLocaleString("tr-TR", {
