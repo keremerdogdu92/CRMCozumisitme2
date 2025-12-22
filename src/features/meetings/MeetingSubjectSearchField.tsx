@@ -78,7 +78,7 @@ export function MeetingSubjectSearchField({
     <div className="relative">
       <input
         type="text"
-        className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+        className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         value={inputValue}
         onChange={(e) => {
           setTouched(true);
