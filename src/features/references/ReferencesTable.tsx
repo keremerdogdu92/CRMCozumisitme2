@@ -8,6 +8,8 @@
 // - ADD: Table export buttons (CSV + XLSX) next to column visibility control.
 // - Export respects current visible columns and current sorted order.
 // - Uses shared csvUtils helpers (exportToCsvFile / exportToXlsxFile).
+// Patch v2.3:
+// - ADD: focusedId desteği. focusId ile gelen referans satırı listede highlight edilir.
 
 import { useMemo } from 'react';
 import type { ReferenceRow } from './types';
@@ -24,6 +26,11 @@ import {
 type ReferencesTableProps = {
   items: ReferenceRow[];
   onSelectRow: (ref: ReferenceRow) => void;
+  /**
+   * Optional: if provided, the row with this ID will be visually highlighted.
+   * Used when navigating from Meetings via focusId.
+   */
+  focusedId?: string | null;
 };
 
 type ReferenceTableColumnId =
@@ -238,6 +245,7 @@ const REFERENCE_COLUMNS: TableColumnDef<
 export function ReferencesTable({
   items,
   onSelectRow,
+  focusedId,
 }: ReferencesTableProps) {
   const { data: profile } = useCurrentProfile();
   const userId = profile?.id ?? null;
@@ -438,9 +446,18 @@ export function ReferencesTable({
           <tbody>
             {sortedItems.map((r) => {
               const reminder = computeReminderStatus(r);
+              const isFocused = focusedId && r.id === focusedId;
 
               return (
-                <tr key={r.id} className="border-t border-slate-100">
+                <tr
+                  key={r.id}
+                  className={
+                    'border-t border-slate-100 ' +
+                    (isFocused
+                      ? 'bg-primary-50/70'
+                      : 'hover:bg-slate-50')
+                  }
+                >
                   {visibleColumns.map((col) => {
                     switch (col.id as ReferenceTableColumnId) {
                       case 'created_at':
