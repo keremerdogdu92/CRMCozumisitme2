@@ -1,5 +1,6 @@
 // src/components/layout/SideDrawer.tsx
 // Generic right-side drawer shell with overlay, header, optional subtitle and footer.
+// Mobile-first: full-width on small screens, constrained width on larger screens.
 
 import type { ReactNode } from 'react';
 
@@ -33,7 +34,7 @@ export function SideDrawer({
       />
 
       {/* Drawer panel */}
-      <div className="fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col bg-white shadow-xl">
+      <div className="fixed inset-y-0 right-0 z-40 flex w-full max-w-full sm:max-w-md md:max-w-lg lg:max-w-xl flex-col bg-white shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
@@ -52,9 +53,7 @@ export function SideDrawer({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          {children}
-        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-4">{children}</div>
 
         {/* Footer (optional) */}
         {footer && (
