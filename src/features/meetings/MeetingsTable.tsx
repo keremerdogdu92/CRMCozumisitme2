@@ -18,6 +18,11 @@
 //   * `useMemo` (sortedRows) is now executed on every render (even while loading/error).
 //   * Avoids returning early before all hooks are called.
 // - No behavior change intended for normal UI flow.
+//
+// Patch v2.4 (responsive polish):
+// - ADD: Mobile card view (md altı) → telefon ekranında okunabilirlik arttı.
+// - Desktop/tablet tablosu ResponsiveTableShell içine alındı.
+// - Filter bar mobile-first hale getirildi (wrap + dikey stack).
 
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -32,6 +37,7 @@ import {
   exportToXlsxFile,
 } from '../../utils/csvUtils';
 import { TableExportButtons } from '../../components/table/TableExportButtons';
+import { ResponsiveTableShell } from '../../components/layout/ResponsiveTableShell';
 
 function formatDate(value: string | null): string {
   if (!value) return '-';
@@ -337,14 +343,14 @@ export function MeetingsTable() {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {/* Filter bar + sütun kontrolü + export butonları */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <p className="text-[11px] text-slate-500">
           Toplam <span className="font-semibold">{visibleRows.length}</span>{' '}
           görüşme kaydı var.
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
           <div className="flex flex-wrap gap-1.5">
             <FilterButton
               label="Tümü"
@@ -373,20 +379,124 @@ export function MeetingsTable() {
               />
             )}
           </div>
-          <TableColumnsControl
-            columns={MEETING_COLUMNS}
-            isColumnVisible={isColumnVisible}
-            toggleColumn={toggleColumn}
-          />
-          <TableExportButtons
-            onExportCsv={() => handleExport('csv')}
-            onExportXlsx={() => handleExport('xlsx')}
-          />
+          <div className="flex items-center justify-end gap-2">
+            <TableColumnsControl
+              columns={MEETING_COLUMNS}
+              isColumnVisible={isColumnVisible}
+              toggleColumn={toggleColumn}
+            />
+            <TableExportButtons
+              onExportCsv={() => handleExport('csv')}
+              onExportXlsx={() => handleExport('xlsx')}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      {/* Mobile: card list (md altı) */}
+      <div className="space-y-3 md:hidden">
+        {sortedRows.map((m) => {
+          const typeLabel = formatMeetingType(m.meeting_type);
+          const satisfactionDisplay =
+            m.satisfaction_10 != null ? `${m.satisfaction_10} / 10` : '-';
+
+          let actionLabel = '';
+          let path = '';
+          if (m.subject_id) {
+            switch (m.meeting_type) {
+              case 'patient':
+                actionLabel = 'Hastaya git';
+                path = `/patients?focusId=${encodeURIComponent(m.subject_id)}`;
+                break;
+              case 'trial':
+                actionLabel = 'Denemeye git';
+                path = `/trials?focusId=${encodeURIComponent(m.subject_id)}`;
+                break;
+              case 'reference':
+                actionLabel = 'Referansa git';
+                path = `/references?focusId=${encodeURIComponent(
+                  m.subject_id,
+                )}`;
+                break;
+              default:
+                break;
+            }
+          }
+
+          const shortNote =
+            m.note && m.note.length > 120
+              ? `${m.note.slice(0, 120)}…`
+              : m.note ?? '';
+
+          return (
+            <div
+              key={m.id}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-900">
+                    {m.subject_name ?? 'İsimsiz'}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    Tarih: {formatDate(m.at)}
+                    {m.next_at
+                      ? ` · Sonraki: ${formatDate(m.next_at)}`
+                      : ''}
+                  </p>
+                </div>
+                <span className="inline-flex shrink-0 items-center rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                  {typeLabel}
+                </span>
+              </div>
+
+              <div className="mt-2 grid grid-cols-1 gap-2 text-[11px] text-slate-700">
+                {m.subject && (
+                  <div>
+                    <span className="block text-[10px] uppercase text-slate-400">
+                      Başlık
+                    </span>
+                    <span className="font-medium">{m.subject}</span>
+                  </div>
+                )}
+                <div className="flex gap-4">
+                  <div>
+                    <span className="block text-[10px] uppercase text-slate-400">
+                      Memnuniyet
+                    </span>
+                    <span className="font-medium">{satisfactionDisplay}</span>
+                  </div>
+                </div>
+                {shortNote && (
+                  <div>
+                    <span className="block text-[10px] uppercase text-slate-400">
+                      Not
+                    </span>
+                    <span className="font-normal text-slate-600">
+                      {shortNote}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {actionLabel && path && (
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => navigate(path)}
+                    className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    {actionLabel}
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop / tablet: classic table (md ve üzeri) */}
+      <ResponsiveTableShell className="hidden md:block">
         <table className="min-w-full text-left text-xs">
           <thead className="bg-slate-50 text-slate-600">
             <tr>
@@ -523,10 +633,7 @@ export function MeetingsTable() {
                       }
 
                       return (
-                        <td
-                          key={col.id}
-                          className="px-3 py-2 text-right"
-                        >
+                        <td key={col.id} className="px-3 py-2 text-right">
                           <button
                             type="button"
                             onClick={() => navigate(path)}
@@ -545,7 +652,7 @@ export function MeetingsTable() {
             ))}
           </tbody>
         </table>
-      </div>
+      </ResponsiveTableShell>
 
       {filteredRows.length === 0 && (
         <p className="text-[11px] text-slate-500">
