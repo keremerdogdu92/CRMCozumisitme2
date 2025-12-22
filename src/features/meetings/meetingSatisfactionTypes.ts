@@ -3,6 +3,7 @@
 // - 1–5 memnuniyet ölçeği (metin karşılıkları ile)
 // - MEMNUNIYET SORULARI + HASTA İPUCU SORULARI içindeki sorulardan oluşan birleşik soru havuzu
 // - Hasta bazlı, localStorage üzerinden "sorular tekrar dönmesin" mantığı
+// - API için ortak tipler: MeetingSatisfactionQuestion, MeetingSatisfactionAnswer, SaveMeetingSatisfactionInput
 // - Ek olarak: ipucu soruları için ayrı liste (PATIENT_HINT_QUESTIONS)
 
 export type SatisfactionScore = 1 | 2 | 3 | 4 | 5;
@@ -77,7 +78,7 @@ const QUESTION_BANK: MeetingSatisfactionQuestionDef[] = [
     text: 'Bu cihaz genel olarak beklentinizi karşılıyor mu?',
   },
 
-  // Özel senaryolar – device
+  // Özel senaryolar – device / communication
   {
     id: 'tv_listening',
     group: 'device',
@@ -94,7 +95,7 @@ const QUESTION_BANK: MeetingSatisfactionQuestionDef[] = [
     text: 'Müzik dinlerken sesler sizin için nasıl, memnun musunuz?',
   },
 
-  // Konuşma & iletişim – communication
+  // Konuşma & iletişim – communication / service
   {
     id: 'speech_general_satisfaction',
     group: 'communication',
@@ -387,6 +388,34 @@ export function getSurveyQuestionsForPatient(
     ...q,
     score: null,
   }));
+}
+
+/**
+ * API ve UI tarafından kullanılacak ek tipler
+ * (MeetingSatisfactionSurveySection.tsx + api.satisfaction.ts için)
+ */
+export type MeetingSatisfactionQuestion = MeetingSatisfactionQuestionWithAnswer;
+
+export type MeetingSatisfactionQuestionList = MeetingSatisfactionQuestion[];
+
+/**
+ * Tek bir soruya verilen cevabı temsil eder.
+ */
+export interface MeetingSatisfactionAnswer {
+  questionId: string;
+  score: SatisfactionScore;
+}
+
+/**
+ * Bir meeting için memnuniyet kaydı atarken kullanılacak payload.
+ * api.satisfaction.ts bu tipi kullanarak Supabase'e kaydedebilir.
+ */
+export interface SaveMeetingSatisfactionInput {
+  meetingId: string;
+  patientId: string;
+  answers: MeetingSatisfactionAnswer[];
+  overallScore5: SatisfactionScore | null; // 1–5 ortalama (UI ile aynı ölçek)
+  overallScore10: number | null; // 1–10 ölçeğine map edilmiş değer (meetings.satisfaction_10 için)
 }
 
 /**
