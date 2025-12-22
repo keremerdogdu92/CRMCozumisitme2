@@ -158,12 +158,14 @@ export const ProfitCalculatorForm: React.FC = () => {
   }, [result, cardFeeRate, isCard]);
 
   if (loading) {
-    return <div className="p-4">Yükleniyor...</div>;
+    return <div className="p-4 text-sm text-slate-700">Yükleniyor...</div>;
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <h1 className="text-2xl font-semibold">Karlılık Hesaplama Aracı</h1>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <h1 className="text-lg font-semibold text-slate-900">
+        Karlılık Hesaplama Aracı
+      </h1>
 
       {/* 1-3: Cihaz, referans, aksesuarlar */}
       <DeviceSection
@@ -199,7 +201,7 @@ export const ProfitCalculatorForm: React.FC = () => {
       />
 
       {/* 4: Ödeme tipi + kart komisyonu (her zaman görünür) */}
-      <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 shadow-sm">
         <p className="text-sm font-medium text-slate-800">
           4. Ödeme Şekli ve Kart Komisyonu
         </p>
@@ -242,9 +244,7 @@ export const ProfitCalculatorForm: React.FC = () => {
                 </label>
                 <select
                   value={selectedInstallment}
-                  onChange={(e) =>
-                    handleInstallmentChange(e.target.value)
-                  }
+                  onChange={(e) => handleInstallmentChange(e.target.value)}
                   className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 >
                   <option value="">Seçilmedi</option>
@@ -275,7 +275,7 @@ export const ProfitCalculatorForm: React.FC = () => {
                 </p>
               </div>
 
-              <div className="md:col-span-4 mt-2">
+              <div className="mt-2 md:col-span-4">
                 <p className="text-[11px] text-slate-600">
                   Kart komisyonu:{" "}
                   <span className="font-semibold">
