@@ -154,12 +154,13 @@ export function PatientDetailSgkInvoiceTab({
   );
 
   // Invoice local edit state:
-  // - invoiceIssuedLocal: checkbox state (editable).
+  // - invoiceIssuedLocal: checkbox state (editable, only in edit mode).
   // - invoiceDateInput: <input type="date"> value (yyyy-MM-dd).
   const [invoiceIssuedLocal, setInvoiceIssuedLocal] = useState<boolean>(invoiceIssued);
   const [invoiceDateInput, setInvoiceDateInput] = useState<string>(
     toDateInputValue(invoiceIssuedAt),
   );
+  const [isEditingInvoice, setIsEditingInvoice] = useState(false);
 
   // Initial sync from patient row whenever *patient changes* (ID bazında)
   // veya üst katmandan gelen sgkRecordedToSystemAt / invoice fields dışarıdan güncellenirse.
@@ -205,6 +206,7 @@ export function PatientDetailSgkInvoiceTab({
     // Invoice local state reset from saved values:
     setInvoiceIssuedLocal(invoiceIssued);
     setInvoiceDateInput(toDateInputValue(invoiceIssuedAt));
+    setIsEditingInvoice(false);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patient.id, sgkRecordedToSystemAt, invoiceIssued, invoiceIssuedAt]);
@@ -390,6 +392,18 @@ export function PatientDetailSgkInvoiceTab({
     });
   };
 
+  const handleToggleInvoiceEdit = () => {
+    setIsEditingInvoice((prev) => {
+      const next = !prev;
+      if (!prev) {
+        // Edit moduna ilk geçerken local state'i kayıtlı değerlerden tazele.
+        setInvoiceIssuedLocal(invoiceIssued);
+        setInvoiceDateInput(toDateInputValue(invoiceIssuedAt));
+      }
+      return next;
+    });
+  };
+
   // --- Read-only summary values (DB-backed) ---
 
   const invoiceStatusLabel = invoiceIssued ? 'Fatura kesildi' : 'Fatura henüz kesilmedi';
@@ -457,7 +471,7 @@ export function PatientDetailSgkInvoiceTab({
           </div>
         </div>
 
-        {/* Edit toggle */}
+        {/* Edit toggle for SGK */}
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] text-slate-500">
             Bu özet, SGK profili ve iş kurallarına göre hesaplanan beklenen ödemeyi
@@ -473,7 +487,7 @@ export function PatientDetailSgkInvoiceTab({
           </button>
         </div>
 
-        {/* Collapsible edit section */}
+        {/* Collapsible SGK edit section */}
         {isEditing && (
           <div className="space-y-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs">
             {/* SGK flags */}
@@ -640,26 +654,38 @@ export function PatientDetailSgkInvoiceTab({
           </div>
         )}
 
-        {/* Invoice status (always visible) */}
-        <div className="mt-1 border-t border-slate-200 pt-2">
+        {/* Invoice status block */}
+        <div className="mt-1 border-t border-slate-200 pt-2 text-xs">
+          {/* Summary + invoice edit toggle */}
           <div className="flex items-center justify-between gap-2">
             <label className="flex items-center gap-2 text-xs text-slate-700">
               <input
                 type="checkbox"
-                checked={invoiceIssuedLocal}
-                onChange={(e) => handleToggleInvoiceIssuedLocal(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                checked={invoiceIssued}
+                readOnly
+                className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600"
               />
               <span>Fatura kesildi mi?</span>
             </label>
-            <span
-              className={
-                'text-[11px] font-medium ' +
-                (invoiceIssued ? 'text-emerald-700' : 'text-amber-700')
-              }
-            >
-              {invoiceStatusLabel}
-            </span>
+
+            <div className="flex items-center gap-3">
+              <span
+                className={
+                  'text-[11px] font-medium ' +
+                  (invoiceIssued ? 'text-emerald-700' : 'text-amber-700')
+                }
+              >
+                {invoiceStatusLabel}
+              </span>
+              <button
+                type="button"
+                onClick={handleToggleInvoiceEdit}
+                className="text-[11px] font-medium text-primary-700 hover:underline disabled:opacity-50"
+                disabled={!!invoiceIsSaving}
+              >
+                {isEditingInvoice ? 'Düzenlemeyi Kapat' : 'Düzenle'}
+              </button>
+            </div>
           </div>
 
           {/* Saved invoice date summary (DB-backed) */}
@@ -668,35 +694,47 @@ export function PatientDetailSgkInvoiceTab({
             <span>{invoiceDateDisplay}</span>
           </div>
 
-          {/* Editable invoice date + save button */}
-          <div className="mt-2 flex flex-col gap-1 text-[11px] text-slate-700">
-            <span>Düzenlenecek fatura tarihi</span>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="date"
-                value={invoiceDateInput}
-                onChange={(e) => handleInvoiceDateChange(e.target.value)}
-                disabled={!invoiceIssuedLocal}
-                className="w-40 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
-              />
-              <button
-                type="button"
-                onClick={handleSaveInvoiceClick}
-                disabled={!!invoiceIsSaving}
-                className="inline-flex items-center rounded-md bg-primary-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {invoiceIsSaving ? 'Kaydediliyor...' : 'Fatura Tarihini Kaydet'}
-              </button>
+          {/* Collapsible invoice edit section */}
+          {isEditingInvoice && (
+            <div className="mt-2 flex flex-col gap-1 text-[11px] text-slate-700">
+              <label className="flex items-center gap-2 text-xs text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={invoiceIssuedLocal}
+                  onChange={(e) => handleToggleInvoiceIssuedLocal(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span>Fatura kesildi mi?</span>
+              </label>
+
+              <span className="mt-1">Düzenlenecek fatura tarihi</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="date"
+                  value={invoiceDateInput}
+                  onChange={(e) => handleInvoiceDateChange(e.target.value)}
+                  disabled={!invoiceIssuedLocal}
+                  className="w-40 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveInvoiceClick}
+                  disabled={!!invoiceIsSaving}
+                  className="inline-flex items-center rounded-md bg-primary-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {invoiceIsSaving ? 'Kaydediliyor...' : 'Fatura Tarihini Kaydet'}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Kutuyu işaretlediğinizde bugünün tarihi otomatik gelir. Gerekirse
+                buradan geri dönük bir tarih seçip &quot;Fatura Tarihini Kaydet&quot;
+                butonuna basın. Kutunun işaretini kaldırırsanız fatura tarihi temizlenir.
+              </p>
+              {invoiceSaveError && (
+                <p className="text-[11px] text-red-600">{invoiceSaveError}</p>
+              )}
             </div>
-            <p className="text-[11px] text-slate-400">
-              Kutuyu işaretlediğinizde bugünün tarihi otomatik gelir. Gerekirse buradan
-              geri dönük bir tarih seçip &quot;Fatura Tarihini Kaydet&quot; butonuna
-              basın. Kutunun işaretini kaldırırsanız fatura tarihi temizlenir.
-            </p>
-            {invoiceSaveError && (
-              <p className="text-[11px] text-red-600">{invoiceSaveError}</p>
-            )}
-          </div>
+          )}
 
           {!invoiceIssued && (
             <p className="mt-1 text-[11px] text-amber-700">
