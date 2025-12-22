@@ -1,8 +1,9 @@
 // src/features/meetings/meetingSatisfactionTypes.ts
 // Summary: Shared types, constants and helpers for meeting satisfaction surveys.
 // - 1–5 memnuniyet ölçeği (metin karşılıkları ile)
-// - Lokal soru havuzu (örnek 15 soru)
-// - Hasta bazlı, localStorage üzerinden "sorular tekrar dönmesin" mantığı (cihaz bazlı).
+// - MEMNUNIYET SORULARI + HASTA İPUCU SORULARI içindeki sorulardan oluşan birleşik soru havuzu
+// - Hasta bazlı, localStorage üzerinden "sorular tekrar dönmesin" mantığı
+// - Ek olarak: ipucu soruları için ayrı liste (PATIENT_HINT_QUESTIONS)
 
 export type SatisfactionScore = 1 | 2 | 3 | 4 | 5;
 
@@ -17,54 +18,10 @@ export const SATISFACTION_OPTIONS: {
   { value: 5, label: 'Çok memnunum' },
 ];
 
-// -----------------------------------------------------------------------------
-// DB-backed types (Supabase tablolari ile uyumlu tipler)
-// - meeting_satisfaction_question_lists
-// - meeting_satisfaction_questions
-// - meeting_satisfaction_answers
-// -----------------------------------------------------------------------------
-
-export interface MeetingSatisfactionQuestionList {
-  id: string;
-  name: string;
-  is_active: boolean;
-}
-
-export interface MeetingSatisfactionQuestion {
-  id: string;
-  list_id: string;
-  question_text: string;
-  sort_order: number;
-  is_active: boolean;
-}
-
-export interface MeetingSatisfactionAnswer {
-  id: string;
-  meeting_id: string;
-  patient_id: string;
-  list_id: string;
-  question_id: string;
-  score: SatisfactionScore | null;
-}
-
-export interface SaveMeetingSatisfactionInput {
-  meetingId: string;
-  patientId: string;
-  listId: string;
-  answers: {
-    questionId: string;
-    score: SatisfactionScore;
-  }[];
-}
-
-// -----------------------------------------------------------------------------
-// Lokal soru havuzu (DB dışı, opsiyonel kullanım için)
-// -----------------------------------------------------------------------------
-
 export type QuestionGroup = 'service' | 'device' | 'communication';
 
 export interface MeetingSatisfactionQuestionDef {
-  id: string; // Sabit ID (değiştirme, soruyu silersen komple kaldır)
+  id: string; // Sabit ID (silersen komple kaldır; değiştirirsen eski kayıtlarla eşleşme bozulur)
   group: QuestionGroup;
   text: string;
 }
@@ -74,91 +31,251 @@ export interface MeetingSatisfactionQuestionWithAnswer
   score: SatisfactionScore | null;
 }
 
-// Örnek 15 soruluk havuz
-// Not: Metinleri istediğin gibi değiştirebilirsin; ID’leri sabit bırak.
+/**
+ * Grup başına kaç soru seçileceğini buradan ayarlayabilirsin.
+ * Toplam 5 soruyu bu dağılıma göre dolduruyoruz.
+ */
+export const QUESTION_GROUP_TARGETS: Record<QuestionGroup, number> = {
+  service: 2,
+  device: 2,
+  communication: 1,
+};
+
+/**
+ * MEMNUNİYET SORULARI + HASTA İPUCU SORULARI birleşik soru havuzu.
+ * Metinleri buradan düzenleyebilirsin.
+ */
 const QUESTION_BANK: MeetingSatisfactionQuestionDef[] = [
-  // Service
+  // --- MEMNUNİYET SORULARI.docx kökenli sorular ---
+
+  // Fit / konfor – device
   {
-    id: 'service_1',
-    group: 'service',
-    text: 'Karşılama ve randevu sürecinin genel işleyişinden ne kadar memnunsunuz?',
+    id: 'fit_earmold_comfort',
+    group: 'device',
+    text: 'Kalıplar kulağınıza rahat oluyor mu, acıtma veya baskı yapıyor mu?',
   },
   {
-    id: 'service_2',
-    group: 'service',
-    text: 'Merkezimizde bekleme süresi ve konforunu nasıl değerlendirirsiniz?',
-  },
-  {
-    id: 'service_3',
-    group: 'service',
-    text: 'Kontrol randevularının düzenliliği ve takibi sizi ne kadar tatmin ediyor?',
-  },
-  {
-    id: 'service_4',
-    group: 'service',
-    text: 'Genel hizmet kalitemizden ne kadar memnunsunuz?',
-  },
-  {
-    id: 'service_5',
-    group: 'service',
-    text: 'Merkezimize olan güven düzeyinizi nasıl değerlendirirsiniz?',
+    id: 'fit_dome_comfort',
+    group: 'device',
+    text: 'Domelar kulağınızdan çıkıyor mu veya acıtma, rahatsızlık yapıyor mu?',
   },
 
-  // Device
+  // Genel ses deneyimi – device
   {
-    id: 'device_1',
+    id: 'sound_overall_experience',
     group: 'device',
-    text: 'Kullandığınız işitme cihazının genel performansından ne kadar memnunsunuz?',
+    text: 'Tecrübe ettiğiniz bu süre içerisinde sesler sizin için nasıldı?',
   },
   {
-    id: 'device_2',
+    id: 'sound_any_disturbance',
     group: 'device',
-    text: 'Cihazın ses kalitesini ve netliğini nasıl değerlendirirsiniz?',
+    text: 'Rahatsız olduğunuz sesler veya durumlar var mıydı?',
   },
   {
-    id: 'device_3',
+    id: 'device_meets_expectation',
     group: 'device',
-    text: 'Gürültülü ortamlarda cihazdan aldığınız fayda sizi ne kadar tatmin ediyor?',
-  },
-  {
-    id: 'device_4',
-    group: 'device',
-    text: 'Cihazın kullanım kolaylığından (tuşlar, şarj, pil vb.) ne kadar memnunsunuz?',
-  },
-  {
-    id: 'device_5',
-    group: 'device',
-    text: 'Cihaz ayarlarının ihtiyacınıza uygun olduğunu düşünüyor musunuz?',
+    text: 'Bu cihaz genel olarak beklentinizi karşılıyor mu?',
   },
 
-  // Communication
+  // Özel senaryolar – device
   {
-    id: 'communication_1',
-    group: 'communication',
-    text: 'İhtiyaçlarınızı ve şikayetlerinizi anlatırken ne kadar rahat hissediyorsunuz?',
+    id: 'tv_listening',
+    group: 'device',
+    text: 'Televizyon izlerken sesler sizin için rahat ve anlaşılır geliyor mu?',
   },
   {
-    id: 'communication_2',
+    id: 'phone_calls',
     group: 'communication',
-    text: 'Size yapılan açıklamaların (cihaz, fiyat, süreç) anlaşılır olmasından memnun musunuz?',
+    text: 'Telefonla konuşurken sesleri rahat duyup anlayabiliyor musunuz?',
   },
   {
-    id: 'communication_3',
+    id: 'music_listening',
+    group: 'device',
+    text: 'Müzik dinlerken sesler sizin için nasıl, memnun musunuz?',
+  },
+
+  // Konuşma & iletişim – communication
+  {
+    id: 'speech_general_satisfaction',
     group: 'communication',
-    text: 'Sorularınıza verilen cevapları ne kadar yeterli buluyorsunuz?',
+    text: 'Genel konuşma seslerinden ne kadar memnunsunuz?',
   },
   {
-    id: 'communication_4',
-    group: 'communication',
-    text: 'İletişim dilimizin samimiyet ve saygı açısından seviyesini nasıl değerlendirirsiniz?',
+    id: 'service_from_us',
+    group: 'service',
+    text: 'Bizden aldığınız hizmetten genel olarak memnun musunuz?',
   },
   {
-    id: 'communication_5',
+    id: 'noisy_environments',
     group: 'communication',
-    text: 'Genel iletişim sürecimizden ne kadar memnunsunuz?',
+    text: 'Gürültülü ortamlarda (çarşı, pazar, trafik vb.) sesleri duyma seviyenizden memnun musunuz?',
+  },
+
+  // Kullanım kolaylığı – device
+  {
+    id: 'rechargeable_difficulty',
+    group: 'device',
+    text: 'Şarjlı cihazı kullanmakta zorlandığınız bir nokta var mı?',
+  },
+  {
+    id: 'sound_quality',
+    group: 'device',
+    text: 'Cihazların genel ses kalitesini nasıl değerlendirirsiniz?',
+  },
+
+  // Fiziksel etkiler – device
+  {
+    id: 'headache_long_use',
+    group: 'device',
+    text: 'Cihazları uzun süreli kullanırken baş ağrısı yaşıyor musunuz?',
+  },
+
+  // Tercih ve değişiklik – service/device
+  {
+    id: 'buy_again_same_model',
+    group: 'service',
+    text: 'Tekrar işitme cihazı almak zorunda kalsanız aynı modeli tekrar tercih eder miydiniz?',
+  },
+  {
+    id: 'what_to_change_on_device',
+    group: 'device',
+    text: 'Cihazla ilgili değiştirilmesini istediğiniz bir şey var mı?',
+  },
+
+  // Kendi sesiniz – communication
+  {
+    id: 'own_voice_natural',
+    group: 'communication',
+    text: 'Kendi sesiniz size doğal ve düzgün geliyor mu?',
+  },
+
+  // Diğer şikayetler – device/service
+  {
+    id: 'tinnitus_status',
+    group: 'device',
+    text: 'Çınlamanızın durumu nasıl, bir değişiklik fark ettiniz mi?',
+  },
+  {
+    id: 'balance_status',
+    group: 'device',
+    text: 'Denge kaybınızda bir değişim hissettiniz mi?',
+  },
+  {
+    id: 'memory_change',
+    group: 'service',
+    text: 'Unutkanlığınızda cihaz kullanımından sonra bir değişim var mı?',
+  },
+  {
+    id: 'ask_repeat_often',
+    group: 'communication',
+    text: 'Söylenenleri sık sık tekrar ettirmek zorunda kalıyor musunuz?',
+  },
+
+  // --- HASTA İPUCU SORULARI AYARA BAŞLAMADAN.docx kökenli sorular ---
+
+  {
+    id: 'hint_phone_understanding',
+    group: 'communication',
+    text: 'Telefonda konuşulanları net anlayabiliyor musunuz?',
+  },
+  {
+    id: 'hint_birds_children_bell',
+    group: 'communication',
+    text: 'Kuş sesi, kadın sesi, zil sesi, çocuk sesleri size nasıl geliyor?',
+  },
+  {
+    id: 'hint_male_engine_car_door',
+    group: 'device',
+    text: 'Erkek sesi, motor sesi, araba sesi, kapı kapanma sesi size nasıl geliyor?',
+  },
+  {
+    id: 'hint_noisy_places',
+    group: 'communication',
+    text: 'Kalabalıkta, çarşıda, pazarda, trafikte, gürültülü ortamlarda sesler size nasıl geliyor?',
+  },
+  {
+    id: 'hint_tv_volume',
+    group: 'device',
+    text: 'Televizyon sesini normal seviyede mi kullanıyorsunuz yoksa yüksek seste mi açıyorsunuz?',
+  },
+  {
+    id: 'hint_speaking_loudly',
+    group: 'communication',
+    text: 'Konuşurken sık sık bağırıyor musunuz?',
+  },
+  {
+    id: 'hint_harsh_sounds',
+    group: 'device',
+    text: 'Rahatsız edici, kulağınızı tırmalayan sesler var mı?',
+  },
+  {
+    id: 'hint_far_speaker_understanding',
+    group: 'communication',
+    text: 'Uzak mesafeden konuşan birini net duyabiliyor musunuz?',
+  },
+  {
+    id: 'hint_far_calling_you',
+    group: 'communication',
+    text: 'Uzak mesafeden size seslenildiğinde duyabiliyor musunuz?',
+  },
+  {
+    id: 'hint_whisper',
+    group: 'communication',
+    text: 'Fısıltılı sesleri duyup anlayabiliyor musunuz?',
+  },
+  {
+    id: 'hint_loud_speech_disturb',
+    group: 'communication',
+    text: 'Bağırarak konuşulması sizi rahatsız ediyor mu?',
+  },
+  {
+    id: 'hint_outside_change',
+    group: 'device',
+    text: 'Dışarı çıkınca seslerde bir değişim hissediyor musunuz?',
+  },
+  {
+    id: 'hint_closed_space_change',
+    group: 'device',
+    text: 'Kapalı ortamda seslerde bir değişim hissediyor musunuz?',
+  },
+  {
+    id: 'hint_silent_space_change',
+    group: 'device',
+    text: 'Sessiz ortamlarda sesleri nasıl duyuyorsunuz, bir değişiklik var mı?',
+  },
+  {
+    id: 'hint_relatives_voices',
+    group: 'communication',
+    text: 'Yakınlarınızın sesleri size nasıl geliyor?',
+  },
+  {
+    id: 'hint_cutlery_sounds',
+    group: 'device',
+    text: 'Çatal bıçak seslerini nasıl duyuyorsunuz?',
+  },
+  {
+    id: 'hint_left_right_difference',
+    group: 'device',
+    text: 'Sağ ve sol kulağınızdan gelen seslerde fark hissediyor musunuz?',
+  },
+  {
+    id: 'hint_workplace_sounds',
+    group: 'communication',
+    text: 'İş ortamındaki sesleri nasıl duyuyorsunuz?',
+  },
+  {
+    id: 'hint_cleaning_care',
+    group: 'service',
+    text: 'Temizlik ve bakım konusunda zorlandığınız bir nokta var mı?',
+  },
+  {
+    id: 'hint_ear_infection',
+    group: 'service',
+    text: 'Kulağınızda sık sık akıntı, enfeksiyon vb. durumlar oluyor mu?',
   },
 ];
 
+// localStorage anahtarları
 const STORAGE_KEY_PREFIX = 'meeting_satisfaction_answered_';
 
 function getSafeLocalStorage(): Storage | null {
@@ -216,7 +333,7 @@ function shuffle<T>(arr: T[]): T[] {
 /**
  * Belirli bir hasta için 5 soruluk anket üretir.
  * - Önce daha önce sorulmamış soruları kullanmaya çalışır (localStorage’a göre).
- * - Her gruptan hedef sayıda soru seçer (service:2, device:2, communication:1).
+ * - Her gruptan QUESTION_GROUP_TARGETS kadar soru seçer.
  * - Yeterli yeni soru yoksa, tüm havuzdan rastgele tamamlar.
  */
 export function getSurveyQuestionsForPatient(
@@ -231,12 +348,6 @@ export function getSurveyQuestionsForPatient(
     available = QUESTION_BANK;
   }
 
-  const targetByGroup: Record<QuestionGroup, number> = {
-    service: 2,
-    device: 2,
-    communication: 1,
-  };
-
   const byGroup = new Map<QuestionGroup, MeetingSatisfactionQuestionDef[]>();
   for (const q of available) {
     const list = byGroup.get(q.group) ?? [];
@@ -247,10 +358,10 @@ export function getSurveyQuestionsForPatient(
   const selected: MeetingSatisfactionQuestionDef[] = [];
   const usedIds = new Set<string>();
 
-  for (const [group, target] of Object.entries(targetByGroup) as [
-    QuestionGroup,
-    number,
-  ][]) {
+  // Gruplara göre hedef sayıda soru seç
+  for (const [group, target] of Object.entries(
+    QUESTION_GROUP_TARGETS,
+  ) as [QuestionGroup, number][]) {
     const pool = byGroup.get(group) ?? [];
     const shuffled = shuffle(pool).filter((q) => !usedIds.has(q.id));
     const count = Math.min(target, shuffled.length);
@@ -277,3 +388,96 @@ export function getSurveyQuestionsForPatient(
     score: null,
   }));
 }
+
+/**
+ * HASTA İPUCU SORULARI (Ayara başlamadan önce) için ayrı liste.
+ * Aynı metinler yukarıdaki QUESTION_BANK içinde de var, ama
+ * istersen bu listeyi “ön görüşme / ipucu” ekranlarında kullanabilirsin.
+ */
+export interface PatientHintQuestionDef {
+  id: string;
+  text: string;
+}
+
+export const PATIENT_HINT_QUESTIONS: PatientHintQuestionDef[] = [
+  {
+    id: 'hint_phone_understanding',
+    text: 'Telefonda konuşulanları net anlayabiliyor musunuz?',
+  },
+  {
+    id: 'hint_birds_children_bell',
+    text: 'Kuş sesi, kadın sesi, zil sesi, çocuk sesleri size nasıl geliyor?',
+  },
+  {
+    id: 'hint_male_engine_car_door',
+    text: 'Erkek sesi, motor sesi, araba sesi, kapı kapanma sesi size nasıl geliyor?',
+  },
+  {
+    id: 'hint_noisy_places',
+    text: 'Kalabalıkta, çarşıda, pazarda, trafikte, gürültülü ortamlarda sesler size nasıl geliyor?',
+  },
+  {
+    id: 'hint_tv_volume',
+    text: 'Televizyon sesini normal seviyede mi kullanıyorsunuz yoksa yüksek seste mi açıyorsunuz?',
+  },
+  {
+    id: 'hint_speaking_loudly',
+    text: 'Konuşurken sık sık bağırıyor musunuz?',
+  },
+  {
+    id: 'hint_harsh_sounds',
+    text: 'Rahatsız edici, kulağınızı tırmalayan sesler var mı?',
+  },
+  {
+    id: 'hint_far_speaker_understanding',
+    text: 'Uzak mesafeden konuşan birini net duyabiliyor musunuz?',
+  },
+  {
+    id: 'hint_far_calling_you',
+    text: 'Uzak mesafeden size seslenildiğinde duyabiliyor musunuz?',
+  },
+  {
+    id: 'hint_whisper',
+    text: 'Fısıltılı sesleri duyup anlayabiliyor musunuz?',
+  },
+  {
+    id: 'hint_loud_speech_disturb',
+    text: 'Bağırarak konuşulması sizi rahatsız ediyor mu?',
+  },
+  {
+    id: 'hint_outside_change',
+    text: 'Dışarı çıkınca seslerde bir değişim hissediyor musunuz?',
+  },
+  {
+    id: 'hint_closed_space_change',
+    text: 'Kapalı ortamda seslerde bir değişim hissediyor musunuz?',
+  },
+  {
+    id: 'hint_silent_space_change',
+    text: 'Sessiz ortamlarda sesleri nasıl duyuyorsunuz, bir değişiklik var mı?',
+  },
+  {
+    id: 'hint_relatives_voices',
+    text: 'Yakınlarınızın sesleri size nasıl geliyor?',
+  },
+  {
+    id: 'hint_cutlery_sounds',
+    text: 'Çatal bıçak seslerini nasıl duyuyorsunuz?',
+  },
+  {
+    id: 'hint_left_right_difference',
+    text: 'Sağ ve sol kulağınızdan gelen seslerde fark hissediyor musunuz?',
+  },
+  {
+    id: 'hint_workplace_sounds',
+    text: 'İş ortamındaki sesleri nasıl duyuyorsunuz?',
+  },
+  {
+    id: 'hint_cleaning_care',
+    text: 'Temizlik ve bakım konusunda zorlandığınız bir nokta var mı?',
+  },
+  {
+    id: 'hint_ear_infection',
+    text: 'Kulağınızda sık sık akıntı, enfeksiyon vb. durumlar oluyor mu?',
+  },
+];
