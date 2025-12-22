@@ -49,6 +49,11 @@ export default function PatientsPage() {
   // Optional: if PatientsPage is opened from a Trial context,
   // ?trialId=<uuid> can be passed in the URL.
   const linkedTrialId = searchParams.get('trialId');
+
+  // Optional: if PatientsPage is opened from Meetings / another place,
+  // ?focusId=<patientId> geçilirse sadece bu hasta listede gösterilir.
+  const focusPatientId = searchParams.get('focusId');
+
   const openedFromTrial = !!location.state?.fromTrial;
 
   const [search, setSearch] = useState('');
@@ -115,20 +120,33 @@ export default function PatientsPage() {
 
   const patients = data ?? [];
 
-  const filteredPatients = patients.filter((p) => {
-    const term = search.trim().toLowerCase();
-    const matchesSearch =
-      !term ||
-      p.full_name.toLowerCase().includes(term) ||
-      (p.phone ?? '').toLowerCase().includes(term);
+  // Eğer URL'de focusId varsa ve bu ID'ye sahip hasta bulunursa,
+  // filtreler yerine sadece bu hasta listede gösterilir.
+  const focusPatient: PatientRow | null =
+    focusPatientId && patients.length > 0
+      ? patients.find((p) => p.id === focusPatientId) ?? null
+      : null;
 
-    const matchesSgk =
-      sgkFilter === 'all' ||
-      (sgkFilter === 'sgk' && !!p.sgk_flag) ||
-      (sgkFilter === 'non-sgk' && !p.sgk_flag);
+  let filteredPatients: PatientRow[];
 
-    return matchesSearch && matchesSgk;
-  });
+  if (focusPatient) {
+    filteredPatients = [focusPatient];
+  } else {
+    filteredPatients = patients.filter((p) => {
+      const term = search.trim().toLowerCase();
+      const matchesSearch =
+        !term ||
+        p.full_name.toLowerCase().includes(term) ||
+        (p.phone ?? '').toLowerCase().includes(term);
+
+      const matchesSgk =
+        sgkFilter === 'all' ||
+        (sgkFilter === 'sgk' && !!p.sgk_flag) ||
+        (sgkFilter === 'non-sgk' && !p.sgk_flag);
+
+      return matchesSearch && matchesSgk;
+    });
+  }
 
   const mutationError =
     (createMutation.error as Error | null | undefined)?.message ?? '';
@@ -195,6 +213,7 @@ export default function PatientsPage() {
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            disabled={!!focusPatient} // focus modunda arama pasif (sadece 1 kayıt gösteriliyor)
           />
 
           {/* Yeni hasta butonu */}
