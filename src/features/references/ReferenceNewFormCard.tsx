@@ -48,10 +48,10 @@ export function ReferenceNewFormCard({
     >
       <form
         onSubmit={handleSubmit}
-        className="grid gap-3 md:grid-cols-4 md:items-start"
+        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 sm:items-start"
       >
         {/* Ad Soyad / Kurum */}
-        <div className="md:col-span-2">
+        <div className="sm:col-span-2 lg:col-span-2">
           <label className="block text-xs font-medium text-slate-600 mb-1">
             Ad Soyad / Kurum
           </label>
@@ -181,7 +181,7 @@ export function ReferenceNewFormCard({
         </div>
 
         {/* Son / sonraki görüşme */}
-        <div className="md:col-span-2">
+        <div className="sm:col-span-1 lg:col-span-2">
           <label className="block text-xs font-medium text-slate-600 mb-1">
             Son Görüşme Tarihi
           </label>
@@ -193,7 +193,7 @@ export function ReferenceNewFormCard({
           />
         </div>
 
-        <div className="md:col-span-2">
+        <div className="sm:col-span-1 lg:col-span-2">
           <label className="block text-xs font-medium text-slate-600 mb-1">
             Sonraki Görüşme Tarihi
           </label>
@@ -206,7 +206,7 @@ export function ReferenceNewFormCard({
         </div>
 
         {/* Not */}
-        <div className="md:col-span-4">
+        <div className="sm:col-span-2 lg:col-span-4">
           <label className="block text-xs font-medium text-slate-600 mb-1">
             Not
           </label>
@@ -220,7 +220,7 @@ export function ReferenceNewFormCard({
         </div>
 
         {/* Aktif / pasif + submit */}
-        <div className="md:col-span-4 flex items-center justify-between">
+        <div className="sm:col-span-2 lg:col-span-4 flex items-center justify-between">
           <label className="inline-flex items-center gap-2 text-xs text-slate-600">
             <input
               type="checkbox"
