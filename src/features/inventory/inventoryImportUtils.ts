@@ -208,7 +208,7 @@ export function buildInventoryImportPayload(args: {
   jobId: string;
   csvObjects: CsvRowObj[];
   catalogPriceMap?: CatalogPriceMap;
-}: InventoryImportBuildResult {
+}): InventoryImportBuildResult {
   const { orgId, jobId, csvObjects, catalogPriceMap } = args;
 
   const totalRows = csvObjects.length;
