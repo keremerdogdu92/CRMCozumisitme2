@@ -13,6 +13,10 @@
 //   * Used to show "sisteme işlendiği tarih" in patient detail SGK tab.
 // - Extends PatientSgkUpdateInput to include sgkRecordedToSystemAt so UI can
 //   persist the manual/system date into DB.
+//
+// v2.12:
+// - Clarifies invoice tracking fields (invoice_issued / invoice_issued_at) usage:
+//   * invoice_issued_at is set/cleared via a dedicated "Invoice Save" action in the detail drawer.
 
 export type PatientPaymentMethod =
   | 'Tim'
