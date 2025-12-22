@@ -1,6 +1,9 @@
 // src/components/layout/AppShell.tsx
 // Main application shell with persistent sidebar and topbar.
-// v2 – Adds mobile sidebar drawer controlled by Topbar menu button.
+// v3 – Mobile-first layout tweaks:
+// - Hides desktop sidebar on small screens; SidebarMobile handles nav.
+// - Uses min-h-screen for scrollable content on small devices.
+// - Adds responsive paddings and prevents horizontal overflow on main area.
 
 import { useState, type PropsWithChildren } from 'react';
 import { Sidebar, SidebarMobile } from '../navigation/Sidebar';
@@ -10,9 +13,11 @@ export function AppShell({ children }: PropsWithChildren) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-100">
-      {/* Desktop sidebar */}
-      <Sidebar />
+    <div className="flex min-h-screen bg-slate-100">
+      {/* Desktop sidebar (md and up) */}
+      <div className="hidden md:block">
+        <Sidebar />
+      </div>
 
       {/* Mobile sidebar (drawer) */}
       <SidebarMobile
@@ -22,7 +27,9 @@ export function AppShell({ children }: PropsWithChildren) {
 
       <div className="flex flex-1 flex-col">
         <Topbar onMenuClick={() => setIsMobileSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
+          {children}
+        </main>
       </div>
     </div>
   );
