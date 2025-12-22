@@ -53,7 +53,7 @@ export function OrgSettingsCard() {
 
   if (!orgId) {
     return (
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="text-sm font-semibold text-slate-900">
           Organization Settings
         </h3>
@@ -65,10 +65,7 @@ export function OrgSettingsCard() {
     );
   }
 
-  const handleChange = (
-    field: keyof FormState,
-    value: string,
-  ): void => {
+  const handleChange = (field: keyof FormState, value: string): void => {
     setForm((prev) => ({
       ...prev,
       [field]: value,
@@ -121,8 +118,8 @@ export function OrgSettingsCard() {
   };
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <section className="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">
             Organization / Teklif Ayarları
@@ -135,9 +132,7 @@ export function OrgSettingsCard() {
       </div>
 
       {isLoading && (
-        <p className="text-xs text-slate-500">
-          Ayarlar yükleniyor...
-        </p>
+        <p className="text-xs text-slate-500">Ayarlar yükleniyor...</p>
       )}
 
       {isError && (
@@ -158,9 +153,7 @@ export function OrgSettingsCard() {
             <input
               type="text"
               value={form.companyName}
-              onChange={(e) =>
-                handleChange('companyName', e.target.value)
-              }
+              onChange={(e) => handleChange('companyName', e.target.value)}
               className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Örn: Çözüm İşitme Merkezi"
             />
@@ -201,23 +194,17 @@ export function OrgSettingsCard() {
             <input
               type="text"
               value={form.website}
-              onChange={(e) =>
-                handleChange('website', e.target.value)
-              }
+              onChange={(e) => handleChange('website', e.target.value)}
               className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="www.ornek-site.com"
             />
           </div>
 
           <div className="space-y-1 md:col-span-2">
-            <label className="block font-medium text-slate-700">
-              Adres
-            </label>
+            <label className="block font-medium text-slate-700">Adres</label>
             <textarea
               value={form.address}
-              onChange={(e) =>
-                handleChange('address', e.target.value)
-              }
+              onChange={(e) => handleChange('address', e.target.value)}
               rows={2}
               className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Adres bilgisi"
@@ -256,7 +243,7 @@ export function OrgSettingsCard() {
             />
           </div>
 
-          <div className="md:col-span-2 flex items-center justify-between pt-2">
+          <div className="md:col-span-2 flex flex-col items-stretch justify-between gap-2 pt-2 sm:flex-row sm:items-center">
             <div className="text-[11px] text-slate-500">
               Bu bilgiler deneme hastası teklif çıktısının üst kısmında ve
               alt bilgi alanında kullanılır.
@@ -264,7 +251,7 @@ export function OrgSettingsCard() {
             <button
               type="submit"
               disabled={isSaving}
-              className="inline-flex items-center justify-center rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               {isSaving ? 'Kaydediliyor...' : 'Kaydet'}
             </button>
