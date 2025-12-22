@@ -1,8 +1,9 @@
 // src/features/meetings/api.satisfaction.ts
 // Summary: Supabase API helpers for meeting satisfaction surveys.
-// - Fetch active lists & questions for use in meeting forms.
-// - Save per-meeting answers into meeting_satisfaction_answers.
-// - Admin utilities for managing lists and questions from Settings.
+// - Active list & question fetch (for meeting form).
+// - Full list/question management (for Settings card).
+// - Per-meeting answer save/load and average calculation.
+// - All inserts include org_id, resolved from current user's profile.
 
 import { supabaseClient } from '../../utils/supabaseClient';
 import type {
@@ -12,6 +13,55 @@ import type {
   SaveMeetingSatisfactionInput,
   SatisfactionScore,
 } from './meetingSatisfactionTypes';
+
+/**
+ * Shared helper: resolve org_id from current auth user via profiles.
+ */
+async function getCurrentOrgId(): Promise<string> {
+  const { data: userData, error: userError } =
+    await supabaseClient.auth.getUser();
+  if (userError) {
+    console.error(
+      'SATISFACTION_STEP_USER: Failed to get current user',
+      userError,
+    );
+    throw new Error(
+      'SATISFACTION_STEP_USER: ' + userError.message,
+    );
+  }
+  const user = userData.user;
+  if (!user) {
+    throw new Error('SATISFACTION_STEP_USER: User not authenticated');
+  }
+
+  const { data: profile, error: profileError } = await supabaseClient
+    .from('profiles')
+    .select('org_id')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError) {
+    console.error(
+      'SATISFACTION_STEP_PROFILE: Failed to load profile for org_id',
+      profileError,
+    );
+    throw new Error(
+      'SATISFACTION_STEP_PROFILE: ' + profileError.message,
+    );
+  }
+
+  if (!profile?.org_id) {
+    console.error(
+      'SATISFACTION_STEP_NO_ORG: Profile org_id is missing',
+      profile,
+    );
+    throw new Error(
+      'SATISFACTION_STEP_NO_ORG: Profile org_id is missing',
+    );
+  }
+
+  return profile.org_id as string;
+}
 
 /**
  * Fetch active survey question lists for the current org.
@@ -32,13 +82,12 @@ export async function fetchActiveSatisfactionLists(): Promise<MeetingSatisfactio
 }
 
 /**
- * Admin: fetch all lists (active + inactive) for management UI.
+ * Fetch ALL survey lists for settings screen (active + passive).
  */
 export async function fetchAllSatisfactionLists(): Promise<MeetingSatisfactionQuestionList[]> {
   const { data, error } = await supabaseClient
     .from('meeting_satisfaction_question_lists')
     .select('*')
-    .order('created_at', { ascending: true })
     .order('name', { ascending: true });
 
   if (error) {
@@ -50,7 +99,7 @@ export async function fetchAllSatisfactionLists(): Promise<MeetingSatisfactionQu
 
 /**
  * Fetch active questions for a given list, ordered by sort_order.
- * Used by meeting forms (short 5-question survey).
+ * Used by meeting form (anket UI).
  */
 export async function fetchQuestionsForList(
   listId: string,
@@ -70,8 +119,7 @@ export async function fetchQuestionsForList(
 }
 
 /**
- * Admin: fetch all questions for a list (active + inactive).
- * Used by Settings → Memnuniyet Soruları ekranı.
+ * Fetch ALL questions (active + passive) for settings screen.
  */
 export async function fetchAllQuestionsForList(
   listId: string,
@@ -80,14 +128,141 @@ export async function fetchAllQuestionsForList(
     .from('meeting_satisfaction_questions')
     .select('*')
     .eq('list_id', listId)
-    .order('sort_order', { ascending: true })
-    .order('created_at', { ascending: true });
+    .order('sort_order', { ascending: true });
 
   if (error) {
     console.error('fetchAllQuestionsForList error', error);
     throw error;
   }
   return (data ?? []) as MeetingSatisfactionQuestion[];
+}
+
+/**
+ * Create a new question list for current org.
+ */
+export async function createSatisfactionList(input: {
+  orgId: string;
+  name: string;
+}): Promise<MeetingSatisfactionQuestionList> {
+  const payload = {
+    org_id: input.orgId,
+    name: input.name.trim(),
+    is_active: true,
+  };
+
+  const { data, error } = await supabaseClient
+    .from('meeting_satisfaction_question_lists')
+    .insert(payload)
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('createSatisfactionList error', error);
+    throw error;
+  }
+
+  return data as MeetingSatisfactionQuestionList;
+}
+
+/**
+ * Update an existing list (name / is_active).
+ */
+export async function updateSatisfactionList(input: {
+  listId: string;
+  patch: {
+    name?: string;
+    is_active?: boolean;
+  };
+}): Promise<MeetingSatisfactionQuestionList> {
+  const patchDb: Record<string, unknown> = {};
+  if (typeof input.patch.name === 'string') {
+    patchDb.name = input.patch.name.trim();
+  }
+  if (typeof input.patch.is_active === 'boolean') {
+    patchDb.is_active = input.patch.is_active;
+  }
+
+  const { data, error } = await supabaseClient
+    .from('meeting_satisfaction_question_lists')
+    .update(patchDb)
+    .eq('id', input.listId)
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('updateSatisfactionList error', error);
+    throw error;
+  }
+
+  return data as MeetingSatisfactionQuestionList;
+}
+
+/**
+ * Create a new question for a given list in current org.
+ */
+export async function createSatisfactionQuestion(input: {
+  orgId: string;
+  listId: string;
+  questionText: string;
+  sortOrder?: number;
+}): Promise<MeetingSatisfactionQuestion> {
+  const payload = {
+    org_id: input.orgId,
+    list_id: input.listId,
+    question_text: input.questionText.trim(),
+    sort_order: input.sortOrder ?? 0,
+    is_active: true,
+  };
+
+  const { data, error } = await supabaseClient
+    .from('meeting_satisfaction_questions')
+    .insert(payload)
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('createSatisfactionQuestion error', error);
+    throw error;
+  }
+
+  return data as MeetingSatisfactionQuestion;
+}
+
+/**
+ * Update a question (text / order / is_active).
+ */
+export async function updateSatisfactionQuestion(input: {
+  questionId: string;
+  patch: {
+    question_text?: string;
+    sort_order?: number;
+    is_active?: boolean;
+  };
+}): Promise<MeetingSatisfactionQuestion> {
+  const patchDb: Record<string, unknown> = {};
+  if (typeof input.patch.question_text === 'string') {
+    patchDb.question_text = input.patch.question_text.trim();
+  }
+  if (typeof input.patch.sort_order === 'number') {
+    patchDb.sort_order = input.patch.sort_order;
+  }
+  if (typeof input.patch.is_active === 'boolean') {
+    patchDb.is_active = input.patch.is_active;
+  }
+
+  const { data, error } = await supabaseClient
+    .from('meeting_satisfaction_questions')
+    .update(patchDb)
+    .eq('id', input.questionId)
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('updateSatisfactionQuestion error', error);
+    throw error;
+  }
+
+  return data as MeetingSatisfactionQuestion;
 }
 
 /**
@@ -111,11 +286,15 @@ export async function fetchAnswersForMeeting(
 /**
  * Save / replace all satisfaction answers for a meeting.
  * Strategy: delete old rows for that meeting, then insert the new list.
+ * - org_id is resolved from current user's profile.
  */
 export async function saveMeetingSatisfaction(
   payload: SaveMeetingSatisfactionInput,
 ): Promise<void> {
   const { meetingId, patientId, listId, answers } = payload;
+
+  // Org id needed for NOT NULL org_id column
+  const orgId = await getCurrentOrgId();
 
   // 1) Delete previous answers for this meeting (idempotent save).
   const { error: deleteError } = await supabaseClient
@@ -124,7 +303,10 @@ export async function saveMeetingSatisfaction(
     .eq('meeting_id', meetingId);
 
   if (deleteError) {
-    console.error('saveMeetingSatisfaction delete error', deleteError);
+    console.error(
+      'saveMeetingSatisfaction delete error',
+      deleteError,
+    );
     throw deleteError;
   }
 
@@ -140,6 +322,7 @@ export async function saveMeetingSatisfaction(
 
   // 2) Insert new answers
   const rows = answers.map((a: AnswerInput) => ({
+    org_id: orgId,
     meeting_id: meetingId,
     patient_id: patientId,
     list_id: listId,
@@ -152,7 +335,10 @@ export async function saveMeetingSatisfaction(
     .insert(rows);
 
   if (insertError) {
-    console.error('saveMeetingSatisfaction insert error', insertError);
+    console.error(
+      'saveMeetingSatisfaction insert error',
+      insertError,
+    );
     throw insertError;
   }
 }
@@ -170,7 +356,10 @@ export async function fetchMeetingSatisfactionAverage(
     .eq('meeting_id', meetingId);
 
   if (error) {
-    console.error('fetchMeetingSatisfactionAverage error', error);
+    console.error(
+      'fetchMeetingSatisfactionAverage error',
+      error,
+    );
     throw error;
   }
 
@@ -182,135 +371,4 @@ export async function fetchMeetingSatisfactionAverage(
     0,
   );
   return sum / data.length;
-}
-
-/**
- * Admin: create a new satisfaction question list for the given org.
- */
-export async function createSatisfactionList(params: {
-  orgId: string;
-  name: string;
-}): Promise<MeetingSatisfactionQuestionList> {
-  const payload = {
-    org_id: params.orgId,
-    name: params.name.trim() || 'Yeni Liste',
-    is_active: true,
-  };
-
-  const { data, error } = await supabaseClient
-    .from('meeting_satisfaction_question_lists')
-    .insert(payload)
-    .select('*')
-    .single();
-
-  if (error) {
-    console.error('createSatisfactionList error', error);
-    throw error;
-  }
-
-  return data as MeetingSatisfactionQuestionList;
-}
-
-/**
- * Admin: update attributes of a satisfaction list (e.g. name, is_active).
- */
-export async function updateSatisfactionList(params: {
-  listId: string;
-  patch: {
-    name?: string;
-    is_active?: boolean;
-  };
-}): Promise<MeetingSatisfactionQuestionList> {
-  const patch: Record<string, unknown> = {};
-
-  if (typeof params.patch.name === 'string') {
-    patch.name = params.patch.name.trim() || 'İsmi olmayan liste';
-  }
-  if (typeof params.patch.is_active === 'boolean') {
-    patch.is_active = params.patch.is_active;
-  }
-
-  const { data, error } = await supabaseClient
-    .from('meeting_satisfaction_question_lists')
-    .update(patch)
-    .eq('id', params.listId)
-    .select('*')
-    .single();
-
-  if (error) {
-    console.error('updateSatisfactionList error', error);
-    throw error;
-  }
-
-  return data as MeetingSatisfactionQuestionList;
-}
-
-/**
- * Admin: create a new question in a given list.
- */
-export async function createSatisfactionQuestion(params: {
-  orgId: string;
-  listId: string;
-  questionText: string;
-  sortOrder?: number;
-}): Promise<MeetingSatisfactionQuestion> {
-  const payload = {
-    org_id: params.orgId,
-    list_id: params.listId,
-    question_text: params.questionText.trim() || 'Yeni soru',
-    sort_order: params.sortOrder ?? 0,
-    is_active: true,
-  };
-
-  const { data, error } = await supabaseClient
-    .from('meeting_satisfaction_questions')
-    .insert(payload)
-    .select('*')
-    .single();
-
-  if (error) {
-    console.error('createSatisfactionQuestion error', error);
-    throw error;
-  }
-
-  return data as MeetingSatisfactionQuestion;
-}
-
-/**
- * Admin: update a question in a list (text, order, active flag).
- * We avoid hard delete because answers reference questions with ON DELETE RESTRICT.
- */
-export async function updateSatisfactionQuestion(params: {
-  questionId: string;
-  patch: {
-    question_text?: string;
-    sort_order?: number;
-    is_active?: boolean;
-  };
-}): Promise<MeetingSatisfactionQuestion> {
-  const patch: Record<string, unknown> = {};
-
-  if (typeof params.patch.question_text === 'string') {
-    patch.question_text = params.patch.question_text.trim() || 'Boş soru';
-  }
-  if (typeof params.patch.sort_order === 'number') {
-    patch.sort_order = params.patch.sort_order;
-  }
-  if (typeof params.patch.is_active === 'boolean') {
-    patch.is_active = params.patch.is_active;
-  }
-
-  const { data, error } = await supabaseClient
-    .from('meeting_satisfaction_questions')
-    .update(patch)
-    .eq('id', params.questionId)
-    .select('*')
-    .single();
-
-  if (error) {
-    console.error('updateSatisfactionQuestion error', error);
-    throw error;
-  }
-
-  return data as MeetingSatisfactionQuestion;
 }
