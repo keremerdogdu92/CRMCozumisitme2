@@ -153,7 +153,7 @@ export function MeetingNewFormCard() {
               Görüşme Tipi
             </label>
             <select
-              className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               value={form.meetingType}
               onChange={(e) =>
                 setForm((f) => ({
@@ -200,7 +200,7 @@ export function MeetingNewFormCard() {
           </label>
           <input
             type="text"
-            className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             value={form.subject}
             onChange={(e) =>
               setForm((f) => ({ ...f, subject: e.target.value }))
@@ -217,7 +217,7 @@ export function MeetingNewFormCard() {
             </label>
             <input
               type="date"
-              className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               value={form.at}
               onChange={(e) =>
                 setForm((f) => ({ ...f, at: e.target.value }))
@@ -230,7 +230,7 @@ export function MeetingNewFormCard() {
             </label>
             <input
               type="date"
-              className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               value={form.next_at}
               onChange={(e) =>
                 setForm((f) => ({ ...f, next_at: e.target.value }))
@@ -239,7 +239,7 @@ export function MeetingNewFormCard() {
           </div>
         </div>
 
-        {/* Satisfaction */}
+        {/* Satisfaction (legacy 1–10 field) */}
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-700">
@@ -249,7 +249,7 @@ export function MeetingNewFormCard() {
               type="number"
               min={1}
               max={10}
-              className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               value={form.satisfaction10}
               onChange={(e) =>
                 setForm((f) => ({ ...f, satisfaction10: e.target.value }))
@@ -307,7 +307,7 @@ export function MeetingNewFormCard() {
                           Aksesuar
                         </label>
                         <select
-                          className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                           value={acc.type}
                           onChange={(e) =>
                             handleAccessoryChange(index, {
@@ -324,7 +324,7 @@ export function MeetingNewFormCard() {
                         {isOther && (
                           <input
                             type="text"
-                            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                            className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                             placeholder="Aksesuar adı"
                             value={acc.customName}
                             onChange={(e) =>
@@ -342,7 +342,7 @@ export function MeetingNewFormCard() {
                         </label>
                         <input
                           type="text"
-                          className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                           value={acc.costPrice}
                           onChange={(e) =>
                             handleAccessoryChange(index, {
@@ -359,7 +359,7 @@ export function MeetingNewFormCard() {
                         </label>
                         <input
                           type="text"
-                          className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                           value={acc.salePrice}
                           onChange={(e) =>
                             handleAccessoryChange(index, {
@@ -401,7 +401,7 @@ export function MeetingNewFormCard() {
             Not
           </label>
           <textarea
-            className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             rows={3}
             value={form.note}
             onChange={(e) =>
@@ -421,7 +421,7 @@ export function MeetingNewFormCard() {
         <button
           type="submit"
           disabled={isPending}
-          className="inline-flex items-center rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
         >
           {isPending ? 'Kaydediliyor...' : 'Kaydet'}
         </button>
