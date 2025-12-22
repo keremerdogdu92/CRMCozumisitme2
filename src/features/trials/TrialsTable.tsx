@@ -8,6 +8,8 @@
 // - ADD: Export buttons (CSV + XLSX) next to column visibility control.
 // - Export respects current visible columns and current sorted order.
 // - Uses shared csv/xlsx helpers (exportToCsvFile / exportToXlsxFile).
+// Patch v2.3:
+// - ADD: focusedId desteği. focusId ile gelen kayıt satırı listede highlight edilir.
 
 import { useMemo } from 'react';
 import type { TrialRow } from './types';
@@ -24,6 +26,11 @@ import {
 type TrialsTableProps = {
   items: TrialRow[];
   onSelectRow: (trial: TrialRow) => void;
+  /**
+   * Optional: if provided, the row with this ID will be visually highlighted.
+   * Used when navigating from Meetings via focusId.
+   */
+  focusedId?: string | null;
 };
 
 type TrialTableColumnId =
@@ -124,7 +131,11 @@ function formatShortDate(value: string | null): string {
   }
 }
 
-export function TrialsTable({ items, onSelectRow }: TrialsTableProps) {
+export function TrialsTable({
+  items,
+  onSelectRow,
+  focusedId,
+}: TrialsTableProps) {
   const { data: profile } = useCurrentProfile();
   const userId = profile?.id ?? null;
 
@@ -240,8 +251,8 @@ export function TrialsTable({ items, onSelectRow }: TrialsTableProps) {
   if (sortedItems.length === 0) {
     return (
       <div className="text-sm text-slate-500">
-        Filtreye uyan deneme kaydı bulunamadı. Aramayı temizleyebilir veya yeni deneme
-        ekleyebilirsiniz.
+        Filtreye uyan deneme kaydı bulunamadı. Aramayı temizleyebilir veya yeni
+        deneme ekleyebilirsiniz.
       </div>
     );
   }
@@ -252,8 +263,8 @@ export function TrialsTable({ items, onSelectRow }: TrialsTableProps) {
       <div className="flex items-center justify-between px-1 md:px-0">
         <p className="text-[11px] text-slate-500">
           Toplam{' '}
-          <span className="font-semibold">{sortedItems.length}</span>{' '}
-          deneme kaydı var.
+          <span className="font-semibold">{sortedItems.length}</span> deneme
+          kaydı var.
         </p>
         <div className="flex items-center gap-2">
           <TableColumnsControl
@@ -301,98 +312,110 @@ export function TrialsTable({ items, onSelectRow }: TrialsTableProps) {
             </tr>
           </thead>
           <tbody>
-            {sortedItems.map((t) => (
-              <tr key={t.id} className="border-t border-slate-100">
-                {visibleColumns.map((col) => {
-                  switch (col.id as TrialTableColumnId) {
-                    case 'created_at':
-                      return (
-                        <td
-                          key={col.id}
-                          className="px-4 py-2 text-slate-700 whitespace-nowrap"
-                        >
-                          {formatDate(t.created_at)}
-                        </td>
-                      );
-                    case 'full_name':
-                      return (
-                        <td
-                          key={col.id}
-                          className="px-4 py-2 text-slate-800"
-                        >
-                          {t.full_name ?? '-'}
-                        </td>
-                      );
-                    case 'phone':
-                      return (
-                        <td
-                          key={col.id}
-                          className="px-4 py-2 text-slate-700 whitespace-nowrap"
-                        >
-                          {t.phone ?? '-'}
-                        </td>
-                      );
-                    case 'first_meet_at':
-                      return (
-                        <td
-                          key={col.id}
-                          className="px-4 py-2 text-slate-700 whitespace-nowrap"
-                        >
-                          {formatDate(t.first_meet_at)}
-                        </td>
-                      );
-                    case 'next_meet_at':
-                      return (
-                        <td
-                          key={col.id}
-                          className="px-4 py-2 text-slate-700 whitespace-nowrap"
-                        >
-                          {formatDate(t.next_meet_at)}
-                        </td>
-                      );
-                    case 'reference':
-                      return (
-                        <td
-                          key={col.id}
-                          className="px-4 py-2 text-slate-700"
-                        >
-                          {t.reference_id ? 'Var' : 'Yok'}
-                        </td>
-                      );
-                    case 'note':
-                      return (
-                        <td
-                          key={col.id}
-                          className="px-4 py-2 text-slate-700"
-                        >
-                          {t.note
-                            ? t.note.length > 60
-                              ? `${t.note.slice(0, 60)}…`
-                              : t.note
-                            : '-'}
-                        </td>
-                      );
-                    case 'actions':
-                      return (
-                        <td
-                          key={col.id}
-                          className="px-4 py-2 text-right whitespace-nowrap"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => onSelectRow(t)}
-                            className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                          >
-                            Detay
-                          </button>
-                        </td>
-                      );
-                    default:
-                      return null;
+            {sortedItems.map((t) => {
+              const isFocused = focusedId && t.id === focusedId;
+
+              return (
+                <tr
+                  key={t.id}
+                  className={
+                    'border-t border-slate-100 ' +
+                    (isFocused
+                      ? 'bg-primary-50/70'
+                      : 'hover:bg-slate-50')
                   }
-                })}
-              </tr>
-            ))}
+                >
+                  {visibleColumns.map((col) => {
+                    switch (col.id as TrialTableColumnId) {
+                      case 'created_at':
+                        return (
+                          <td
+                            key={col.id}
+                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                          >
+                            {formatDate(t.created_at)}
+                          </td>
+                        );
+                      case 'full_name':
+                        return (
+                          <td
+                            key={col.id}
+                            className="px-4 py-2 text-slate-800"
+                          >
+                            {t.full_name ?? '-'}
+                          </td>
+                        );
+                      case 'phone':
+                        return (
+                          <td
+                            key={col.id}
+                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                          >
+                            {t.phone ?? '-'}
+                          </td>
+                        );
+                      case 'first_meet_at':
+                        return (
+                          <td
+                            key={col.id}
+                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                          >
+                            {formatDate(t.first_meet_at)}
+                          </td>
+                        );
+                      case 'next_meet_at':
+                        return (
+                          <td
+                            key={col.id}
+                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                          >
+                            {formatDate(t.next_meet_at)}
+                          </td>
+                        );
+                      case 'reference':
+                        return (
+                          <td
+                            key={col.id}
+                            className="px-4 py-2 text-slate-700"
+                          >
+                            {t.reference_id ? 'Var' : 'Yok'}
+                          </td>
+                        );
+                      case 'note':
+                        return (
+                          <td
+                            key={col.id}
+                            className="px-4 py-2 text-slate-700"
+                          >
+                            {t.note
+                              ? t.note.length > 60
+                                ? `${t.note.slice(0, 60)}…`
+                                : t.note
+                              : '-'}
+                          </td>
+                        );
+                      case 'actions':
+                        return (
+                          <td
+                            key={col.id}
+                            className="whitespace-nowrap px-4 py-2 text-right"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => onSelectRow(t)}
+                              className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                              Detay
+                            </button>
+                          </td>
+                        );
+                      default:
+                        return null;
+                    }
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
