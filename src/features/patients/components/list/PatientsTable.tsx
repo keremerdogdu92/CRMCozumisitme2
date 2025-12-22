@@ -6,6 +6,11 @@
 // - ADD: Table export buttons (CSV + XLSX) on desktop toolbar, next to column visibility control.
 // - Export respects current visible columns and current sorted order.
 // - Uses shared csvUtils helpers (exportToCsvFile / exportToXlsxFile).
+//
+// Patch v2.2 (responsive polish):
+// - Mobile cards: better grid behavior on very small screens (1 column <640px, 2 columns >=640px).
+// - Slight padding/typography tweaks for better readability on 720p and tablet screens.
+// - Keeps behavior and API identical.
 
 import { useMemo } from 'react';
 import type { PatientRow } from '../../types';
@@ -403,7 +408,11 @@ export function PatientsTable({
                 </div>
               </div>
 
-              <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-700">
+              {/* Mobile details grid:
+                  - 1 column on very narrow phones
+                  - 2 columns starting from sm breakpoint (>=640px)
+                */}
+              <div className="mt-2 grid grid-cols-1 gap-2 text-[11px] text-slate-700 sm:grid-cols-2">
                 <div>
                   <span className="block text-[10px] uppercase text-slate-400">
                     Telefon
@@ -499,8 +508,8 @@ export function PatientsTable({
       {/* Desktop: classic table (md ve üzeri) */}
       <ResponsiveTableShell className="hidden md:block">
         {/* Toolbar: left count + right column control + export buttons */}
-        <div className="flex items-center justify-between px-4 py-2">
-          <p className="text-[11px] text-slate-500">
+        <div className="flex items-center justify-between px-3 py-2 sm:px-4 sm:py-2.5">
+          <p className="text-[11px] text-slate-500 sm:text-xs">
             Toplam{' '}
             <span className="font-semibold">{sortedPatients.length}</span> hasta
             kaydı var.
@@ -537,7 +546,7 @@ export function PatientsTable({
                 return (
                   <th
                     key={col.id}
-                    className={`px-4 py-2 font-medium text-slate-600 ${
+                    className={`px-3 py-2 text-[11px] font-medium text-slate-600 sm:px-4 sm:py-2.5 sm:text-xs ${
                       col.sortable ? 'cursor-pointer select-none' : ''
                     } ${alignClass}`}
                     onClick={() => col.sortable && setSort(col.id)}
@@ -579,7 +588,7 @@ export function PatientsTable({
                         return (
                           <td
                             key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                            className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
                           >
                             {formatDate(p.created_at)}
                           </td>
@@ -588,7 +597,7 @@ export function PatientsTable({
                         return (
                           <td
                             key={col.id}
-                            className="max-w-[220px] truncate px-4 py-2 text-slate-800"
+                            className="max-w-[220px] truncate px-3 py-2 text-slate-800 sm:px-4 sm:py-2.5"
                           >
                             {p.full_name}
                           </td>
@@ -597,7 +606,7 @@ export function PatientsTable({
                         return (
                           <td
                             key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                            className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
                           >
                             {p.national_id && p.national_id.trim().length > 0
                               ? p.national_id
@@ -608,7 +617,7 @@ export function PatientsTable({
                         return (
                           <td
                             key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                            className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
                           >
                             {p.phone ?? '-'}
                           </td>
@@ -617,7 +626,7 @@ export function PatientsTable({
                         return (
                           <td
                             key={col.id}
-                            className="px-4 py-2 text-slate-700"
+                            className="px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
                           >
                             {deviceLabel}
                           </td>
@@ -626,7 +635,7 @@ export function PatientsTable({
                         return (
                           <td
                             key={col.id}
-                            className="px-4 py-2 text-slate-700"
+                            className="px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
                           >
                             {deviceEarLabel}
                           </td>
@@ -635,7 +644,7 @@ export function PatientsTable({
                         return (
                           <td
                             key={col.id}
-                            className="px-4 py-2 text-right text-slate-700"
+                            className="px-3 py-2 text-right text-slate-700 sm:px-4 sm:py-2.5"
                           >
                             {formatPrice(p.sale_total_amount)}
                           </td>
@@ -644,7 +653,7 @@ export function PatientsTable({
                         return (
                           <td
                             key={col.id}
-                            className="px-4 py-2 text-center text-slate-700"
+                            className="px-3 py-2 text-center text-slate-700 sm:px-4 sm:py-2.5"
                           >
                             {satisfactionDisplay}
                           </td>
@@ -653,14 +662,17 @@ export function PatientsTable({
                         return (
                           <td
                             key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                            className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
                           >
                             {formatDate(p.last_visit_at)}
                           </td>
                         );
                       case 'sgk':
                         return (
-                          <td key={col.id} className="px-4 py-2 text-center">
+                          <td
+                            key={col.id}
+                            className="px-3 py-2 text-center sm:px-4 sm:py-2.5"
+                          >
                             <div className="flex flex-col items-center gap-0.5">
                               <span
                                 className={
@@ -686,7 +698,10 @@ export function PatientsTable({
                         );
                       case 'invoice':
                         return (
-                          <td key={col.id} className="px-4 py-2 text-slate-700">
+                          <td
+                            key={col.id}
+                            className="px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                          >
                             <div className="flex flex-col items-start gap-0.5">
                               <span
                                 className={
@@ -709,7 +724,7 @@ export function PatientsTable({
                         return (
                           <td
                             key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-right"
+                            className="whitespace-nowrap px-3 py-2 text-right sm:px-4 sm:py-2.5"
                           >
                             <div className="inline-flex items-center gap-2">
                               <button
