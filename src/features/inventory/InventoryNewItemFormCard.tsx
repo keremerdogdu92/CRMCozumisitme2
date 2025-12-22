@@ -1,5 +1,12 @@
 // src/features/inventory/InventoryNewItemFormCard.tsx
 // Inline card to add a new inventory item (hearing aid or charger).
+//
+// v2.0:
+// - Fiyat alanlarının açıklamasına şu davranış eklendi:
+//   Eğer hem "Geliş Fiyatı" hem "Tavsiye Satış Fiyatı" boş bırakılırsa,
+//   backend tarafında cihaz katalogundan (current_device_model_prices_public)
+//   ilgili marka + model + ürün tipi için en güncel fiyatlar otomatik
+//   alınmaya çalışılır. Katalogta da yoksa anlamlı bir hata gösterilir.
 
 import { useState, FormEvent } from 'react';
 import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
@@ -233,6 +240,13 @@ export function InventoryNewItemFormCard({
               className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Örn. 40.000"
             />
+            <p className="mt-1 text-[11px] text-slate-500">
+              Eğer hem &quot;Geliş Fiyatı&quot; hem de &quot;Tavsiye Satış
+              Fiyatı&quot; alanlarını boş bırakırsanız, kayıt sırasında cihaz
+              katalogundaki en güncel purchase/list fiyatları otomatik olarak
+              kullanılmaya çalışılır. Katalogta da yoksa sistem size hata
+              mesajı gösterir.
+            </p>
           </div>
         </div>
 
