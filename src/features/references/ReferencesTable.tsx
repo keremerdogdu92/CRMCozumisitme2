@@ -10,6 +10,10 @@
 // - Uses shared csvUtils helpers (exportToCsvFile / exportToXlsxFile).
 // Patch v2.3:
 // - ADD: focusedId desteği. focusId ile gelen referans satırı listede highlight edilir.
+// Patch v2.4 (responsive polish):
+// - ADD: Mobile card view (md altı) → telefon ekranında okunabilirlik arttı.
+// - Desktop/tablet tablosu ResponsiveTableShell içine alındı.
+// - Üst bar mobile-first hale getirildi (wrap + dikey stack).
 
 import { useMemo } from 'react';
 import type { ReferenceRow } from './types';
@@ -22,6 +26,7 @@ import {
   exportToCsvFile,
   exportToXlsxFile,
 } from '../../utils/csvUtils';
+import { ResponsiveTableShell } from '../../components/layout/ResponsiveTableShell';
 
 type ReferencesTableProps = {
   items: ReferenceRow[];
@@ -376,23 +381,23 @@ export function ReferencesTable({
 
   if (items.length === 0) {
     return (
-      <div className="text-sm text-slate-500">
-        Filtreye uyan referans bulunamadı. Aramayı temizleyebilir veya
-        yeni referans ekleyebilirsiniz.
+      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-500 sm:text-sm">
+        Filtreye uyan referans bulunamadı. Aramayı temizleyebilir veya yeni
+        referans ekleyebilirsiniz.
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {/* Üst bar: kayıt sayısı + sütun kontrolü + export */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <p className="text-[11px] text-slate-500">
           Toplam{' '}
           <span className="font-semibold">{sortedItems.length}</span>{' '}
           referans kaydı var.
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           <TableColumnsControl
             columns={REFERENCE_COLUMNS}
             isColumnVisible={isColumnVisible}
@@ -405,8 +410,122 @@ export function ReferencesTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table className="min-w-full text-sm">
+      {/* Mobile: card list (md altı) */}
+      <div className="space-y-3 md:hidden">
+        {sortedItems.map((r) => {
+          const reminder = computeReminderStatus(r);
+          const isFocused = focusedId && r.id === focusedId;
+
+          const noteText =
+            r.note && r.note.length > 120
+              ? `${r.note.slice(0, 120)}…`
+              : r.note ?? '';
+
+          return (
+            <div
+              key={r.id}
+              className={
+                'rounded-lg border px-3 py-3 shadow-sm ' +
+                (isFocused
+                  ? 'border-primary-300 bg-primary-50/70'
+                  : 'border-slate-200 bg-white')
+              }
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-900">
+                    {r.full_name ?? '-'}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    Kayıt: {formatDate(r.created_at)}
+                  </p>
+                </div>
+                <span className="inline-flex shrink-0 items-center rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                  {renderGroup(r.group)}
+                </span>
+              </div>
+
+              <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-700">
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Telefon
+                  </span>
+                  <span className="font-medium">
+                    {r.phone && r.phone.trim().length > 0 ? r.phone : '-'}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Durum
+                  </span>
+                  <span
+                    className={
+                      r.is_active
+                        ? 'inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700'
+                        : 'inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500'
+                    }
+                  >
+                    {renderStatus(r)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Komisyon
+                  </span>
+                  <span className="font-medium">{renderCommission(r)}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Takip
+                  </span>
+                  <span className={reminder.className}>{reminder.label}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Son Görüşme
+                  </span>
+                  <span className="font-medium">
+                    {formatDate(r.last_meet_at)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Sonraki Görüşme
+                  </span>
+                  <span className="font-medium">
+                    {formatDate(r.next_meet_at)}
+                  </span>
+                </div>
+              </div>
+
+              {noteText && (
+                <div className="mt-2">
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Not
+                  </span>
+                  <span className="text-[11px] text-slate-600">
+                    {noteText}
+                  </span>
+                </div>
+              )}
+
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => onSelectRow(r)}
+                  className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Detay
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop / tablet: classic table (md ve üzeri) */}
+      <ResponsiveTableShell className="hidden md:block">
+        <table className="min-w-full text-xs md:text-sm">
           <thead className="bg-slate-50">
             <tr>
               {visibleColumns.map((col) => {
@@ -577,7 +696,7 @@ export function ReferencesTable({
             })}
           </tbody>
         </table>
-      </div>
+      </ResponsiveTableShell>
     </div>
   );
 }
