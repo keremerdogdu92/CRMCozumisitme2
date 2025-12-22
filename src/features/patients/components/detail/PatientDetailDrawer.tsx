@@ -16,7 +16,7 @@ import { PatientDetailSgkInvoiceTab } from './PatientDetailSgkInvoiceTab';
 import { PatientDetailAccessoriesTab } from './PatientDetailAccessoriesTab';
 import { PatientDetailBatteryPrescriptionsTab } from './PatientDetailBatteryPrescriptionsTab';
 import { PATIENTS_QUERY_KEY } from '../../api/api.core';
-import { updatePatientInvoiceStatus } from '../../api/api.patients';
+import { updatePatientInvoiceStatus } from '../../api/api.patients.update';
 import type { MeetingRow } from '../../../meetings/types';
 import {
   MEETINGS_BY_PATIENT_QUERY_KEY,
@@ -91,8 +91,7 @@ export function PatientDetailDrawer({
     ((patient as any).sgk_recorded_to_system_at as string | null) ?? null,
   );
 
-  // Invoice state is handled locally here and synced with Supabase
-  // via updatePatientInvoiceStatus, triggered explicitly from the SGK tab.
+  // Invoice state (DB-backed) – burada tutuluyor.
   const [invoiceIssued, setInvoiceIssued] = useState<boolean>(
     patient.invoice_issued === true,
   );
@@ -114,27 +113,22 @@ export function PatientDetailDrawer({
         invoiceIssuedAt: params.invoiceIssuedAt,
       }),
     onSuccess: (data) => {
+      setInvoiceError(null);
       setInvoiceIssued(!!data.invoice_issued);
       setInvoiceIssuedAt(data.invoice_issued_at);
-      setInvoiceError(null);
       void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
     },
     onError: (err) => {
-      console.error(
-        'Failed to update patient invoice status (DETAIL_DRAWER):',
-        err,
-      );
-      const message =
-        err instanceof Error
-          ? err.message
-          : 'Fatura bilgileri güncellenirken beklenmeyen bir hata oluştu.';
-      setInvoiceError(message);
-
-      // Revert to last known patient-level values for safety.
       setInvoiceIssued(patient.invoice_issued === true);
       setInvoiceIssuedAt(
         (patient.invoice_issued_at as string | null) ?? null,
       );
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Fatura durumu güncellenirken bir hata oluştu.';
+      setInvoiceError(message);
     },
   });
 
@@ -233,12 +227,10 @@ export function PatientDetailDrawer({
     });
   };
 
-  const handleSaveInvoice = (params: {
+  const handleSaveInvoiceFromTab = (params: {
     invoiceIssued: boolean;
     invoiceIssuedAt: string | null;
   }) => {
-    setInvoiceIssued(params.invoiceIssued);
-    setInvoiceIssuedAt(params.invoiceIssuedAt);
     invoiceMutation.mutate(params);
   };
 
@@ -357,7 +349,7 @@ export function PatientDetailDrawer({
             invoiceIssuedAt={invoiceIssuedAt}
             invoiceIsSaving={invoiceMutation.isPending}
             invoiceSaveError={invoiceError}
-            onSaveInvoice={handleSaveInvoice}
+            onSaveInvoice={handleSaveInvoiceFromTab}
           />
         )}
 
