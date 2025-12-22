@@ -111,11 +111,9 @@ export function PatientDetailDrawer({
     onSuccess: (data) => {
       setInvoiceIssued(!!data.invoice_issued);
       setInvoiceIssuedAt(data.invoice_issued_at);
-      // Hasta listesi ve detay drawer'ı güncel kalsın diye cache'i tazele.
       void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
     },
     onError: () => {
-      // Hata durumunda optimistic değişikliği geri al.
       setInvoiceIssued(patient.invoice_issued === true);
       setInvoiceIssuedAt(
         (patient.invoice_issued_at as string | null) ?? null,
@@ -169,7 +167,6 @@ export function PatientDetailDrawer({
       }
     },
     onSuccess: () => {
-      // Listeyi tazele, detay drawer'ı kapat.
       void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
       onClose();
     },
@@ -183,7 +180,12 @@ export function PatientDetailDrawer({
     },
   });
 
+  // Drawer her yeni hasta için (veya yeniden açıldığında) state'i resetler.
+  // Backend'den gelen küçük güncellemeler (ör. hızlı fatura kaydı) sırasında
+  // aktif sekme ve lokal SGK formu artık sıfırlanmaz.
   useEffect(() => {
+    if (!open) return;
+
     setSgkFlag(!!patient.sgk_flag);
     setSgkPrescriptionReceived(!!patient.sgk_prescription_received);
     setSgkRecordedToSystem(!!patient.sgk_recorded_to_system);
@@ -195,21 +197,12 @@ export function PatientDetailDrawer({
       (patient.invoice_issued_at as string | null) ?? null,
     );
 
-    // DB’den gelen sisteme işlendiği tarih (varsa) ile senkronize et.
     setSgkRecordedToSystemAt(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ((patient as any).sgk_recorded_to_system_at as string | null) ?? null,
     );
-  }, [
-    patient.id,
-    patient.sgk_flag,
-    patient.sgk_prescription_received,
-    patient.sgk_recorded_to_system,
-    patient.sgk_prescription_no,
-    patient.invoice_issued,
-    patient.invoice_issued_at,
-    initialTab,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient.id, open, initialTab]);
 
   const handleSave = () => {
     onSave({
@@ -217,14 +210,12 @@ export function PatientDetailDrawer({
       sgkPrescriptionReceived: sgkFlag ? sgkPrescriptionReceived : false,
       sgkRecordedToSystem: sgkFlag ? sgkRecordedToSystem : false,
       sgkPrescriptionNo,
-      // SGK kapalıysa veya "sisteme işlendi" işaretli değilse tarih NULL gider.
       sgkRecordedToSystemAt:
         sgkFlag && sgkRecordedToSystem ? sgkRecordedToSystemAt ?? null : null,
     });
   };
 
   const handleChangeInvoiceIssued = (nextValue: boolean) => {
-    // Optimistic update; onError revert to last known backend state.
     setInvoiceIssued(nextValue);
     invoiceMutation.mutate(nextValue);
   };
