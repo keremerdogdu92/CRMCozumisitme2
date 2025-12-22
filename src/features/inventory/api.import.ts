@@ -15,7 +15,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
 import { parseSimpleCsv } from '../../utils/csvUtils';
-import type { InventoryImportSummary } from './types';
+import type { InventoryImportSummary, InventoryItemType } from './types';
 import { INVENTORY_QUERY_KEY } from './api.keys';
 import {
   buildInventoryImportPayload,
@@ -24,7 +24,6 @@ import {
   makeCatalogPriceKey,
   normalizeItemType,
 } from './inventoryImportUtils';
-import type { InventoryItemType } from './types';
 
 /**
  * Basit header normalizasyonu:
@@ -47,7 +46,7 @@ function normalizeHeaderKey(raw: string): string {
  * - Inserts valid rows into inventory_items.
  * - Boş fiyatlar için (purchase_price + list_price):
  *   * current_device_model_prices_public üzerinden katalogtan doldurmayı dener.
- *   * Katalogta yoksa satırı blocking error yapar.
+ *   * Katalogta yoksa satırı blocking error yapar (util içinde).
  */
 export async function importInventoryFromCsv(
   file: File,
@@ -175,7 +174,6 @@ export async function importInventoryFromCsv(
   });
 
   if (combosNeedingCatalog.size > 0) {
-    // Supabase numeric alanları string döndürebildiği için basit bir converter
     const toNumberOrNull = (v: unknown): number | null => {
       if (v === null || v === undefined || v === '') return null;
       const num = Number(v);
