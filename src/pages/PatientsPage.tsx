@@ -2,7 +2,7 @@
 // Container page for Patients with responsive layout and filters.
 // NOTE: Hasta CSV import işlemleri yalnızca Settings sayfasından yönetilir.
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import {
@@ -17,6 +17,9 @@ import {
   PatientDetailDrawer,
   PatientsTable,
 } from '../features/patients/ui';
+import { useCurrentProfile } from '../features/auth/useCurrentProfile';
+import type { SoftDeleteMode } from '../utils/softDelete/softDeleteTypes';
+import { SoftDeleteModeFilter } from '../components/table/SoftDeleteModeFilter';
 
 type PatientDetailTabId =
   | 'info'
@@ -46,6 +49,9 @@ export default function PatientsPage() {
   const [searchParams] = useSearchParams();
   const location = useLocation() as { state?: PatientsPageLocationState };
 
+  const { data: profile } = useCurrentProfile();
+  const isAdmin = profile?.role === 'admin';
+
   // Optional: if PatientsPage is opened from a Trial context,
   // ?trialId=<uuid> can be passed in the URL.
   const linkedTrialId = searchParams.get('trialId');
@@ -65,15 +71,19 @@ export default function PatientsPage() {
   const [detailInitialShowPlan, setDetailInitialShowPlan] =
     useState<boolean>(false);
 
+  // Soft delete filter (admin only):
+  // - staff always uses 'active'
+  const [softDeleteMode, setSoftDeleteMode] = useState<SoftDeleteMode>('active');
+  const effectiveSoftDeleteMode: SoftDeleteMode = isAdmin
+    ? softDeleteMode
+    : 'active';
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: PATIENTS_QUERY_KEY,
-    queryFn: fetchPatients,
+    queryKey: [...PATIENTS_QUERY_KEY, { mode: effectiveSoftDeleteMode }],
+    queryFn: () => fetchPatients({ mode: effectiveSoftDeleteMode }),
   });
 
   const createMutation = useMutation({
-    // Yeni hasta oluşturma:
-    // - Finansal ve cihaz zinciri createPatientFromForm içinde yönetilir.
-    // - patient_sale_breakdown artık sadece Payments tabından yönetilir.
     mutationFn: async (values: NewPatientForm) => {
       const patient = await createPatientFromForm(
         values,
@@ -85,7 +95,6 @@ export default function PatientsPage() {
       void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
       setShowCreateForm(false);
 
-      // Yeni hasta Senet ise: detayı otomatik aç, Ödemeler sekmesi + plan formu açık gelsin.
       if (variables.paymentMethod === 'Senet' && createdPatient) {
         setDetailPatient(createdPatient);
         setDetailInitialTab('payments');
@@ -120,19 +129,15 @@ export default function PatientsPage() {
 
   const patients = data ?? [];
 
-  // Eğer URL'de focusId varsa ve bu ID'ye sahip hasta bulunursa,
-  // filtreler yerine sadece bu hasta listede gösterilir.
   const focusPatient: PatientRow | null =
     focusPatientId && patients.length > 0
       ? patients.find((p) => p.id === focusPatientId) ?? null
       : null;
 
-  let filteredPatients: PatientRow[];
+  const filteredPatients = useMemo(() => {
+    if (focusPatient) return [focusPatient];
 
-  if (focusPatient) {
-    filteredPatients = [focusPatient];
-  } else {
-    filteredPatients = patients.filter((p) => {
+    return patients.filter((p) => {
       const term = search.trim().toLowerCase();
       const matchesSearch =
         !term ||
@@ -146,7 +151,7 @@ export default function PatientsPage() {
 
       return matchesSearch && matchesSgk;
     });
-  }
+  }, [focusPatient, patients, search, sgkFilter]);
 
   const mutationError =
     (createMutation.error as Error | null | undefined)?.message ?? '';
@@ -171,22 +176,19 @@ export default function PatientsPage() {
 
   return (
     <div className="space-y-5 px-3 py-4 sm:px-4 sm:py-6 lg:px-8 lg:py-8">
-      {/* Başlık + sayım */}
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
             Hastalar
           </h2>
           <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs">
-            Toplam {patients.length} kayıt
+            Toplam {filteredPatients.length} kayıt
           </p>
         </div>
       </div>
 
-      {/* Filtreler + arama + yeni hasta butonu */}
       <div className="space-y-3 rounded-lg border border-slate-100 bg-slate-50/70 p-3 shadow-sm sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:space-y-0 sm:bg-slate-50">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          {/* SGK filtresi */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-slate-500 sm:text-xs">
               SGK filtre:
@@ -203,20 +205,25 @@ export default function PatientsPage() {
               <option value="non-sgk">SGK’sız</option>
             </select>
           </div>
+
+          {isAdmin && !focusPatient && (
+            <SoftDeleteModeFilter
+              value={softDeleteMode}
+              onChange={setSoftDeleteMode}
+            />
+          )}
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
-          {/* Arama */}
           <input
             type="text"
             placeholder="İsim veya telefon ile ara..."
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            disabled={!!focusPatient} // focus modunda arama pasif (sadece 1 kayıt gösteriliyor)
+            disabled={!!focusPatient}
           />
 
-          {/* Yeni hasta butonu */}
           <button
             type="button"
             onClick={handleToggleCreateForm}
@@ -227,7 +234,6 @@ export default function PatientsPage() {
         </div>
       </div>
 
-      {/* Yeni hasta formu */}
       <NewPatientFormCard
         open={showCreateForm}
         onToggle={handleToggleCreateForm}
@@ -236,13 +242,11 @@ export default function PatientsPage() {
         errorMessage={createMutation.isError ? mutationError : undefined}
       />
 
-      {/* Hasta listesi */}
       <PatientsTable
         patients={filteredPatients}
         onSelectPatient={handleSelectPatient}
       />
 
-      {/* Hasta Detay çekmecesi */}
       {detailPatient && (
         <PatientDetailDrawer
           patient={detailPatient}
