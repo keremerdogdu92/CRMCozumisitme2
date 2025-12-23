@@ -4,6 +4,10 @@
 // - If user arrives with a valid recovery link, Supabase establishes a session.
 // - We wait for a session, then call updateUser({ password }).
 // - If there's no session, user is guided back to forgot-password.
+//
+// Patch v2.1:
+// - Cleans up auth subscription and timeout on unmount to avoid leaks.
+// - Prevents double-unsubscribe edge cases.
 
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -23,6 +27,20 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     let alive = true;
+
+    let unsubscribe: (() => void) | null = null;
+    let timeoutId: number | null = null;
+
+    const cleanup = () => {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (unsubscribe) {
+        unsubscribe();
+        unsubscribe = null;
+      }
+    };
 
     const checkSession = async () => {
       const { data, error } = await supabaseClient.auth.getSession();
@@ -45,15 +63,19 @@ export default function ResetPasswordPage() {
           if (!alive) return;
           if (session) {
             setReadyState('ready');
+            // Once ready, we can safely stop listening.
+            cleanup();
           }
         },
       );
 
+      unsubscribe = () => sub.subscription.unsubscribe();
+
       // Fallback: after short delay, decide no-session.
-      window.setTimeout(() => {
+      timeoutId = window.setTimeout(() => {
         if (!alive) return;
         setReadyState((prev) => (prev === 'ready' ? 'ready' : 'no-session'));
-        sub.subscription.unsubscribe();
+        cleanup();
       }, 1200);
     };
 
@@ -61,6 +83,7 @@ export default function ResetPasswordPage() {
 
     return () => {
       alive = false;
+      cleanup();
     };
   }, []);
 
@@ -123,7 +146,10 @@ export default function ResetPasswordPage() {
               Yeni link iste
             </Link>
             <div>
-              <Link to="/login" className="text-xs text-slate-600 hover:underline">
+              <Link
+                to="/login"
+                className="text-xs text-slate-600 hover:underline"
+              >
                 Giriş sayfasına dön
               </Link>
             </div>
