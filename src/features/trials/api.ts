@@ -1,5 +1,11 @@
 // src/features/trials/api.ts
-// Supabase-backed API helpers and React Query keys for trial (deneme) data.
+// Summary: Supabase-backed API helpers and React Query keys for trial (deneme) data.
+//
+// Patch v2.0 (soft delete support):
+// - Adds optional SoftDeleteMode-aware fetchers:
+//   fetchTrials({ mode }) / fetchTrialsByReferenceId(referenceId, { mode })
+// - Default behavior is "active" (deleted_at IS NULL) so staff/admin see clean lists.
+// - Admin UI can switch to "deleted" or "all" without changing DB schema beyond deleted_at.
 
 import { supabaseClient } from '../../utils/supabaseClient';
 import type {
@@ -8,6 +14,7 @@ import type {
   DeviceModelPriceRow,
   TrialDeviceRow,
 } from './types';
+import type { SoftDeleteMode } from '../../utils/softDelete/softDeleteTypes';
 
 export const TRIALS_QUERY_KEY = ['trials'] as const;
 
@@ -24,11 +31,37 @@ export const DEVICE_MODELS_BY_BRAND_QUERY_KEY = (brand: string) =>
 export const TRIAL_DEVICES_BY_TRIAL_QUERY_KEY = (trialId: string) =>
   ['trial-devices-by-trial', trialId] as const;
 
-export async function fetchTrials(): Promise<TrialRow[]> {
-  const { data, error } = await supabaseClient
-    .from('trials')
-    .select(
-      `
+type FetchTrialsOptions = {
+  /**
+   * Soft-delete visibility mode:
+   * - active: only not-deleted rows (default)
+   * - deleted: only deleted rows
+   * - all: deleted + not-deleted rows
+   */
+  mode?: SoftDeleteMode;
+};
+
+function applySoftDeleteModeFilter(
+  query: ReturnType<typeof supabaseClient.from>,
+  mode: SoftDeleteMode,
+) {
+  if (mode === 'active') {
+    return query.is('deleted_at', null);
+  }
+  if (mode === 'deleted') {
+    // Supabase "IS NOT NULL" equivalent:
+    return query.not('deleted_at', 'is', null);
+  }
+  return query; // all
+}
+
+export async function fetchTrials(
+  opts: FetchTrialsOptions = {},
+): Promise<TrialRow[]> {
+  const mode = opts.mode ?? 'active';
+
+  let q = supabaseClient.from('trials').select(
+    `
       id,
       full_name,
       phone,
@@ -36,17 +69,23 @@ export async function fetchTrials(): Promise<TrialRow[]> {
       next_meet_at,
       created_at,
       reference_id,
-      note
+      note,
+      deleted_at
     `,
-    )
-    .order('created_at', { ascending: false });
+  );
+
+  q = applySoftDeleteModeFilter(q, mode).order('created_at', {
+    ascending: false,
+  });
+
+  const { data, error } = await q;
 
   if (error) {
     console.error('Supabase trials fetch error:', error);
     throw error;
   }
 
-  return data ?? [];
+  return (data ?? []) as TrialRow[];
 }
 
 /**
@@ -54,15 +93,16 @@ export async function fetchTrials(): Promise<TrialRow[]> {
  */
 export async function fetchTrialsByReferenceId(
   referenceId: string,
+  opts: FetchTrialsOptions = {},
 ): Promise<TrialRow[]> {
   if (!referenceId) {
     return [];
   }
 
-  const { data, error } = await supabaseClient
-    .from('trials')
-    .select(
-      `
+  const mode = opts.mode ?? 'active';
+
+  let q = supabaseClient.from('trials').select(
+    `
       id,
       full_name,
       phone,
@@ -70,23 +110,32 @@ export async function fetchTrialsByReferenceId(
       next_meet_at,
       created_at,
       reference_id,
-      note
+      note,
+      deleted_at
     `,
-    )
+  );
+
+  q = applySoftDeleteModeFilter(q, mode)
     .eq('reference_id', referenceId)
     .order('created_at', { ascending: false });
+
+  const { data, error } = await q;
 
   if (error) {
     console.error('Supabase trials-by-reference fetch error:', error);
     throw error;
   }
 
-  return data ?? [];
+  return (data ?? []) as TrialRow[];
 }
 
 /**
  * Lightweight search for trials by full_name.
  * Used by the Meetings subject picker to attach meetings to existing trial patients.
+ *
+ * NOTE:
+ * - Defaults to active-only (deleted rows are excluded).
+ * - Add an opts.mode parameter later only if you truly need to search deleted.
  */
 export interface TrialLite {
   id: string;
@@ -106,6 +155,7 @@ export async function searchTrialsByName(
     .from('trials')
     .select('id, full_name')
     .ilike('full_name', `%${trimmed}%`)
+    .is('deleted_at', null)
     .order('full_name', { ascending: true })
     .limit(limit);
 
@@ -247,8 +297,6 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
   }
 
   // 2) Profile → org_id
-  // Use maybeSingle() to avoid "Cannot coerce the result to a single JSON object"
-  // if there are duplicate profile rows for the same user id.
   const { data: profile, error: profileError } = await supabaseClient
     .from('profiles')
     .select('org_id')
