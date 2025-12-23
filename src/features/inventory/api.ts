@@ -1,6 +1,6 @@
 // src/features/inventory/api.ts
-// Summary: Inventory public API barrel. Adds catalog price fetch helper export
-// so UI can auto-fill prices when brand+model+item_type are chosen.
+// Public API barrel for the Inventory feature.
+// Keeps existing imports stable while delegating to smaller modules.
 
 export { INVENTORY_QUERY_KEY } from './api.keys';
 
