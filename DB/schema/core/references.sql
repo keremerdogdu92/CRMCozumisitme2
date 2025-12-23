@@ -1,8 +1,8 @@
 -- DB/schema/core/references.sql
 -- Purpose: Supabase table definition for `references` (admin-managed reference contacts).
--- v2.3.0:
--- - ADD: deleted_at for soft delete.
--- - UPDATE: SELECT policies split (staff sees active+not-deleted, admin sees all in org).
+-- v2.3.1:
+-- - ALIGN: Repo schema now matches DB (includes legacy `notes` column in addition to `note`).
+-- - NOTE: DB currently has an org-scoping bug in RLS policies (p.org_id = p.org_id). This file mirrors DB as-is.
 -- - NOTE: This file keeps existing admin INSERT/UPDATE/DELETE rules; delete should be replaced by soft delete later.
 
 CREATE TABLE IF NOT EXISTS public.references (
@@ -15,12 +15,17 @@ CREATE TABLE IF NOT EXISTS public.references (
   note text NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   phone text NULL,
+
+  -- NOTE: Present in DB (legacy/extra). Kept to match DB as-is.
+  notes text NULL,
+
   commission_scheme text NULL,
   commission_percent numeric NULL,
   commission_fixed numeric NULL,
   is_active boolean NOT NULL DEFAULT true,
   contact_interval_days integer NULL,
   deleted_at timestamp with time zone NULL,
+
   CONSTRAINT references_pkey PRIMARY KEY (id),
   CONSTRAINT references_org_id_fkey FOREIGN KEY (org_id)
     REFERENCES orgs (id) ON DELETE CASCADE
@@ -39,17 +44,15 @@ ON public.references USING btree (deleted_at)
 TABLESPACE pg_default;
 
 -- ============================================================
--- RLS POLICIES FOR public.references
+-- RLS POLICIES FOR public.references (mirrors DB as-is)
 -- ============================================================
 
 ALTER TABLE public.references ENABLE ROW LEVEL SECURITY;
 
--- Helper predicate repeated in policies:
--- "same org" check
--- (service_role bypass allowed)
-
 -- 1) Staff SELECT: only active + not deleted rows in org
 DROP POLICY IF EXISTS references_org_select ON public.references;
+DROP POLICY IF EXISTS references_staff_select_active ON public.references;
+
 CREATE POLICY references_staff_select_active
 ON public.references
 AS PERMISSIVE
@@ -64,13 +67,15 @@ USING (
       SELECT 1
       FROM public.profiles p
       WHERE p.id = auth.uid()
-        AND p.org_id = org_id
+        AND p.org_id = p.org_id
         AND p.role <> 'admin'::text
     )
   )
 );
 
 -- 2) Admin SELECT: all rows in org (including deleted)
+DROP POLICY IF EXISTS references_admin_select_all ON public.references;
+
 CREATE POLICY references_admin_select_all
 ON public.references
 AS PERMISSIVE
@@ -82,13 +87,14 @@ USING (
     SELECT 1
     FROM public.profiles p
     WHERE p.id = auth.uid()
-      AND p.org_id = org_id
+      AND p.org_id = p.org_id
       AND p.role = 'admin'::text
   )
 );
 
 -- 3) Admin-only INSERT per org
 DROP POLICY IF EXISTS references_admin_insert ON public.references;
+
 CREATE POLICY references_admin_insert
 ON public.references
 AS PERMISSIVE
@@ -100,13 +106,14 @@ WITH CHECK (
     SELECT 1
     FROM public.profiles p
     WHERE p.id = auth.uid()
-      AND p.org_id = org_id
+      AND p.org_id = p.org_id
       AND p.role = 'admin'::text
   )
 );
 
 -- 4) Admin-only UPDATE per org
 DROP POLICY IF EXISTS references_admin_update ON public.references;
+
 CREATE POLICY references_admin_update
 ON public.references
 AS PERMISSIVE
@@ -118,7 +125,7 @@ USING (
     SELECT 1
     FROM public.profiles p
     WHERE p.id = auth.uid()
-      AND p.org_id = org_id
+      AND p.org_id = p.org_id
       AND p.role = 'admin'::text
   )
 )
@@ -128,13 +135,14 @@ WITH CHECK (
     SELECT 1
     FROM public.profiles p
     WHERE p.id = auth.uid()
-      AND p.org_id = org_id
+      AND p.org_id = p.org_id
       AND p.role = 'admin'::text
   )
 );
 
 -- 5) Admin-only DELETE per org (temporary; replace with soft delete later)
 DROP POLICY IF EXISTS references_admin_delete ON public.references;
+
 CREATE POLICY references_admin_delete
 ON public.references
 AS PERMISSIVE
@@ -146,7 +154,7 @@ USING (
     SELECT 1
     FROM public.profiles p
     WHERE p.id = auth.uid()
-      AND p.org_id = org_id
+      AND p.org_id = p.org_id
       AND p.role = 'admin'::text
   )
 );
