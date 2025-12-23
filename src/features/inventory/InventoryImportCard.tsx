@@ -1,10 +1,8 @@
 // src/features/inventory/InventoryImportCard.tsx
-// Inline card to import inventory items from a CSV file.
-//
-// Kullanım:
-// - SettingsPage içinden <InventoryImportCard /> olarak çağrılır.
-// - CSV'yi yükler, import_jobs + inventory_import_rows + inventory_items
-//   pipeline'ını tetikler.
+// Summary: Inventory CSV import card UI.
+// v2.1:
+// - Adds a toggle: "Fill missing prices from catalog" (default ON).
+// - Passes the option to the import mutation payload.
 
 import { FormEvent, useState, ChangeEvent } from 'react';
 import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
@@ -20,6 +18,8 @@ export function InventoryImportCard({ open, onToggle }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [summary, setSummary] = useState<InventoryImportSummary | null>(null);
+  const [fillMissingPricesFromCatalog, setFillMissingPricesFromCatalog] =
+    useState(true);
 
   const importMutation = useInventoryCsvImportMutation();
 
@@ -47,7 +47,10 @@ export function InventoryImportCard({ open, onToggle }: Props) {
     }
 
     try {
-      const result = await importMutation.mutateAsync(file);
+      const result = await importMutation.mutateAsync({
+        file,
+        fillMissingPricesFromCatalog,
+      });
       setSummary(result);
     } catch (err) {
       setLocalError((err as Error).message);
@@ -70,28 +73,45 @@ export function InventoryImportCard({ open, onToggle }: Props) {
     >
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div className="grid gap-3 md:grid-cols-2 md:items-center">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              CSV Dosyası
-            </label>
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={handleFileChange}
-              className="block w-full text-xs text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-primary-600 file:px-3 file:py-2 file:text-xs file:font-medium file:text-white hover:file:bg-primary-700"
-            />
-            <p className="mt-1 text-[11px] text-slate-500">
-              Beklenen başlıklar:{' '}
-              <span className="font-mono">
-                brand (veya device_brand), model (veya device_model), item_type,
-                serial_no, barcode, status, purchase_price, list_price (veya
-                device_price), purchase_date, notes
-              </span>
-              . Marka, model, item_type ve serial_no zorunludur. Diğer alanlar
-              opsiyoneldir; geçersiz değerler için satır yine import edilir
-              ancak <span className="font-mono">inventory_import_rows</span>{' '}
-              tablosunda uyarı olarak işaretlenir.
-            </p>
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                CSV Dosyası
+              </label>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleFileChange}
+                className="block w-full text-xs text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-primary-600 file:px-3 file:py-2 file:text-xs file:font-medium file:text-white hover:file:bg-primary-700"
+              />
+              <p className="mt-1 text-[11px] text-slate-500">
+                Beklenen başlıklar:{' '}
+                <span className="font-mono">
+                  brand (veya device_brand), model (veya device_model), item_type,
+                  serial_no, barcode, status, purchase_price, list_price (veya
+                  device_price), purchase_date, notes
+                </span>
+                . Marka, model, item_type ve serial_no zorunludur.
+              </p>
+            </div>
+
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <label className="flex items-start gap-2 text-[12px] text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={fillMissingPricesFromCatalog}
+                  onChange={(e) => setFillMissingPricesFromCatalog(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  Boş fiyatları cihaz kataloğundan doldur{' '}
+                  <span className="text-[11px] text-slate-500">
+                    (purchase_price + list_price ikisi de boşsa katalogtan
+                    doldurur; katalogta yoksa satır bloklanır)
+                  </span>
+                </span>
+              </label>
+            </div>
           </div>
 
           {summary && (
@@ -106,9 +126,8 @@ export function InventoryImportCard({ open, onToggle }: Props) {
                 Bloklayan hatalı satır: <strong>{summary.errorCount}</strong>
               </p>
               <p className="mt-1 text-[10px] text-slate-500">
-                Import job ID:{' '}
-                <span className="font-mono">{summary.jobId}</span> — detaylı
-                hata ve uyarılar için{' '}
+                Import job ID: <span className="font-mono">{summary.jobId}</span>{' '}
+                — detaylı hata ve uyarılar için{' '}
                 <span className="font-mono">inventory_import_rows</span> ve{' '}
                 <span className="font-mono">import_jobs</span> tablolarına
                 bakabilirsiniz.
