@@ -149,8 +149,7 @@ export async function importInventoryFromCsv(
     const rawBrand = (row['brand'] ?? row['device_brand'] ?? '').trim();
     const rawModel = (row['model'] ?? row['device_model'] ?? '').trim();
     const rawItemType = (row['item_type'] ?? '').trim();
-    const hasPurchase =
-      (row['purchase_price'] ?? '').trim().length > 0;
+    const hasPurchase = (row['purchase_price'] ?? '').trim().length > 0;
     const hasList =
       (row['list_price'] ?? '').trim().length > 0 ||
       (row['device_price'] ?? '').trim().length > 0;
@@ -267,10 +266,7 @@ export async function importInventoryFromCsv(
         .insert(inventoryItemsPayload);
 
       if (itemsError) {
-        console.error(
-          'Failed to insert inventory_items from import:',
-          itemsError,
-        );
+        console.error('Failed to insert inventory_items from import:', itemsError);
         throw new Error('IMPORT_ITEMS: ' + itemsError.message);
       }
     }
@@ -291,10 +287,7 @@ export async function importInventoryFromCsv(
       .eq('id', jobId);
 
     if (updateError) {
-      console.error(
-        'Failed to update import_jobs after completion:',
-        updateError,
-      );
+      console.error('Failed to update import_jobs after completion:', updateError);
       // Import is already done; do not rethrow here.
     }
   } catch (err) {
