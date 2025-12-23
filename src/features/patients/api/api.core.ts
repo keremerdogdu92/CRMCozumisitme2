@@ -3,6 +3,11 @@
 
 import { supabaseClient } from '../../../utils/supabaseClient';
 import type { PatientRow } from '../types';
+import type { SoftDeleteMode } from '../../../utils/softDelete/softDeleteTypes';
+import {
+  isDeletedOnly,
+  needsIncludeDeleted,
+} from '../../../utils/softDelete/softDeleteTypes';
 
 // React Query keys
 export const PATIENTS_QUERY_KEY = ['patients'] as const;
@@ -60,11 +65,21 @@ export async function fetchPatientsByReferenceId(
 
 /**
  * Full patient list with device + reference info.
- * Backed by the patient_list_with_device view.
+ * Backed by:
+ * - patient_list_with_device (default, NOT deleted)
+ * - patient_list_with_device_all (admin/all, includes deleted rows)
  */
-export async function fetchPatients(): Promise<PatientRow[]> {
+export async function fetchPatients(params?: {
+  mode?: SoftDeleteMode;
+}): Promise<PatientRow[]> {
+  const mode: SoftDeleteMode = params?.mode ?? 'active';
+
+  const source = needsIncludeDeleted(mode)
+    ? 'patient_list_with_device_all'
+    : 'patient_list_with_device';
+
   const { data, error } = await supabaseClient
-    .from('patient_list_with_device')
+    .from(source)
     .select(
       [
         'id',
@@ -100,6 +115,13 @@ export async function fetchPatients(): Promise<PatientRow[]> {
         'sgk_profile',
         'sgk_expected_reimbursement',
         'sgk_expected_reimbursement_month',
+        'is_battery_patient',
+
+        // NOTE: Only exists in *_all view. Safe to request; in non-all view it won't be selected.
+        // We keep this here so admin UI can filter deleted-only client-side when needed.
+        'deleted_at',
+        'deleted_by',
+        'delete_reason',
       ].join(', '),
     )
     .order('created_at', { ascending: false });
@@ -109,7 +131,7 @@ export async function fetchPatients(): Promise<PatientRow[]> {
     throw error;
   }
 
-  return (data ?? []).map((row: any) => {
+  const mapped = (data ?? []).map((row: any) => {
     const patient: PatientRow = {
       id: row.id as string,
       full_name: row.full_name as string,
@@ -181,10 +203,30 @@ export async function fetchPatients(): Promise<PatientRow[]> {
           | string
           | null
           | undefined) ?? null,
+
+      is_battery_patient: (row.is_battery_patient as boolean | null) ?? null,
     };
+
+    // NOTE:
+    // PatientRow type may not currently include deleted fields. We intentionally do NOT assign them here.
+    // Deleted-only filtering is done in the page using raw row.deleted_at presence.
+    (patient as any).deleted_at = (row.deleted_at as string | null) ?? null;
+    (patient as any).deleted_by = (row.deleted_by as string | null) ?? null;
+    (patient as any).delete_reason =
+      (row.delete_reason as string | null) ?? null;
 
     return patient;
   });
+
+  if (!needsIncludeDeleted(mode)) {
+    return mapped;
+  }
+
+  if (isDeletedOnly(mode)) {
+    return mapped.filter((p) => (p as any).deleted_at != null);
+  }
+
+  return mapped;
 }
 
 /**
@@ -230,18 +272,14 @@ export async function searchPatientsByName(
 export function parseMoneyToNumber(raw: string, fieldCode: string): number {
   const trimmed = raw.trim();
   if (!trimmed) {
-    throw new Error(
-      `${fieldCode}: Boş bırakılamaz, geçerli bir tutar girin.`,
-    );
+    throw new Error(`${fieldCode}: Boş bırakılamaz, geçerli bir tutar girin.`);
   }
 
   const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
   const value = Number(normalized);
 
   if (!Number.isFinite(value) || value <= 0) {
-    throw new Error(
-      `${fieldCode}: Geçerli bir tutar girin (0'dan büyük olmalı).`,
-    );
+    throw new Error(`${fieldCode}: Geçerli bir tutar girin (0'dan büyük olmalı).`);
   }
 
   return Number(value.toFixed(2));
