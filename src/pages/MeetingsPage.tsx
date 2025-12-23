@@ -1,5 +1,7 @@
 // src/pages/MeetingsPage.tsx
 // Meetings overview page: new-meeting form + meetings table.
+//
+// Patch v1.1: No functional change; kept for completeness.
 
 import { MeetingNewFormCard } from '../features/meetings/MeetingNewFormCard';
 import { MeetingsTable } from '../features/meetings/MeetingsTable';
