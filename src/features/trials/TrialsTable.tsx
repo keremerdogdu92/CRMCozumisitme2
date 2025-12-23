@@ -1,4 +1,4 @@
-// src/features/trials/TrialsTable.tsx 
+// src/features/trials/TrialsTable.tsx
 // Tabular list view for trial rows with column visibility toggles and sorting.
 // Preferences are stored per user via useTablePreferences(userId).
 //
@@ -14,18 +14,17 @@
 // - ADD: Mobile card view (md altı) → deneme listesini telefon ekranında daha okunur hale getirir.
 // - Desktop/tablet tablosu ResponsiveTableShell içine alındı.
 // - Toolbar mobile-first düzene çekildi.
+// Patch v2.5:
+// - ADD: Optional toolbarRight slot so pages can attach extra filters (e.g., SoftDeleteModeFilter).
 
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type { TrialRow } from './types';
 import { useTablePreferences } from '../../components/table/useTablePreferences';
 import { TableColumnsControl } from '../../components/table/TableColumnsControl';
 import type { TableColumnDef } from '../../components/table/tableTypes';
 import { useCurrentProfile } from '../auth/useCurrentProfile';
 import { TableExportButtons } from '../../components/table/TableExportButtons';
-import {
-  exportToCsvFile,
-  exportToXlsxFile,
-} from '../../utils/csvUtils';
+import { exportToCsvFile, exportToXlsxFile } from '../../utils/csvUtils';
 import { ResponsiveTableShell } from '../../components/layout/ResponsiveTableShell';
 
 type TrialsTableProps = {
@@ -36,6 +35,12 @@ type TrialsTableProps = {
    * Used when navigating from Meetings via focusId.
    */
   focusedId?: string | null;
+
+  /**
+   * Optional slot to attach extra toolbar content on the right (before columns/export).
+   * Example: SoftDeleteModeFilter shown only for admins.
+   */
+  toolbarRight?: ReactNode;
 };
 
 type TrialTableColumnId =
@@ -140,6 +145,7 @@ export function TrialsTable({
   items,
   onSelectRow,
   focusedId,
+  toolbarRight,
 }: TrialsTableProps) {
   const { data: profile } = useCurrentProfile();
   const userId = profile?.id ?? null;
@@ -205,10 +211,7 @@ export function TrialsTable({
   const handleExport = (type: 'csv' | 'xlsx') => {
     if (!sortedItems.length) return;
 
-    const exportableColumns = visibleColumns.filter(
-      (c) => c.id !== 'actions',
-    );
-
+    const exportableColumns = visibleColumns.filter((c) => c.id !== 'actions');
     if (!exportableColumns.length) return;
 
     const headers = exportableColumns.map((col) => col.label);
@@ -264,14 +267,14 @@ export function TrialsTable({
 
   return (
     <div className="space-y-3">
-      {/* Toolbar: sol sayım, sağda sütun kontrolü + export */}
+      {/* Toolbar: sol sayım, sağda filtre slotu + sütun kontrolü + export */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[11px] text-slate-500">
-          Toplam{' '}
-          <span className="font-semibold">{sortedItems.length}</span> deneme
-          kaydı var.
+          Toplam <span className="font-semibold">{sortedItems.length}</span>{' '}
+          deneme kaydı var.
         </p>
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {toolbarRight}
           <TableColumnsControl
             columns={TRIAL_COLUMNS}
             isColumnVisible={isColumnVisible}
@@ -290,9 +293,7 @@ export function TrialsTable({
           const isFocused = focusedId && t.id === focusedId;
 
           const noteText =
-            t.note && t.note.length > 100
-              ? `${t.note.slice(0, 100)}…`
-              : t.note ?? '';
+            t.note && t.note.length > 100 ? `${t.note.slice(0, 100)}…` : t.note ?? '';
 
           return (
             <div
@@ -337,17 +338,13 @@ export function TrialsTable({
                   <span className="block text-[10px] uppercase text-slate-400">
                     İlk görüşme
                   </span>
-                  <span className="font-medium">
-                    {formatShortDate(t.first_meet_at)}
-                  </span>
+                  <span className="font-medium">{formatShortDate(t.first_meet_at)}</span>
                 </div>
                 <div>
                   <span className="block text-[10px] uppercase text-slate-400">
                     Sonraki randevu
                   </span>
-                  <span className="font-medium">
-                    {formatShortDate(t.next_meet_at)}
-                  </span>
+                  <span className="font-medium">{formatShortDate(t.next_meet_at)}</span>
                 </div>
               </div>
 
@@ -356,9 +353,7 @@ export function TrialsTable({
                   <span className="block text-[10px] uppercase text-slate-400">
                     Not
                   </span>
-                  <span className="text-[11px] text-slate-600">
-                    {noteText}
-                  </span>
+                  <span className="text-[11px] text-slate-600">{noteText}</span>
                 </div>
               )}
 
@@ -419,9 +414,7 @@ export function TrialsTable({
                     key={t.id}
                     className={
                       'border-t border-slate-100 ' +
-                      (isFocused
-                        ? 'bg-primary-50/70'
-                        : 'hover:bg-slate-50')
+                      (isFocused ? 'bg-primary-50/70' : 'hover:bg-slate-50')
                     }
                   >
                     {visibleColumns.map((col) => {
@@ -437,10 +430,7 @@ export function TrialsTable({
                           );
                         case 'full_name':
                           return (
-                            <td
-                              key={col.id}
-                              className="px-4 py-2 text-slate-800"
-                            >
+                            <td key={col.id} className="px-4 py-2 text-slate-800">
                               {t.full_name ?? '-'}
                             </td>
                           );
@@ -473,19 +463,13 @@ export function TrialsTable({
                           );
                         case 'reference':
                           return (
-                            <td
-                              key={col.id}
-                              className="px-4 py-2 text-slate-700"
-                            >
+                            <td key={col.id} className="px-4 py-2 text-slate-700">
                               {t.reference_id ? 'Var' : 'Yok'}
                             </td>
                           );
                         case 'note':
                           return (
-                            <td
-                              key={col.id}
-                              className="px-4 py-2 text-slate-700"
-                            >
+                            <td key={col.id} className="px-4 py-2 text-slate-700">
                               {t.note
                                 ? t.note.length > 60
                                   ? `${t.note.slice(0, 60)}…`
