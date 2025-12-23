@@ -3,6 +3,11 @@
 // - Pulls active question lists and questions.
 // - Lets user pick a list and answer 1-5 with fixed labels.
 // - On submit, calls saveMeetingSatisfaction() with all answers.
+//
+// Patch v2.2:
+// - Better "pre-save" UX: if meetingId is null, show a small inline hint and
+//   disable the Save button instead of silently doing nothing.
+// - Keeps existing logic intact for loading lists/questions/answers.
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -23,10 +28,6 @@ import { useCurrentProfile } from '../auth/useCurrentProfile';
 interface MeetingSatisfactionSurveySectionProps {
   meetingId: string | null; // null for brand new meetings (pre-save)
   patientId: string;
-  /**
-   * When creating a new meeting, parent form can call this after meeting is saved
-   * to pass the new meetingId so this component can persist answers.
-   */
   onRequireMeetingId?: () => void;
 }
 
@@ -126,10 +127,7 @@ export function MeetingSatisfactionSurveySection(
 
   async function handleSave() {
     if (!meetingId) {
-      // Parent must first persist the meeting so we can use its id.
-      if (onRequireMeetingId) {
-        onRequireMeetingId();
-      }
+      if (onRequireMeetingId) onRequireMeetingId();
       return;
     }
     if (!selectedListId) return;
@@ -154,6 +152,8 @@ export function MeetingSatisfactionSurveySection(
   const disabled =
     loadingLists || loadingQuestions || loadingExisting || mutation.isPending;
 
+  const canSave = !!meetingId && !!selectedListId && !disabled;
+
   return (
     <div className="mt-6 space-y-4 rounded-lg border border-gray-200 bg-white p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -166,6 +166,12 @@ export function MeetingSatisfactionSurveySection(
           </span>
         )}
       </div>
+
+      {!meetingId && (
+        <p className="text-xs text-gray-500">
+          Anketi kaydetmek için önce görüşmeyi kaydedin.
+        </p>
+      )}
 
       {/* List selector */}
       <div className="space-y-1">
@@ -225,12 +231,6 @@ export function MeetingSatisfactionSurveySection(
                 </div>
               </div>
             ))}
-
-          {questions.length > 5 && (
-            <p className="text-[10px] text-gray-400">
-              Not: Şu anda yalnızca ilk 5 soru kullanılmaktadır.
-            </p>
-          )}
         </div>
       )}
 
@@ -239,7 +239,7 @@ export function MeetingSatisfactionSurveySection(
         <Button
           type="button"
           onClick={handleSave}
-          disabled={disabled || !selectedListId}
+          disabled={!canSave}
           variant="primary"
         >
           Anket Cevaplarını Kaydet
