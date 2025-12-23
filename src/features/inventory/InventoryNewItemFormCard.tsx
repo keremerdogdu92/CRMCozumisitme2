@@ -7,9 +7,16 @@
 //   backend tarafında cihaz katalogundan (current_device_model_prices_public)
 //   ilgili marka + model + ürün tipi için en güncel fiyatlar otomatik
 //   alınmaya çalışılır. Katalogta da yoksa anlamlı bir hata gösterilir.
+//
+// v2.1:
+// - Adds optional UI helper: "Katalogtan Doldur" button to prefill prices
+//   without changing backend behavior (no feature loss).
+// - The button only fills fields that are currently empty.
 
-import { useState, FormEvent } from 'react';
+import { useMemo, useState, FormEvent } from 'react';
 import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
+import { supabaseClient } from '../../utils/supabaseClient';
+import { fetchCatalogPriceForInventory } from './api.catalog';
 import type { EarSide, InventoryItemType, NewInventoryItemForm } from './types';
 
 type Props = {
@@ -32,6 +39,13 @@ const EAR_SIDE_OPTIONS: { value: EarSide; label: string }[] = [
   { value: 'none', label: 'Yok / Henüz Atanmadı' },
 ];
 
+function formatMoneyTr(v: number): string {
+  // Keep it simple; UI is text-based and backend already parses flexible formats.
+  // 25000 -> "25.000"
+  const rounded = Math.round(v);
+  return rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
 export function InventoryNewItemFormCard({
   open,
   onToggle,
@@ -50,10 +64,23 @@ export function InventoryNewItemFormCard({
     listPrice: '',
   });
 
+  const [catalogHint, setCatalogHint] = useState<string | null>(null);
+  const [isCatalogLoading, setIsCatalogLoading] = useState(false);
+  const [cachedOrgId, setCachedOrgId] = useState<string | null>(null);
+
   const isCharger = formState.itemType === 'charger';
+
+  const canUseCatalog = useMemo(() => {
+    return (
+      formState.brand.trim().length > 0 &&
+      formState.model.trim().length > 0 &&
+      !isSubmitting
+    );
+  }, [formState.brand, formState.model, isSubmitting]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    setCatalogHint(null);
     onSubmit(formState);
 
     setFormState({
@@ -66,6 +93,105 @@ export function InventoryNewItemFormCard({
       purchasePrice: '',
       listPrice: '',
     });
+  };
+
+  const resolveOrgId = async (): Promise<string> => {
+    if (cachedOrgId) return cachedOrgId;
+
+    const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+    if (userError) {
+      console.error('Failed to get current user for catalog lookup:', userError);
+      throw new Error('CATALOG_USER: ' + userError.message);
+    }
+    const user = userData.user;
+    if (!user) {
+      throw new Error('CATALOG_USER: Kullanıcı oturumu bulunamadı.');
+    }
+
+    const { data: profile, error: profileError } = await supabaseClient
+      .from('profiles')
+      .select('org_id')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      console.error('Failed to load profile for catalog lookup:', profileError);
+      throw new Error('CATALOG_PROFILE: ' + profileError.message);
+    }
+    if (!profile?.org_id) {
+      throw new Error('CATALOG_NO_ORG: Profilde org_id bulunamadı.');
+    }
+
+    const orgId = profile.org_id as string;
+    setCachedOrgId(orgId);
+    return orgId;
+  };
+
+  const handleFillFromCatalog = async () => {
+    setCatalogHint(null);
+
+    if (!canUseCatalog) {
+      setCatalogHint('Katalogtan doldurmak için marka ve model gerekli.');
+      return;
+    }
+
+    // Only useful when at least one price is empty
+    const needsAnyPrice =
+      formState.purchasePrice.trim().length === 0 || formState.listPrice.trim().length === 0;
+
+    if (!needsAnyPrice) {
+      setCatalogHint('Fiyat alanları zaten dolu.');
+      return;
+    }
+
+    setIsCatalogLoading(true);
+    try {
+      const orgId = await resolveOrgId();
+
+      const res = await fetchCatalogPriceForInventory({
+        orgId,
+        brand: formState.brand.trim(),
+        model: formState.model.trim(),
+        itemType: formState.itemType,
+      });
+
+      if (!res) {
+        setCatalogHint(
+          'Bu marka + model + ürün tipi için katalogta fiyat bulunamadı. İstersen manuel gir, kayıt sırasında backend yine deneyecek.',
+        );
+        return;
+      }
+
+      const hasAny = res.purchase_price != null || res.list_price != null;
+      if (!hasAny) {
+        setCatalogHint(
+          'Katalogta kayıt bulundu ama fiyatlar boş görünüyor. Manuel girmen gerekebilir (backend de aynı durumda hata verebilir).',
+        );
+        return;
+      }
+
+      setFormState((s) => ({
+        ...s,
+        purchasePrice:
+          s.purchasePrice.trim().length > 0
+            ? s.purchasePrice
+            : res.purchase_price != null
+              ? formatMoneyTr(res.purchase_price)
+              : '',
+        listPrice:
+          s.listPrice.trim().length > 0
+            ? s.listPrice
+            : res.list_price != null
+              ? formatMoneyTr(res.list_price)
+              : '',
+      }));
+
+      setCatalogHint('Katalog fiyatları dolduruldu (boş alanlara).');
+    } catch (e) {
+      setCatalogHint((e as Error).message);
+    } finally {
+      setIsCatalogLoading(false);
+    }
   };
 
   return (
@@ -82,16 +208,12 @@ export function InventoryNewItemFormCard({
       >
         {/* Marka */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">
-            Marka
-          </label>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Marka</label>
           <input
             type="text"
             required
             value={formState.brand}
-            onChange={(e) =>
-              setFormState((s) => ({ ...s, brand: e.target.value }))
-            }
+            onChange={(e) => setFormState((s) => ({ ...s, brand: e.target.value }))}
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             placeholder="Örn. Signia"
           />
@@ -99,16 +221,12 @@ export function InventoryNewItemFormCard({
 
         {/* Model */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">
-            Model
-          </label>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Model</label>
           <input
             type="text"
             required
             value={formState.model}
-            onChange={(e) =>
-              setFormState((s) => ({ ...s, model: e.target.value }))
-            }
+            onChange={(e) => setFormState((s) => ({ ...s, model: e.target.value }))}
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             placeholder="Örn. Pure C&G 3AX"
           />
@@ -116,9 +234,7 @@ export function InventoryNewItemFormCard({
 
         {/* Ürün tipi */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">
-            Ürün Tipi
-          </label>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Ürün Tipi</label>
           <select
             value={formState.itemType}
             onChange={(e) => {
@@ -127,12 +243,9 @@ export function InventoryNewItemFormCard({
                 ...s,
                 itemType: value,
                 earSide:
-                  value === 'charger'
-                    ? 'none'
-                    : s.earSide === 'none'
-                    ? 'bilateral'
-                    : s.earSide,
+                  value === 'charger' ? 'none' : s.earSide === 'none' ? 'bilateral' : s.earSide,
               }));
+              setCatalogHint(null);
             }}
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           >
@@ -146,17 +259,10 @@ export function InventoryNewItemFormCard({
 
         {/* Kulak tarafı */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">
-            Kulak Tarafı
-          </label>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Kulak Tarafı</label>
           <select
             value={formState.earSide}
-            onChange={(e) =>
-              setFormState((s) => ({
-                ...s,
-                earSide: e.target.value as EarSide,
-              }))
-            }
+            onChange={(e) => setFormState((s) => ({ ...s, earSide: e.target.value as EarSide }))}
             disabled={isCharger}
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-50 disabled:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           >
@@ -167,38 +273,29 @@ export function InventoryNewItemFormCard({
             ))}
           </select>
           <p className="mt-1 text-[11px] text-slate-500">
-            Yeni stok için kulak yönü boş bırakılabilir. Satış sırasında hastaya
-            göre sağ / sol atanacak. Şarj cihazı seçtiğinizde kulak tarafı
-            otomatik olarak &quot;Yok&quot; olur.
+            Yeni stok için kulak yönü boş bırakılabilir. Satış sırasında hastaya göre sağ / sol
+            atanacak. Şarj cihazı seçtiğinizde kulak tarafı otomatik olarak &quot;Yok&quot; olur.
           </p>
         </div>
 
         {/* Barkod + Seri no */}
         <div className="sm:col-span-2 lg:col-span-2 grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Barkod
-            </label>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Barkod</label>
             <input
               type="text"
               value={formState.barcode}
-              onChange={(e) =>
-                setFormState((s) => ({ ...s, barcode: e.target.value }))
-              }
+              onChange={(e) => setFormState((s) => ({ ...s, barcode: e.target.value }))}
               className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Opsiyonel"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Seri No
-            </label>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Seri No</label>
             <input
               type="text"
               value={formState.serialNo}
-              onChange={(e) =>
-                setFormState((s) => ({ ...s, serialNo: e.target.value }))
-              }
+              onChange={(e) => setFormState((s) => ({ ...s, serialNo: e.target.value }))}
               className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Opsiyonel"
             />
@@ -208,9 +305,7 @@ export function InventoryNewItemFormCard({
         {/* Fiyatlar */}
         <div className="sm:col-span-2 lg:col-span-2 grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Geliş Fiyatı
-            </label>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Geliş Fiyatı</label>
             <input
               type="text"
               value={formState.purchasePrice}
@@ -225,9 +320,20 @@ export function InventoryNewItemFormCard({
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Tavsiye Satış Fiyatı
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                Tavsiye Satış Fiyatı
+              </label>
+              <button
+                type="button"
+                onClick={handleFillFromCatalog}
+                disabled={!canUseCatalog || isCatalogLoading}
+                className="text-[11px] font-medium text-primary-700 hover:text-primary-800 disabled:cursor-not-allowed disabled:opacity-60"
+                title="Marka + model + ürün tipine göre katalogtan fiyatları getirir"
+              >
+                {isCatalogLoading ? 'Katalog...' : 'Katalogtan Doldur'}
+              </button>
+            </div>
             <input
               type="text"
               value={formState.listPrice}
@@ -241,12 +347,14 @@ export function InventoryNewItemFormCard({
               placeholder="Örn. 40.000"
             />
             <p className="mt-1 text-[11px] text-slate-500">
-              Eğer hem &quot;Geliş Fiyatı&quot; hem de &quot;Tavsiye Satış
-              Fiyatı&quot; alanlarını boş bırakırsanız, kayıt sırasında cihaz
-              katalogundaki en güncel purchase/list fiyatları otomatik olarak
-              kullanılmaya çalışılır. Katalogta da yoksa sistem size hata
-              mesajı gösterir.
+              Eğer hem &quot;Geliş Fiyatı&quot; hem de &quot;Tavsiye Satış Fiyatı&quot; alanlarını
+              boş bırakırsanız, kayıt sırasında cihaz katalogundaki en güncel purchase/list fiyatları
+              otomatik olarak kullanılmaya çalışılır. Katalogta da yoksa sistem size hata mesajı
+              gösterir.
             </p>
+            {catalogHint && (
+              <p className="mt-1 text-[11px] text-slate-600">{catalogHint}</p>
+            )}
           </div>
         </div>
 
