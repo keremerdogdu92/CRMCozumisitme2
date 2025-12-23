@@ -1,11 +1,11 @@
 // src/features/trials/api.ts
 // Summary: Supabase-backed API helpers and React Query keys for trial (deneme) data.
 //
-// Patch v2.0 (soft delete support):
-// - Adds optional SoftDeleteMode-aware fetchers:
-//   fetchTrials({ mode }) / fetchTrialsByReferenceId(referenceId, { mode })
-// - Default behavior is "active" (deleted_at IS NULL) so staff/admin see clean lists.
-// - Admin UI can switch to "deleted" or "all" without changing DB schema beyond deleted_at.
+// Patch v2.1 (fix build + soft delete filter typing):
+// - Fixes Vercel/TS build errors by removing incorrect builder typing in applySoftDeleteModeFilter.
+//   Supabase select() returns a PostgrestFilterBuilder which supports .is() / .not().
+// - Keeps default fetch behavior as active-only (deleted_at IS NULL).
+// - Admin UI can request mode=deleted/all; RLS can still restrict staff to active-only.
 
 import { supabaseClient } from '../../utils/supabaseClient';
 import type {
@@ -37,14 +37,22 @@ type FetchTrialsOptions = {
    * - active: only not-deleted rows (default)
    * - deleted: only deleted rows
    * - all: deleted + not-deleted rows
+   *
+   * NOTE: RLS can enforce that staff only see active rows even if UI asks for others.
    */
   mode?: SoftDeleteMode;
 };
 
-function applySoftDeleteModeFilter(
-  query: ReturnType<typeof supabaseClient.from>,
-  mode: SoftDeleteMode,
-) {
+/**
+ * Applies soft-delete visibility filter to a Supabase select query.
+ *
+ * IMPORTANT:
+ * Do not type this as PostgrestQueryBuilder — select() returns a FilterBuilder
+ * which exposes .is()/.not() and other filtering methods.
+ *
+ * We keep typing intentionally permissive here to avoid coupling to internal generics.
+ */
+function applySoftDeleteModeFilter(query: any, mode: SoftDeleteMode) {
   if (mode === 'active') {
     return query.is('deleted_at', null);
   }
@@ -228,6 +236,8 @@ export async function fetchDeviceModelsByBrand(
 /**
  * Fetch trial_devices rows for a single trial, enriched with
  * catalog model data via trial_devices_with_catalog_public view.
+ *
+ * NOTE: trial_devices are not soft-deleted in this project (by design).
  */
 export async function fetchTrialDevicesByTrialId(
   trialId: string,
@@ -372,10 +382,8 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
 /**
  * RPC wrapper: link a trial to a newly created patient and then delete the trial.
  *
- * Server-side logic:
- * - Checks org isolation (caller org, trial org, patient org).
- * - Moves meetings.trial_id → meetings.patient_id and sets meeting_type = 'patient'.
- * - Deletes the trial row.
+ * IMPORTANT (soft delete plan):
+ * Prefer updating the RPC to set trials.deleted_at = now() (soft delete) instead of hard DELETE.
  */
 export async function linkTrialToPatientAndDelete(
   trialId: string,
