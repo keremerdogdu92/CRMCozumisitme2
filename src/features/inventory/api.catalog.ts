@@ -1,7 +1,7 @@
 // src/features/inventory/api.catalog.ts
-// Summary: Shared catalog price lookup helper for Inventory UI and flows.
-// Reads from current_device_model_prices_public (org-scoped). No caching here;
-// callers should decide when/how often to call.
+// Summary: Shared helper to fetch catalog prices (purchase/list) for Inventory UI.
+// Reads from current_device_model_prices_public, org-scoped.
+// Keeps parsing defensive because numeric columns may return as string.
 
 import { supabaseClient } from '../../utils/supabaseClient';
 import type { InventoryItemType } from './types';
@@ -11,13 +11,6 @@ export type InventoryCatalogPriceResult = {
   list_price: number | null;
 };
 
-/**
- * Fetch catalog prices for an (org_id, brand, model, item_type) tuple.
- * Returns null if not found.
- *
- * NOTE:
- * - Supabase numeric columns may come back as string → normalize to number.
- */
 export async function fetchCatalogPriceForInventory(args: {
   orgId: string;
   brand: string;
@@ -36,8 +29,8 @@ export async function fetchCatalogPriceForInventory(args: {
     .maybeSingle();
 
   if (error) {
-    console.error('Failed to load catalog prices:', error);
-    throw new Error('CATALOG_FETCH: ' + error.message);
+    console.error('Failed to load catalog prices for inventory:', error);
+    throw new Error('INVENTORY_CATALOG_FETCH: ' + error.message);
   }
 
   if (!data) return null;
