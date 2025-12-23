@@ -1,5 +1,9 @@
 // src/features/trials/types.ts
-// Shared TypeScript types for trial (deneme) entities used in UI and API.
+// Summary: Shared TypeScript types for trial (deneme) entities used in UI and API.
+//
+// v1.1:
+// - Adds optional soft-delete field `deleted_at` to support admin visibility filters
+//   (active / deleted / all) without polluting default lists.
 
 export type TrialRow = {
   id: string;
@@ -10,6 +14,13 @@ export type TrialRow = {
   created_at: string;
   reference_id: string | null;
   note: string | null;
+
+  /**
+   * Soft delete timestamp (timestamptz).
+   * When present, the row is considered deleted.
+   * Optional for backward compatibility while DB/view rollout completes.
+   */
+  deleted_at?: string | null;
 };
 
 /**
@@ -17,12 +28,12 @@ export type TrialRow = {
  * Each row corresponds to a row in trial_devices on the backend.
  */
 export type TrialDeviceFormRow = {
-  rowKey: string;      // local UI key, not persisted
-  side: string;        // 'both' | 'left' | 'right' | ''
-  brand: string;       // brand text
-  model: string;       // model text
-  listPrice: string;   // suggested list price (auto from catalog view, toplam)
-  quotePrice: string;  // user-entered total offer for this device row
+  rowKey: string; // local UI key, not persisted
+  side: string; // 'both' | 'left' | 'right' | ''
+  brand: string; // brand text
+  model: string; // model text
+  listPrice: string; // suggested list price (auto from catalog view, toplam)
+  quotePrice: string; // user-entered total offer for this device row
 };
 
 export type NewTrialForm = {
@@ -30,7 +41,7 @@ export type NewTrialForm = {
   fullName: string;
   phone: string;
   firstMeetAt: string; // datetime-local string, can be empty
-  nextMeetAt: string;  // datetime-local string, can be empty
+  nextMeetAt: string; // datetime-local string, can be empty
 
   // Optional reference link (who sent this trial)
   referenceId?: string | null;
