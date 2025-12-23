@@ -74,7 +74,9 @@ export function makeCatalogPriceKey(
   model: string,
   itemType: InventoryItemType,
 ): string {
-  return `${brand.trim().toLowerCase()}::${model.trim().toLowerCase()}::${itemType}`;
+  return `${brand.trim().toLowerCase()}::${model
+    .trim()
+    .toLowerCase()}::${itemType}`;
 }
 
 /**
@@ -233,8 +235,7 @@ export function buildInventoryImportPayload(args: {
 
     const rawPurchasePrice = (row['purchase_price'] ?? '').trim();
     const rawListPrice =
-      (row['list_price'] ?? '').trim() ||
-      (row['device_price'] ?? '').trim();
+      (row['list_price'] ?? '').trim() || (row['device_price'] ?? '').trim();
 
     const rawPurchaseDate = (row['purchase_date'] ?? '').trim();
 
@@ -248,12 +249,10 @@ export function buildInventoryImportPayload(args: {
     // 1) Marka / model / serial_no zorunlu
     if (!rawBrand) {
       valid = false;
-      blockingError =
-        'Marka (brand / device_brand) alanı boş olamaz.';
+      blockingError = 'Marka (brand / device_brand) alanı boş olamaz.';
     } else if (!rawModel) {
       valid = false;
-      blockingError =
-        'Model (model / device_model) alanı boş olamaz.';
+      blockingError = 'Model (model / device_model) alanı boş olamaz.';
     } else if (!rawSerialNo) {
       valid = false;
       blockingError = 'serial_no alanı boş olamaz.';
@@ -322,24 +321,14 @@ export function buildInventoryImportPayload(args: {
     }
 
     // 7) Hem CSV'de hem de hesaplanan değerlerde fiyat boşsa → katalogtan doldurmayı dene
-    if (
-      valid &&
-      purchasePrice == null &&
-      listPrice == null &&
-      catalogPriceMap
-    ) {
+    if (valid && purchasePrice == null && listPrice == null && catalogPriceMap) {
       const key = makeCatalogPriceKey(rawBrand, rawModel, itemType);
       const catalog = catalogPriceMap[key];
 
       if (catalog) {
         purchasePrice =
-          typeof catalog.purchase_price === 'number'
-            ? catalog.purchase_price
-            : null;
-        listPrice =
-          typeof catalog.list_price === 'number'
-            ? catalog.list_price
-            : null;
+          typeof catalog.purchase_price === 'number' ? catalog.purchase_price : null;
+        listPrice = typeof catalog.list_price === 'number' ? catalog.list_price : null;
 
         if (purchasePrice === null && listPrice === null) {
           // Katalog satırı var ama her iki fiyat da null → blocking error
@@ -360,11 +349,7 @@ export function buildInventoryImportPayload(args: {
     }
 
     const validation_error =
-      !valid
-        ? blockingError
-        : warnings.length > 0
-          ? warnings.join(' | ')
-          : null;
+      !valid ? blockingError : warnings.length > 0 ? warnings.join(' | ') : null;
 
     importRowsPayload.push({
       job_id: jobId,
@@ -380,9 +365,7 @@ export function buildInventoryImportPayload(args: {
       raw_purchase_date: rawPurchaseDate || null,
       raw_notes:
         rawNotes ||
-        (rawPatientNationalId
-          ? `legacy_patient_national_id=${rawPatientNationalId}`
-          : null),
+        (rawPatientNationalId ? `legacy_patient_national_id=${rawPatientNationalId}` : null),
       valid,
       validation_error,
     });
