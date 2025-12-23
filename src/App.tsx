@@ -1,4 +1,8 @@
 // src/App.tsx
+// Patch v2:
+// - Adds public routes: /forgot-password and /reset-password.
+// - Keeps ProtectedLayout for app routes only.
+
 import {
   Outlet,
   RouterProvider,
@@ -15,24 +19,18 @@ const MeetingsPage = lazy(() => import('./pages/MeetingsPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const PatientsPage = lazy(() => import('./pages/PatientsPage'));
 const TrialsPage = lazy(() => import('./pages/TrialsPage'));
 const ReferencesPage = lazy(() => import('./pages/ReferencesPage'));
 const ProfitCalculatorPage = lazy(
   () => import('./pages/ProfitCalculatorPage'),
 );
-// NEW: inventory page
 const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
-// NEW: reports page
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 
-/**
- * ProtectedLayout:
- * - Supabase session var mı kontrol eder
- * - Yoksa /login'e yönlendirir
- * - Varsa AppShell + Suspense + Outlet ile içeriği gösterir
- */
 function ProtectedLayout() {
   const [status, setStatus] = useState<'loading' | 'authed' | 'guest'>(
     'loading',
@@ -75,6 +73,26 @@ const router = createBrowserRouter([
       <AppProviders>
         <Suspense fallback={<LoadingScreen />}>
           <LoginPage />
+        </Suspense>
+      </AppProviders>
+    ),
+  },
+  {
+    path: '/forgot-password',
+    element: (
+      <AppProviders>
+        <Suspense fallback={<LoadingScreen />}>
+          <ForgotPasswordPage />
+        </Suspense>
+      </AppProviders>
+    ),
+  },
+  {
+    path: '/reset-password',
+    element: (
+      <AppProviders>
+        <Suspense fallback={<LoadingScreen />}>
+          <ResetPasswordPage />
         </Suspense>
       </AppProviders>
     ),
@@ -128,7 +146,6 @@ const router = createBrowserRouter([
         path: 'settings',
         element: <SettingsPage />,
       },
-      // NEW: reports route
       {
         path: 'reports',
         element: <ReportsPage />,
