@@ -109,7 +109,9 @@ export function ReferenceDetailDrawer({
             />
           )}
 
-          {activeTab === 'gifts' && <ReferenceGiftsSection />}
+          {activeTab === 'gifts' && (
+            <ReferenceGiftsSection referenceId={referenceId} />
+          )}
         </div>
       </div>
     </SideDrawer>
