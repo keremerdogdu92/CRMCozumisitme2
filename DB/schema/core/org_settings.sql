@@ -3,7 +3,7 @@
 --          other organization-level configuration (branding, contact info).
 -- Notes:
 --   - One row per org_id (PRIMARY KEY = org_id).
---   - Multi-tenant isolation via org_id + JWT claim (auth.jwt()->>'org_id').
+--   - Multi-tenant isolation via org_id resolved from profiles.org_id (auth.uid()).
 --   - Exposed via PostgREST as /rest/v1/org_settings.
 
 CREATE TABLE IF NOT EXISTS public.org_settings (
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS public.org_settings (
   CONSTRAINT org_settings_pkey PRIMARY KEY (org_id)
 );
 
--- Optional but recommended: link to orgs.id
+-- Link to orgs.id (matches DB: REFERENCES orgs(id) ON DELETE CASCADE)
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -36,38 +36,111 @@ BEGIN
   END IF;
 END$$;
 
--- Make sure RLS is enabled
+-- Make sure RLS is enabled (matches DB)
 ALTER TABLE public.org_settings ENABLE ROW LEVEL SECURITY;
 
--- Policy: users only see their own org row
+-- Drop old/legacy policies (from earlier repo versions) so repo matches DB
 DO $$
 BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
     SELECT 1 FROM pg_policies
     WHERE schemaname = 'public'
       AND tablename  = 'org_settings'
       AND policyname = 'org_settings_select_own_org'
   ) THEN
-    CREATE POLICY org_settings_select_own_org
-      ON public.org_settings
-      FOR SELECT
-      USING (org_id = (auth.jwt()->>'org_id')::uuid);
+    DROP POLICY org_settings_select_own_org ON public.org_settings;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename  = 'org_settings'
+      AND policyname = 'org_settings_upsert_own_org'
+  ) THEN
+    DROP POLICY org_settings_upsert_own_org ON public.org_settings;
   END IF;
 END$$;
 
--- Policy: users may insert/update their own org row
+-- Policies (match DB exactly: resolve org_id via profiles.org_id for auth.uid())
+
+-- SELECT
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
     WHERE schemaname = 'public'
       AND tablename  = 'org_settings'
-      AND policyname = 'org_settings_upsert_own_org'
+      AND policyname = 'org_settings_select_by_profile'
   ) THEN
-    CREATE POLICY org_settings_upsert_own_org
+    CREATE POLICY org_settings_select_by_profile
       ON public.org_settings
-      FOR INSERT, UPDATE
-      USING (org_id = (auth.jwt()->>'org_id')::uuid)
-      WITH CHECK (org_id = (auth.jwt()->>'org_id')::uuid);
+      FOR SELECT
+      TO public
+      USING (
+        org_id = (
+          SELECT profiles.org_id
+          FROM profiles
+          WHERE profiles.id = auth.uid()
+        )
+      );
   END IF;
 END$$;
+
+-- INSERT
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename  = 'org_settings'
+      AND policyname = 'org_settings_insert_by_profile'
+  ) THEN
+    CREATE POLICY org_settings_insert_by_profile
+      ON public.org_settings
+      FOR INSERT
+      TO public
+      WITH CHECK (
+        org_id = (
+          SELECT profiles.org_id
+          FROM profiles
+          WHERE profiles.id = auth.uid()
+        )
+      );
+  END IF;
+END$$;
+
+-- UPDATE
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename  = 'org_settings'
+      AND policyname = 'org_settings_update_by_profile'
+  ) THEN
+    CREATE POLICY org_settings_update_by_profile
+      ON public.org_settings
+      FOR UPDATE
+      TO public
+      USING (
+        org_id = (
+          SELECT profiles.org_id
+          FROM profiles
+          WHERE profiles.id = auth.uid()
+        )
+      )
+      WITH CHECK (
+        org_id = (
+          SELECT profiles.org_id
+          FROM profiles
+          WHERE profiles.id = auth.uid()
+        )
+      );
+  END IF;
+END$$;
+
+-- Grants (match DB output)
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.org_settings TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.org_settings TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.org_settings TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.org_settings TO postgres;
