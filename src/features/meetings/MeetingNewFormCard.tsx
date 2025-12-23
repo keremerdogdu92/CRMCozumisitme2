@@ -1,6 +1,13 @@
 // src/features/meetings/MeetingNewFormCard.tsx
 // Inline card with form to create a new meeting.
 // v2.5 – refactored: subject search + payment section moved to separate components.
+//
+// Patch v2.6:
+// - After saving a Patient meeting, we keep the form in place and show the
+//   Satisfaction Survey section below it (meetingId is now available).
+// - Adds a "Yeni Görüşme" button to reset the card after survey (or anytime).
+// - Avoids the old behavior of immediately clearing the form, which was breaking
+//   the intended "save meeting then save survey" flow.
 
 import { useState, FormEvent, useEffect } from 'react';
 import { useCreateMeetingMutation } from './api';
@@ -12,6 +19,7 @@ import type {
 import { useCurrentProfile } from '../auth/useCurrentProfile';
 import { MeetingSubjectSearchField } from './MeetingSubjectSearchField';
 import { MeetingPaymentSection } from './MeetingPaymentSection';
+import { MeetingSatisfactionSurveySection } from './MeetingSatisfactionSurveySection';
 
 const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string }[] = [
   { value: 'patient', label: 'Hasta' },
@@ -52,13 +60,17 @@ export function MeetingNewFormCard() {
   const [form, setForm] = useState<NewMeetingForm>(EMPTY_FORM);
   const [accessories, setAccessories] = useState<MeetingAccessoryDraft[]>([]);
   const [showAccessories, setShowAccessories] = useState(false);
+
+  // Created meeting context for the survey flow
+  const [createdMeetingId, setCreatedMeetingId] = useState<string | null>(null);
+  const [createdPatientId, setCreatedPatientId] = useState<string | null>(null);
+
   const { mutateAsync, isPending, isError, error } =
     useCreateMeetingMutation();
 
   const { data: profile } = useCurrentProfile();
   const isAdmin = profile?.role === 'admin';
 
-  // Hide "reference" type in UI for non-admin users
   const visibleTypeOptions = isAdmin
     ? MEETING_TYPE_OPTIONS
     : MEETING_TYPE_OPTIONS.filter((opt) => opt.value !== 'reference');
@@ -83,15 +95,47 @@ export function MeetingNewFormCard() {
     }
   }, [form.meetingType]);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    await mutateAsync({ ...form, accessories });
+  const showPaymentSection =
+    form.meetingType === 'patient' && !!form.subjectId;
+  const showAccessorySection =
+    form.meetingType === 'patient' && !!form.subjectId;
+
+  const isSurveyFlowActive =
+    !!createdMeetingId && !!createdPatientId;
+
+  const disableMainForm = isPending || isSurveyFlowActive;
+
+  const resetAll = () => {
     setForm(EMPTY_FORM);
     setAccessories([]);
     setShowAccessories(false);
+    setCreatedMeetingId(null);
+    setCreatedPatientId(null);
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+
+    // When survey flow is active, user should start a new meeting instead.
+    if (isSurveyFlowActive) return;
+
+    const meetingId = await mutateAsync({ ...form, accessories });
+
+    // Only Patient meetings can have satisfaction survey (needs patientId)
+    if (form.meetingType === 'patient' && form.subjectId) {
+      setCreatedMeetingId(meetingId);
+      setCreatedPatientId(form.subjectId);
+      return;
+    }
+
+    // For non-patient meeting types, keep old behavior (no survey)
+    resetAll();
   };
 
   const handleSubjectSelect = (id: string, name: string) => {
+    // If a meeting is already created, don't allow changing subject under it.
+    if (isSurveyFlowActive) return;
+
     setForm((f) => ({
       ...f,
       subjectId: id,
@@ -99,12 +143,9 @@ export function MeetingNewFormCard() {
     }));
   };
 
-  const showPaymentSection =
-    form.meetingType === 'patient' && !!form.subjectId;
-  const showAccessorySection =
-    form.meetingType === 'patient' && !!form.subjectId;
-
   const handleAddAccessory = () => {
+    if (isSurveyFlowActive) return;
+
     const localId =
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID()
@@ -126,24 +167,50 @@ export function MeetingNewFormCard() {
     index: number,
     patch: Partial<MeetingAccessoryDraft>,
   ) => {
+    if (isSurveyFlowActive) return;
+
     setAccessories((prev) =>
       prev.map((row, i) => (i === index ? { ...row, ...patch } : row)),
     );
   };
 
   const handleAccessoryRemove = (index: number) => {
+    if (isSurveyFlowActive) return;
+
     setAccessories((prev) => prev.filter((_, i) => i !== index));
   };
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-2 text-sm font-semibold text-slate-900">
-        Yeni Görüşme
-      </h2>
-      <p className="mb-4 text-xs text-slate-500">
-        Görüşme tipini, kişiyi, tarihleri ve notu girerek kayıt oluşturun.
-        Senetli hastalar için bu ekrandan ödeme de kaydedebilirsiniz.
-      </p>
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <h2 className="mb-1 text-sm font-semibold text-slate-900">
+            Yeni Görüşme
+          </h2>
+          <p className="text-xs text-slate-500">
+            Görüşme tipini, kişiyi, tarihleri ve notu girerek kayıt oluşturun.
+            Senetli hastalar için bu ekrandan ödeme de kaydedebilirsiniz.
+          </p>
+        </div>
+
+        {isSurveyFlowActive && (
+          <button
+            type="button"
+            className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            onClick={resetAll}
+          >
+            Yeni Görüşme
+          </button>
+        )}
+      </div>
+
+      {isSurveyFlowActive && (
+        <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
+          <p className="text-xs text-emerald-800">
+            Görüşme kaydedildi. Aşağıdan memnuniyet anketini doldurabilirsiniz.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-3">
         {/* Meeting type + person */}
@@ -153,8 +220,9 @@ export function MeetingNewFormCard() {
               Görüşme Tipi
             </label>
             <select
-              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
               value={form.meetingType}
+              disabled={disableMainForm}
               onChange={(e) =>
                 setForm((f) => ({
                   ...f,
@@ -185,11 +253,13 @@ export function MeetingNewFormCard() {
               Görüşme Yapılan Kişi
             </label>
 
-            <MeetingSubjectSearchField
-              meetingType={form.meetingType}
-              selectedName={form.subjectName}
-              onSelect={handleSubjectSelect}
-            />
+            <div className={disableMainForm ? 'pointer-events-none opacity-60' : ''}>
+              <MeetingSubjectSearchField
+                meetingType={form.meetingType}
+                selectedName={form.subjectName}
+                onSelect={handleSubjectSelect}
+              />
+            </div>
           </div>
         </div>
 
@@ -200,11 +270,10 @@ export function MeetingNewFormCard() {
           </label>
           <input
             type="text"
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
             value={form.subject}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, subject: e.target.value }))
-            }
+            disabled={disableMainForm}
+            onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
             placeholder="Örn: Ayar kontrolü, ilk görüşme..."
           />
         </div>
@@ -217,11 +286,10 @@ export function MeetingNewFormCard() {
             </label>
             <input
               type="date"
-              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
               value={form.at}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, at: e.target.value }))
-              }
+              disabled={disableMainForm}
+              onChange={(e) => setForm((f) => ({ ...f, at: e.target.value }))}
             />
           </div>
           <div>
@@ -230,8 +298,9 @@ export function MeetingNewFormCard() {
             </label>
             <input
               type="date"
-              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
               value={form.next_at}
+              disabled={disableMainForm}
               onChange={(e) =>
                 setForm((f) => ({ ...f, next_at: e.target.value }))
               }
@@ -249,8 +318,9 @@ export function MeetingNewFormCard() {
               type="number"
               min={1}
               max={10}
-              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
               value={form.satisfaction10}
+              disabled={disableMainForm}
               onChange={(e) =>
                 setForm((f) => ({ ...f, satisfaction10: e.target.value }))
               }
@@ -261,27 +331,30 @@ export function MeetingNewFormCard() {
 
         {/* Payment (senet) – only for patient meetings with selected person */}
         {showPaymentSection && form.subjectId && (
-          <MeetingPaymentSection
-            patientId={form.subjectId}
-            form={{
-              hasPayment: form.hasPayment,
-              paymentAmount: form.paymentAmount,
-              paymentNote: form.paymentNote,
-            }}
-            onChange={(patch) =>
-              setForm((f) => ({
-                ...f,
-                ...patch,
-              }))
-            }
-          />
+          <div className={disableMainForm ? 'pointer-events-none opacity-60' : ''}>
+            <MeetingPaymentSection
+              patientId={form.subjectId}
+              form={{
+                hasPayment: form.hasPayment,
+                paymentAmount: form.paymentAmount,
+                paymentNote: form.paymentNote,
+              }}
+              onChange={(patch) =>
+                setForm((f) => ({
+                  ...f,
+                  ...patch,
+                }))
+              }
+            />
+          </div>
         )}
 
         {showAccessorySection && (
           <div className="border-t border-dashed border-slate-200 pt-2">
             <button
               type="button"
-              className="mt-1 text-[11px] text-slate-500 underline"
+              className="mt-1 text-[11px] text-slate-500 underline disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={disableMainForm}
               onClick={() => setShowAccessories((v) => !v)}
             >
               Aksesuar ekle (opsiyonel)
@@ -307,8 +380,9 @@ export function MeetingNewFormCard() {
                           Aksesuar
                         </label>
                         <select
-                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
                           value={acc.type}
+                          disabled={disableMainForm}
                           onChange={(e) =>
                             handleAccessoryChange(index, {
                               type: e.target.value as MeetingAccessoryDraft['type'],
@@ -324,9 +398,10 @@ export function MeetingNewFormCard() {
                         {isOther && (
                           <input
                             type="text"
-                            className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                            className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
                             placeholder="Aksesuar adı"
                             value={acc.customName}
+                            disabled={disableMainForm}
                             onChange={(e) =>
                               handleAccessoryChange(index, {
                                 customName: e.target.value,
@@ -342,8 +417,9 @@ export function MeetingNewFormCard() {
                         </label>
                         <input
                           type="text"
-                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
                           value={acc.costPrice}
+                          disabled={disableMainForm}
                           onChange={(e) =>
                             handleAccessoryChange(index, {
                               costPrice: e.target.value,
@@ -359,8 +435,9 @@ export function MeetingNewFormCard() {
                         </label>
                         <input
                           type="text"
-                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
                           value={acc.salePrice}
+                          disabled={disableMainForm}
                           onChange={(e) =>
                             handleAccessoryChange(index, {
                               salePrice: e.target.value,
@@ -373,7 +450,8 @@ export function MeetingNewFormCard() {
                       <div className="flex items-end justify-end">
                         <button
                           type="button"
-                          className="text-[11px] text-red-600 underline"
+                          className="text-[11px] text-red-600 underline disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={disableMainForm}
                           onClick={() => handleAccessoryRemove(index)}
                         >
                           Sil
@@ -385,7 +463,8 @@ export function MeetingNewFormCard() {
 
                 <button
                   type="button"
-                  className="text-[11px] text-primary-600 underline"
+                  className="text-[11px] text-primary-600 underline disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={disableMainForm}
                   onClick={handleAddAccessory}
                 >
                   Aksesuar satırı ekle
@@ -401,12 +480,11 @@ export function MeetingNewFormCard() {
             Not
           </label>
           <textarea
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
             rows={3}
             value={form.note}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, note: e.target.value }))
-            }
+            disabled={disableMainForm}
+            onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
             placeholder="Görüşme içeriği, yapılan işlemler, notlar..."
           />
         </div>
@@ -420,12 +498,35 @@ export function MeetingNewFormCard() {
 
         <button
           type="submit"
-          disabled={isPending}
+          disabled={
+            isPending ||
+            isSurveyFlowActive ||
+            (form.meetingType === 'patient' && !form.subjectId)
+          }
           className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+          title={
+            form.meetingType === 'patient' && !form.subjectId
+              ? 'Hasta seçmeden görüşme kaydedilemez.'
+              : undefined
+          }
         >
           {isPending ? 'Kaydediliyor...' : 'Kaydet'}
         </button>
+
+        {isSurveyFlowActive && (
+          <p className="text-[11px] text-slate-500">
+            Yeni görüşme girmek için sağ üstteki “Yeni Görüşme” butonunu kullanın.
+          </p>
+        )}
       </form>
+
+      {/* Satisfaction Survey (only after patient meeting is created) */}
+      {createdMeetingId && createdPatientId && (
+        <MeetingSatisfactionSurveySection
+          meetingId={createdMeetingId}
+          patientId={createdPatientId}
+        />
+      )}
     </div>
   );
 }
