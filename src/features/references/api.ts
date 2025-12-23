@@ -1,5 +1,9 @@
 // src/features/references/api.ts
-// Supabase-backed API helpers and React Query keys for references data.
+// Summary: Supabase-backed API helpers and React Query keys for references data.
+// v2.2.0:
+// - ADD: SoftDeleteMode-aware list query (active/deleted/all) for admin screen.
+// - ADD: Staff-safe filters in autocomplete helpers (active + not deleted).
+// - ADD: deleted_at mapping.
 
 import { supabaseClient } from '../../utils/supabaseClient';
 import type {
@@ -7,12 +11,16 @@ import type {
   ReferenceRow,
   ReferenceGroup,
   ReferenceCommissionScheme,
+  SoftDeleteMode,
 } from './types';
 
-export const REFERENCES_QUERY_KEY = ['references'] as const;
+export const REFERENCES_QUERY_KEY = (mode: SoftDeleteMode) =>
+  ['references', mode] as const;
 
-export async function fetchReferences(): Promise<ReferenceRow[]> {
-  const { data, error } = await supabaseClient
+export async function fetchReferences(
+  mode: SoftDeleteMode,
+): Promise<ReferenceRow[]> {
+  let q = supabaseClient
     .from('references')
     .select(
       `
@@ -28,10 +36,19 @@ export async function fetchReferences(): Promise<ReferenceRow[]> {
       last_meet_at,
       next_meet_at,
       note,
-      created_at
+      created_at,
+      deleted_at
     `,
     )
     .order('created_at', { ascending: false });
+
+  if (mode === 'active') {
+    q = q.is('deleted_at', null);
+  } else if (mode === 'deleted') {
+    q = q.not('deleted_at', 'is', null);
+  }
+
+  const { data, error } = await q;
 
   if (error) {
     console.error('Supabase references fetch error:', error);
@@ -44,8 +61,7 @@ export async function fetchReferences(): Promise<ReferenceRow[]> {
       full_name: row.full_name ?? null,
       group: (row.group ?? null) as ReferenceGroup | null,
       phone: (row.phone ?? null) as string | null,
-      commission_scheme: (row.commission_scheme ??
-        null) as ReferenceCommissionScheme,
+      commission_scheme: (row.commission_scheme ?? null) as ReferenceCommissionScheme,
       commission_percent:
         row.commission_percent !== null && row.commission_percent !== undefined
           ? Number(row.commission_percent)
@@ -60,21 +76,22 @@ export async function fetchReferences(): Promise<ReferenceRow[]> {
           : row.is_active,
       ),
       contact_interval_days:
-        row.contact_interval_days !== null &&
-        row.contact_interval_days !== undefined
+        row.contact_interval_days !== null && row.contact_interval_days !== undefined
           ? Number(row.contact_interval_days)
           : null,
       last_meet_at: row.last_meet_at ?? null,
       next_meet_at: row.next_meet_at ?? null,
       note: row.note ?? null,
       created_at: row.created_at as string,
+      deleted_at: row.deleted_at ?? null,
     })) ?? []
   );
 }
 
 /**
  * Lightweight search helper for Meeting subject picker.
- * Returns only id + full_name, RLS ile zaten kendi org'unu görür.
+ * Staff should only see active + not-deleted references.
+ * RLS should also enforce this on DB side (recommended).
  */
 type ReferenceSearchRow = {
   id: string;
@@ -91,23 +108,20 @@ export async function searchReferencesByName(
     .from('references')
     .select('id, full_name')
     .ilike('full_name', `%${q}%`)
+    .is('deleted_at', null)
+    .eq('is_active', true)
     .order('full_name', { ascending: true })
     .limit(20);
 
   if (error) {
-    console.error(
-      'Supabase references search error (REF_STEP_SEARCH):',
-      error,
-    );
+    console.error('Supabase references search error (REF_STEP_SEARCH):', error);
     throw new Error('REF_STEP_SEARCH: ' + error.message);
   }
 
   return (data ?? []) as ReferenceSearchRow[];
 }
 
-export async function createReference(
-  input: NewReferenceForm,
-): Promise<void> {
+export async function createReference(input: NewReferenceForm): Promise<void> {
   const { data: userData, error: userError } =
     await supabaseClient.auth.getUser();
   if (userError) {
@@ -142,50 +156,39 @@ export async function createReference(
 
   const commission_percent =
     scheme === 'percent' ? (input.commissionPercent || 0) / 100 : null;
-  const commission_fixed =
-    scheme === 'fixed' ? input.commissionFixed || 0 : null;
+  const commission_fixed = scheme === 'fixed' ? input.commissionFixed || 0 : null;
 
   const contactInterval =
     input.contactIntervalDays.trim() === ''
       ? null
       : Number(input.contactIntervalDays);
 
-  const { error: insertError } = await supabaseClient
-    .from('references')
-    .insert({
-      org_id: profile.org_id,
-      full_name: input.fullName.trim() || null,
-      group: input.group || null,
-      phone: input.phone.trim() || null,
-      commission_scheme: scheme,
-      commission_percent,
-      commission_fixed,
-      is_active: input.isActive,
-      contact_interval_days:
-        Number.isFinite(contactInterval) && contactInterval! > 0
-          ? contactInterval
-          : null,
-      last_meet_at: input.lastMeetAt
-        ? new Date(input.lastMeetAt).toISOString()
-        : null,
-      next_meet_at: input.nextMeetAt
-        ? new Date(input.nextMeetAt).toISOString()
-        : null,
-      note: input.note.trim() || null,
-    });
+  const { error: insertError } = await supabaseClient.from('references').insert({
+    org_id: profile.org_id,
+    full_name: input.fullName.trim() || null,
+    group: input.group || null,
+    phone: input.phone.trim() || null,
+    commission_scheme: scheme,
+    commission_percent,
+    commission_fixed,
+    is_active: input.isActive,
+    contact_interval_days:
+      Number.isFinite(contactInterval) && contactInterval! > 0 ? contactInterval : null,
+    last_meet_at: input.lastMeetAt ? new Date(input.lastMeetAt).toISOString() : null,
+    next_meet_at: input.nextMeetAt ? new Date(input.nextMeetAt).toISOString() : null,
+    note: input.note.trim() || null,
+    deleted_at: null,
+  });
 
   if (insertError) {
-    console.error(
-      'Failed to insert reference (REF_STEP_INSERT):',
-      insertError,
-    );
+    console.error('Failed to insert reference (REF_STEP_INSERT):', insertError);
     throw new Error('REF_STEP_INSERT: ' + insertError.message);
   }
 }
 
 /**
  * Lightweight single-reference loader for detail views (trials, patients).
- * Only id + full_name döner; RLS org_id üzerinden zaten kısıtlı.
+ * Staff should only see active + not-deleted references.
  */
 export type ReferenceLiteForTrial = {
   id: string;
@@ -201,6 +204,8 @@ export async function fetchReferenceLiteById(
     .from('references')
     .select('id, full_name')
     .eq('id', id)
+    .is('deleted_at', null)
+    .eq('is_active', true)
     .maybeSingle();
 
   if (error) {
@@ -208,9 +213,7 @@ export async function fetchReferenceLiteById(
     throw error;
   }
 
-  if (!data) {
-    return null;
-  }
+  if (!data) return null;
 
   return {
     id: data.id as string,
