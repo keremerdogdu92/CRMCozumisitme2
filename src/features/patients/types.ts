@@ -17,6 +17,10 @@
 // v2.12:
 // - Clarifies invoice tracking fields (invoice_issued / invoice_issued_at) usage:
 //   * invoice_issued_at is set/cleared via a dedicated "Invoice Save" action in the detail drawer.
+//
+// v2.13:
+// - Adds soft-delete fields (deleted_at / deleted_by / delete_reason) to PatientRow.
+// - Adds is_battery_patient to PatientRow to match view selections and reporting needs.
 
 export type PatientPaymentMethod =
   | 'Tim'
@@ -34,6 +38,21 @@ export type PatientRow = {
   phone: string | null;
   created_at: string;
   last_visit_at: string | null;
+
+  /**
+   * Soft delete audit fields.
+   * - deleted_at: when the row was soft-deleted
+   * - deleted_by: auth.users.id of the user who deleted (if recorded)
+   * - delete_reason: optional short reason
+   *
+   * NOTE:
+   * - In normal (non-admin) list views, these fields may be missing or always null,
+   *   depending on whether the source view includes deleted rows.
+   */
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  delete_reason?: string | null;
+
   sgk_flag: boolean | null;
   sgk_prescription_received: boolean | null;
   sgk_recorded_to_system: boolean | null;
@@ -43,6 +62,13 @@ export type PatientRow = {
    * when it was recorded. Optional for backward compatibility.
    */
   sgk_recorded_to_system_at?: string | null;
+
+  /**
+   * Battery patient marker:
+   * True if patient ever received SGK battery prescription delivery.
+   * Optional for backward compatibility with older selects.
+   */
+  is_battery_patient?: boolean | null;
 
   /**
    * Extra SGK / satisfaction fields stored on patients.
