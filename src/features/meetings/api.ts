@@ -1,5 +1,12 @@
 // src/features/meetings/api.ts
-// Supabase-backed API helpers and React Query hooks for Meetings.
+// Summary: Supabase-backed API helpers and React Query hooks for Meetings.
+//
+// Patch v2.6:
+// - createMeeting() now returns the created meetingId (string) instead of void.
+//   This enables "save meeting first, then save survey" UX without hacks.
+// - useCreateMeetingMutation() is updated accordingly; callers can await mutateAsync()
+//   and receive meetingId.
+// - Query invalidation behavior is kept the same.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
@@ -260,7 +267,10 @@ export async function fetchMeetingAccessoriesByMeetingId(
   return (data ?? []) as MeetingAccessoryRow[];
 }
 
-export async function createMeeting(input: NewMeetingForm): Promise<void> {
+/**
+ * Creates a meeting and returns its id (meetingId).
+ */
+export async function createMeeting(input: NewMeetingForm): Promise<string> {
   // 1) Aktif kullanıcıyı al
   const { data: userData, error: userError } =
     await supabaseClient.auth.getUser();
@@ -303,16 +313,13 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
         );
 
   const atIso = input.at ? new Date(input.at).toISOString() : null;
-  const nextAtIso = input.next_at
-    ? new Date(input.next_at).toISOString()
-    : null;
+  const nextAtIso = input.next_at ? new Date(input.next_at).toISOString() : null;
 
   // Ödeme (sadece hasta tipi meeting için anlamlı)
   const paymentAmountNumber = (() => {
     try {
       return parseAmountString(input.paymentAmount);
     } catch (err) {
-      // Mesajı yukarı fırlatıyoruz ki UI'da gösterilsin
       if (err instanceof Error) {
         throw err;
       }
@@ -345,7 +352,6 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
       at: atIso,
       next_at: nextAtIso,
       satisfaction_10: satisfaction,
-      // created_by, profiles(id) ile aynı olduğu için direkt user.id
       created_by: user.id,
     })
     .select('id')
@@ -362,7 +368,7 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
       'Meeting insert did not return an id (MEET_STEP_INSERT_NO_ID)',
       insertedMeetings,
     );
-  throw new Error(
+    throw new Error(
       'MEET_STEP_INSERT_NO_ID: Meeting insert did not return an id',
     );
   }
@@ -376,8 +382,6 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
         meeting_id: meetingId,
         patient_id: input.subjectId,
         amount: paymentAmountNumber,
-        // NOTE: method artık CHECK constraint ile kısıtlı.
-        // Şimdilik meeting ekranından sadece 'Senet' kaydediyoruz.
         method: 'Senet',
         note: input.paymentNote.trim() || null,
       });
@@ -406,7 +410,6 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
         'Failed to insert meeting accessories (MEET_STEP_ACCESSORIES_INSERT):',
         accErr,
       );
-      // Meeting ve ödeme kaydedildi; kullanıcıya yine de hata göstermeyi tercih ediyoruz.
       if (accErr instanceof Error) {
         throw new Error(
           'MEET_STEP_ACCESSORIES_INSERT: ' + accErr.message,
@@ -415,6 +418,8 @@ export async function createMeeting(input: NewMeetingForm): Promise<void> {
       throw accErr;
     }
   }
+
+  return meetingId;
 }
 
 /**
@@ -438,11 +443,9 @@ export function useMeetingsQuery() {
 export function useCreateMeetingMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutation<string, Error, NewMeetingForm>({
     mutationFn: createMeeting,
     onSuccess: () => {
-      // Bu invalidation, ['meetings'] ile başlayan tüm queryKey'leri
-      // (ör: ['meetings'], ['meetings', 'trial', trialId], ['meetings', 'patient', patientId]) etkileyecek.
       queryClient.invalidateQueries({ queryKey: MEETINGS_QUERY_KEY });
     },
   });
