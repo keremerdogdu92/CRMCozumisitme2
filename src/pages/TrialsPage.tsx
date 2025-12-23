@@ -5,19 +5,23 @@
 // - ADD: focusId query param desteği (ör. /trials?focusId=<uuid>).
 //   * Eğer focusId varsa, filtre sadece bu ID'li denemeyi gösterir.
 //   * TrialsTable'a focusedId geçilerek satır highlight edilir.
+//
+// Patch v2.3 (soft delete admin filter):
+// - ADD: SoftDeleteMode state + admin-only SoftDeleteModeFilter.
+// - Default is "active" so deleted rows never appear unless admin selects.
+// - If focusId is present, effective mode becomes "all" to avoid hiding the target row.
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { TrialNewFormCard } from '../features/trials/TrialNewFormCard';
 import { TrialsTable } from '../features/trials/TrialsTable';
 import { TrialDetailDrawer } from '../features/trials/TrialDetailDrawer';
-import {
-  fetchTrials,
-  createTrial,
-  TRIALS_QUERY_KEY,
-} from '../features/trials/api';
+import { fetchTrials, createTrial } from '../features/trials/api';
 import type { NewTrialForm, TrialRow } from '../features/trials/types';
+import { useCurrentProfile } from '../features/auth/useCurrentProfile';
+import { SoftDeleteModeFilter } from '../components/table/SoftDeleteModeFilter';
+import type { SoftDeleteMode } from '../utils/softDelete/softDeleteTypes';
 
 const initialFormState: NewTrialForm = {
   fullName: '',
@@ -40,34 +44,43 @@ const initialFormState: NewTrialForm = {
 export default function TrialsPage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
+  const { data: profile } = useCurrentProfile();
 
   const [search, setSearch] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formState, setFormState] = useState<NewTrialForm>(initialFormState);
   const [detailTrial, setDetailTrial] = useState<TrialRow | null>(null);
 
-  const {
-    data,
-    isLoading,
-    isError,
-  } = useQuery({
-    queryKey: TRIALS_QUERY_KEY,
-    queryFn: fetchTrials,
+  const [softDeleteMode, setSoftDeleteMode] = useState<SoftDeleteMode>('active');
+
+  // Meetings üzerinden derin link desteği: /trials?focusId=<trialId>
+  const focusId = searchParams.get('focusId');
+
+  // If we deep-link to a specific row, don't accidentally hide it.
+  const effectiveSoftDeleteMode: SoftDeleteMode = focusId ? 'all' : softDeleteMode;
+
+  const isAdmin = profile?.role === 'admin';
+
+  const queryKey = useMemo(
+    () => ['trials', { softDeleteMode: effectiveSoftDeleteMode }] as const,
+    [effectiveSoftDeleteMode],
+  );
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey,
+    queryFn: () => fetchTrials({ mode: effectiveSoftDeleteMode }),
   });
 
   const createMutation = useMutation({
     mutationFn: createTrial,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: TRIALS_QUERY_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['trials'] });
       setFormState(initialFormState);
       setShowCreateForm(false);
     },
   });
 
   const trials = data ?? [];
-
-  // Meetings üzerinden derin link desteği: /trials?focusId=<trialId>
-  const focusId = searchParams.get('focusId');
 
   const filteredTrials = trials.filter((t) => {
     if (focusId) {
@@ -97,13 +110,11 @@ export default function TrialsPage() {
   if (isError) {
     return (
       <div className="p-8 text-sm text-red-600">
-        Deneme verileri alınırken bir hata oluştu. Lütfen Supabase
-        bağlantısını ve RLS ayarlarını kontrol edin.
+        Deneme verileri alınırken bir hata oluştu. Lütfen Supabase bağlantısını
+        ve RLS ayarlarını kontrol edin.
       </div>
     );
   }
-
-  const totalCount = trials.length;
 
   return (
     <div className="space-y-6 p-8">
@@ -112,7 +123,7 @@ export default function TrialsPage() {
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Denemeler</h2>
           <p className="mt-1 text-xs text-slate-500">
-            Toplam {totalCount} kayıt
+            Toplam {trials.length} kayıt
           </p>
           {focusId && (
             <p className="mt-1 text-[11px] text-primary-700">
@@ -169,6 +180,15 @@ export default function TrialsPage() {
         items={filteredTrials}
         onSelectRow={(t) => setDetailTrial(t)}
         focusedId={focusId}
+        toolbarRight={
+          isAdmin ? (
+            <SoftDeleteModeFilter
+              value={softDeleteMode}
+              onChange={(v) => setSoftDeleteMode(v)}
+              className={focusId ? 'opacity-60 pointer-events-none' : ''}
+            />
+          ) : null
+        }
       />
 
       {/* Detail drawer */}
