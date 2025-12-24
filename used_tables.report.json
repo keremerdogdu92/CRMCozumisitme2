@@ -1,0 +1,122 @@
+{
+  "tables": [
+    {
+      "name": "import_jobs",
+      "description": "Tracks CSV import jobs and their status; used across legacy device import and patient import processors."
+    },
+    {
+      "name": "patients_legacy_devices_import_rows",
+      "description": "Staging rows for legacy devices imported from CSV; used in import processor, import commit, and manual link functions."
+    },
+    {
+      "name": "patients_import_rows",
+      "description": "Staging rows for patient data imported from CSV; used in the patient import processor and fix-modals."
+    },
+    {
+      "name": "patients",
+      "description": "Main patient records; used for creating, updating, deleting, searching patients and linking inventory or prescription deliveries."
+    },
+    {
+      "name": "inventory_items",
+      "description": "Holds inventory items (devices, accessories, etc.); used for creation, listing, status updates and linking to patients."
+    },
+    {
+      "name": "trials",
+      "description": "Trial records for hearing aids; used to list and create trial entries."
+    },
+    {
+      "name": "trial_devices",
+      "description": "Devices associated with a trial; used to manage trial device entries."
+    },
+    {
+      "name": "profiles",
+      "description": "User profiles containing org_id and role; used to retrieve organization id for many operations."
+    },
+    {
+      "name": "meeting_payments",
+      "description": "Payments linked to meetings; used to record meeting payments and manage installment plans."
+    },
+    {
+      "name": "patient_installment_plans",
+      "description": "Installment plans for patient payments; used to manage and track patient installment plans."
+    },
+    {
+      "name": "meetings",
+      "description": "Patient appointments; used for listing and creating meetings and linking payments/accessories."
+    },
+    {
+      "name": "meeting_accessories",
+      "description": "Accessories sold during meetings; used to link accessories with specific meetings and patients."
+    },
+    {
+      "name": "meeting_satisfaction_question_lists",
+      "description": "Templates for satisfaction surveys; used to manage question lists for meetings."
+    },
+    {
+      "name": "meeting_satisfaction_questions",
+      "description": "Individual satisfaction survey questions; used when creating and editing survey templates."
+    },
+    {
+      "name": "meeting_satisfaction_answers",
+      "description": "Patient responses to satisfaction surveys; stores answers collected from meetings."
+    },
+    {
+      "name": "references",
+      "description": "Referral contacts; used to list, search and create reference entries."
+    },
+    {
+      "name": "org_settings",
+      "description": "Organization-level settings (e.g. company name, preferences); used to load and update settings."
+    },
+    {
+      "name": "device_catalog_models",
+      "description": "Device catalog model definitions; used in catalog import to create or update models."
+    },
+    {
+      "name": "device_catalog_prices",
+      "description": "Device catalog pricing entries; used in catalog import for adding price rows."
+    },
+    {
+      "name": "patient_sale_breakdown",
+      "description": "Line items for patient sales; used to track sale breakdowns per patient."
+    },
+    {
+      "name": "battery_prescription_deliveries",
+      "description": "Records battery prescription deliveries with quantities and SGK expected amounts; used for tracking deliveries."
+    },
+    {
+      "name": "device_repairs",
+      "description": "Device repair records; used to log repairs and update inventory item statuses."
+    },
+    {
+      "name": "inventory_import_rows",
+      "description": "Staging rows for inventory CSV import; used during inventory import processing."
+    },
+    {
+      "name": "reference_gifts",
+      "description": "Gifts and commissions given to reference contacts; used for listing, creating and updating reference gift records."
+    }
+  ],
+  "views": [
+    {
+      "name": "current_device_catalog_prices_public",
+      "description": "View returning the latest device catalog prices for the current organization."
+    },
+    {
+      "name": "current_device_model_prices_public",
+      "description": "View returning the latest device model prices for the current organization."
+    },
+    {
+      "name": "trial_devices_with_catalog_public",
+      "description": "View combining trial devices with catalog details for easier queries."
+    },
+    {
+      "name": "patient_list_with_device",
+      "description": "View listing patients with a summary of their current device."
+    },
+    {
+      "name": "patient_list_with_device_all",
+      "description": "View listing all devices associated with patients, not just the current device."
+    }
+  ]
+}
