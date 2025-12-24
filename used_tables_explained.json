@@ -1,0 +1,122 @@
+{
+  "tables": [
+    {
+      "name": "battery_prescription_deliveries",
+      "description": "Records battery prescription deliveries, quantities, and SGK reimbursement expectations for patients."
+    },
+    {
+      "name": "device_catalog_models",
+      "description": "Defines catalog items (brand, model, item_type) scoped by organisation; used during device catalog import to create or find models."
+    },
+    {
+      "name": "device_catalog_prices",
+      "description": "Stores price history for catalog models, with effective dates and purchase/list prices; updated during catalog import."
+    },
+    {
+      "name": "device_repairs",
+      "description": "Tracks repairs of inventory devices, including statuses, dates, and linkage to patients or meetings."
+    },
+    {
+      "name": "import_jobs",
+      "description": "Manages CSV import jobs (inventory, patients, trials, legacy devices) and their status, row counts, and error information."
+    },
+    {
+      "name": "inventory_import_rows",
+      "description": "Staging table for inventory CSV imports; holds parsed rows and validation status before committing to inventory_items."
+    },
+    {
+      "name": "inventory_items",
+      "description": "Primary inventory table storing devices and accessories, their status (in_stock, sold, repair), prices, and sale metadata."
+    },
+    {
+      "name": "meeting_accessories",
+      "description": "Associates accessories sold during a meeting with a patient and meeting, recording cost and sale price."
+    },
+    {
+      "name": "meeting_payments",
+      "description": "Records payments made during a meeting for a patient, including amount and payment method."
+    },
+    {
+      "name": "meeting_satisfaction_question_lists",
+      "description": "Templates of satisfaction survey question lists; each list holds multiple questions and can be activated/deactivated."
+    },
+    {
+      "name": "meeting_satisfaction_questions",
+      "description": "Individual satisfaction survey questions linked to a question list; includes order and active status."
+    },
+    {
+      "name": "meeting_satisfaction_answers",
+      "description": "Stores answers provided by patients to satisfaction surveys for meetings, linking to question and list IDs."
+    },
+    {
+      "name": "meetings",
+      "description": "Represents appointments or meetings with patients or trial subjects, including timing, notes, and references."
+    },
+    {
+      "name": "org_settings",
+      "description": "Per-organisation settings such as company name, contact details and branding; editable via settings UI."
+    },
+    {
+      "name": "patients",
+      "description": "Core patient records storing personal, contact, SGK and financial data; links to references and archives."
+    },
+    {
+      "name": "patients_import_rows",
+      "description": "Staging table for patient CSV imports; holds raw rows, normalized payload and status before committing to patients."
+    },
+    {
+      "name": "patients_legacy_devices_import_rows",
+      "description": "Staging table for importing legacy patient-device data; processed to create inventory_items and link to patients."
+    },
+    {
+      "name": "profiles",
+      "description": "User profiles holding org_id, role and admin flag; used to resolve organisation context across API calls."
+    },
+    {
+      "name": "reference_gifts",
+      "description": "Records gifts or commissions given to reference contacts for successful referrals."
+    },
+    {
+      "name": "references",
+      "description": "Stores referral contacts and their metadata (contact info, commission scheme, activity); linked to patients."
+    },
+    {
+      "name": "trial_devices",
+      "description": "Covers devices assigned to trials, including ear side and quoted price, linked to trials."
+    },
+    {
+      "name": "trials",
+      "description": "Represents trial period for prospective patients; holds contact info, meeting schedule and reference link."
+    },
+    {
+      "name": "patient_installment_plans",
+      "description": "Stores payment plans for patients including total amount, upfront payment, installment count and status."
+    },
+    {
+      "name": "patient_sale_breakdown",
+      "description": "Breaks down patient sales into payment methods and amounts; used when recording payments and reports."
+    }
+  ],
+  "views": [
+    {
+      "name": "current_device_model_prices_public",
+      "description": "View returning the most recent device model prices per organisation, used when creating inventory and fetching catalog."
+    },
+    {
+      "name": "current_device_catalog_prices_public",
+      "description": "View returning current catalog prices for devices per organisation."
+    },
+    {
+      "name": "trial_devices_with_catalog_public",
+      "description": "View joining trial devices with catalog models and prices for easier selection and reporting."
+    },
+    {
+      "name": "patient_list_with_device",
+      "description": "View listing patients with aggregated device information, used for patient list page."
+    },
+    {
+      "name": "patient_list_with_device_all",
+      "description": "View similar to patient_list_with_device but includes soft-deleted patients; used in admin contexts."
+    }
+  ]
+}
