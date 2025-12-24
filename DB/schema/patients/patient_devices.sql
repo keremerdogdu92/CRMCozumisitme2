@@ -1,7 +1,9 @@
--- db/schema/patients/patient_devices.sql
+-- DB/schema/patients/patient_devices.sql
 -- Purpose: Definition and RLS policies for patient_devices table.
 -- Links patients to their devices (current + legacy) at org scope.
--- Source of truth: Supabase table definition & policies.
+--
+-- v3.0.0 (2025-12-24):
+-- - SECURITY: Replace JWT org_id claim usage with helper-based org isolation (no JWT trust).
 
 ------------------------------------------------------------
 -- TABLE: public.patient_devices
@@ -48,33 +50,73 @@ FOR EACH ROW
 EXECUTE FUNCTION public.trg_patient_devices_set_archive();
 
 ------------------------------------------------------------
--- ROW LEVEL SECURITY (RLS)
+-- ROW LEVEL SECURITY (RLS) (multi-org, no JWT trust)
 ------------------------------------------------------------
 
 ALTER TABLE public.patient_devices ENABLE ROW LEVEL SECURITY;
 
--- SELECT: allow service_role or same-org users
-CREATE POLICY patient_devices_select
-ON public.patient_devices
-AS PERMISSIVE
-FOR SELECT
-TO public
-USING (
-  (auth.role() = 'service_role'::text)
-  OR (org_id::text = (auth.jwt() ->> 'org_id'::text))
-);
+DROP POLICY IF EXISTS patient_devices_select ON public.patient_devices;
+DROP POLICY IF EXISTS patient_devices_write ON public.patient_devices;
 
--- WRITE (INSERT / UPDATE / DELETE): allow service_role or same-org users
-CREATE POLICY patient_devices_write
+DROP POLICY IF EXISTS patient_devices_service_full_access ON public.patient_devices;
+DROP POLICY IF EXISTS patient_devices_select_by_org ON public.patient_devices;
+DROP POLICY IF EXISTS patient_devices_insert_by_org ON public.patient_devices;
+DROP POLICY IF EXISTS patient_devices_update_by_org ON public.patient_devices;
+DROP POLICY IF EXISTS patient_devices_delete_by_org ON public.patient_devices;
+
+-- service_role bypass
+CREATE POLICY patient_devices_service_full_access
 ON public.patient_devices
 AS PERMISSIVE
 FOR ALL
 TO public
+USING (auth.role() = 'service_role'::text)
+WITH CHECK (auth.role() = 'service_role'::text);
+
+-- SELECT
+CREATE POLICY patient_devices_select_by_org
+ON public.patient_devices
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
 USING (
-  (auth.role() = 'service_role'::text)
-  OR (org_id::text = (auth.jwt() ->> 'org_id'::text))
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
+);
+
+-- INSERT
+CREATE POLICY patient_devices_insert_by_org
+ON public.patient_devices
+AS PERMISSIVE
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
+);
+
+-- UPDATE
+CREATE POLICY patient_devices_update_by_org
+ON public.patient_devices
+AS PERMISSIVE
+FOR UPDATE
+TO authenticated
+USING (
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
 )
 WITH CHECK (
-  (auth.role() = 'service_role'::text)
-  OR (org_id::text = (auth.jwt() ->> 'org_id'::text))
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
+);
+
+-- DELETE (hard delete allowed for now)
+CREATE POLICY patient_devices_delete_by_org
+ON public.patient_devices
+AS PERMISSIVE
+FOR DELETE
+TO authenticated
+USING (
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
 );
