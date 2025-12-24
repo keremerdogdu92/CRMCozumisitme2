@@ -1,6 +1,10 @@
 {
   "tables": [
     {
+      "name": "archive_counters",
+      "description": "Maintains per-organisation monthly counters (yyyymm and seq) for generating sequential archive_code values; used by the set_patient_archive_code function triggered before inserting patients."
+    },
+    {
       "name": "battery_prescription_deliveries",
       "description": "Records battery prescription deliveries, quantities, and SGK reimbursement expectations for patients."
     },
