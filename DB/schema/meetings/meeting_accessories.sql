@@ -1,105 +1,83 @@
--- db/schema/meetings/meeting_accessories.sql
--- Purpose: Supabase table definition for `meeting_accessories`.
--- Stores accessory sales linked to meetings (filters, wax guards, batteries, etc.)
--- Includes: CREATE TABLE, constraints, indexes and RLS policies.
--- Source of truth: Supabase table editor / migrations.
---
--- v2.0.0 (2025-12-24):
--- - SECURITY: Replace profiles subquery org check with public.current_user_org_id().
+-- db/schema/public/meeting_accessories.sql
+-- Purpose: Supabase table definition for `public.meeting_accessories`.
+-- Summary: Accessory line-items attached to meetings and patients.
+-- Source-of-truth: Mirrors current DB columns/constraints/indexes/RLS/policies/grants.
+-- v1.0.1
 
-CREATE TABLE public.meeting_accessories (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  org_id uuid NOT NULL,
-  meeting_id uuid NOT NULL,
-  patient_id uuid NOT NULL,
-  name text NOT NULL,
-  cost_price numeric(12, 2) NOT NULL DEFAULT 0,
-  sale_price numeric(12, 2) NOT NULL DEFAULT 0,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-
-  CONSTRAINT meeting_accessories_pkey PRIMARY KEY (id),
-
-  CONSTRAINT meeting_accessories_meeting_id_fkey
-    FOREIGN KEY (meeting_id) REFERENCES public.meetings (id) ON DELETE CASCADE,
-
-  CONSTRAINT meeting_accessories_patient_id_fkey
-    FOREIGN KEY (patient_id) REFERENCES public.patients (id) ON DELETE RESTRICT,
-
-  CONSTRAINT meeting_accessories_cost_price_check CHECK (cost_price >= 0),
-  CONSTRAINT meeting_accessories_sale_price_check CHECK (sale_price >= 0)
-) TABLESPACE pg_default;
-
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_meeting_accessories_meeting_id
-  ON public.meeting_accessories USING btree (meeting_id)
-  TABLESPACE pg_default;
-
-CREATE INDEX IF NOT EXISTS idx_meeting_accessories_patient_id
-  ON public.meeting_accessories USING btree (patient_id)
-  TABLESPACE pg_default;
-
-CREATE INDEX IF NOT EXISTS idx_meeting_accessories_org_id
-  ON public.meeting_accessories USING btree (org_id)
-  TABLESPACE pg_default;
-
--- ============================================================
--- Row Level Security (RLS) for public.meeting_accessories
--- ============================================================
-
-ALTER TABLE public.meeting_accessories ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS meeting_accessories_select_by_org ON public.meeting_accessories;
-DROP POLICY IF EXISTS meeting_accessories_insert_by_org ON public.meeting_accessories;
-DROP POLICY IF EXISTS meeting_accessories_update_by_org ON public.meeting_accessories;
-DROP POLICY IF EXISTS meeting_accessories_service_role_all ON public.meeting_accessories;
-
--- SELECT
-CREATE POLICY meeting_accessories_select_by_org
-ON public.meeting_accessories
-AS PERMISSIVE
-FOR SELECT
-TO authenticated
-USING (
-  auth.role() = 'service_role'::text
-  OR org_id = public.current_user_org_id()
+create table if not exists public.meeting_accessories (
+  id uuid not null default gen_random_uuid(),
+  org_id uuid not null,
+  meeting_id uuid not null,
+  patient_id uuid not null,
+  name text not null,
+  cost_price numeric not null default 0,
+  sale_price numeric not null default 0,
+  created_at timestamptz not null default now(),
+  constraint meeting_accessories_pkey primary key (id),
+  constraint meeting_accessories_cost_price_check check (cost_price >= 0::numeric),
+  constraint meeting_accessories_sale_price_check check (sale_price >= 0::numeric),
+  constraint meeting_accessories_meeting_id_fkey
+    foreign key (meeting_id) references public.meetings (id) on delete cascade,
+  constraint meeting_accessories_patient_id_fkey
+    foreign key (patient_id) references public.patients (id) on delete restrict
 );
 
--- INSERT
-CREATE POLICY meeting_accessories_insert_by_org
-ON public.meeting_accessories
-AS PERMISSIVE
-FOR INSERT
-TO authenticated
-WITH CHECK (
-  auth.role() = 'service_role'::text
-  OR org_id = public.current_user_org_id()
-);
+-- Indexes (DB-truth)
+create unique index if not exists meeting_accessories_pkey
+  on public.meeting_accessories using btree (id);
 
--- UPDATE
-CREATE POLICY meeting_accessories_update_by_org
-ON public.meeting_accessories
-AS PERMISSIVE
-FOR UPDATE
-TO authenticated
-USING (
-  auth.role() = 'service_role'::text
-  OR org_id = public.current_user_org_id()
-)
-WITH CHECK (
-  auth.role() = 'service_role'::text
-  OR org_id = public.current_user_org_id()
-);
+create index if not exists idx_meeting_accessories_org_id
+  on public.meeting_accessories using btree (org_id);
 
--- Safety policy for service_role (in case bypassrls is not set)
-CREATE POLICY meeting_accessories_service_role_all
-ON public.meeting_accessories
-AS PERMISSIVE
-FOR ALL
-TO public
-USING (auth.role() = 'service_role'::text)
-WITH CHECK (auth.role() = 'service_role'::text);
+create index if not exists idx_meeting_accessories_meeting_id
+  on public.meeting_accessories using btree (meeting_id);
 
--- Grants (RLS still applies)
-REVOKE ALL ON TABLE public.meeting_accessories FROM anon;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.meeting_accessories TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.meeting_accessories TO service_role;
+create index if not exists idx_meeting_accessories_patient_id
+  on public.meeting_accessories using btree (patient_id);
+
+-- RLS
+alter table public.meeting_accessories enable row level security;
+
+-- Policies (DB-truth)
+drop policy if exists meeting_accessories_select_by_org on public.meeting_accessories;
+create policy meeting_accessories_select_by_org
+  on public.meeting_accessories
+  for select
+  to authenticated
+  using (
+    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+  );
+
+drop policy if exists meeting_accessories_insert_by_org on public.meeting_accessories;
+create policy meeting_accessories_insert_by_org
+  on public.meeting_accessories
+  for insert
+  to authenticated
+  with check (
+    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+  );
+
+drop policy if exists meeting_accessories_update_by_org on public.meeting_accessories;
+create policy meeting_accessories_update_by_org
+  on public.meeting_accessories
+  for update
+  to authenticated
+  using (
+    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+  )
+  with check (
+    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+  );
+
+drop policy if exists meeting_accessories_service_full_access on public.meeting_accessories;
+create policy meeting_accessories_service_full_access
+  on public.meeting_accessories
+  for all
+  to public
+  using (auth.role() = 'service_role'::text)
+  with check (auth.role() = 'service_role'::text);
+
+-- Grants
+revoke all on table public.meeting_accessories from public;
+grant all on table public.meeting_accessories to authenticated;
+grant all on table public.meeting_accessories to service_role;
