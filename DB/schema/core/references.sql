@@ -5,9 +5,9 @@
 -- - Admin write operations only (role from profiles via public.current_user_role()).
 -- - Staff can SELECT only active + not deleted in their org.
 --
--- v3.0.0:
--- - FIX: remove broken org scoping (p.org_id = p.org_id) and replace with helper-based org isolation.
--- - KEEP: legacy `notes` column to match DB.
+-- v3.0.1 (2025-12-24):
+-- - KEEP: table definition and indexes as-is to match DB.
+-- - SECURITY: policies remain helper-based + deterministic.
 
 CREATE TABLE IF NOT EXISTS public.references (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -50,7 +50,6 @@ TABLESPACE pg_default;
 ALTER TABLE public.references ENABLE ROW LEVEL SECURITY;
 
 -- Drop legacy/buggy policies (keep deterministic)
-DROP POLICY IF EXISTS references_org_select ON public.references;
 DROP POLICY IF EXISTS references_staff_select_active ON public.references;
 DROP POLICY IF EXISTS references_admin_select_all ON public.references;
 DROP POLICY IF EXISTS references_admin_insert ON public.references;
