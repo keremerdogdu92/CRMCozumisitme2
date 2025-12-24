@@ -4,16 +4,14 @@
 -- Includes: CREATE TABLE, constraints, indexes and RLS policies.
 -- Source of truth: Supabase table editor / migrations.
 --
--- [SECURITY NOTES]
---   - Row visibility:
---       * All authenticated users of the same org can SELECT.
---       * All authenticated users of the same org can INSERT/UPDATE/DELETE
---         repair records (staff + admin).
---       * `service_role` bypasses org checks and has full access.
---   - Multi-tenant isolation:
---       * org_id is enforced via JWT claim: auth.jwt()->>'org_id'.
+-- Multi-org standard:
+-- - Org isolation via public.current_user_org_id() (never JWT claims).
+-- - service_role bypass for backoffice/imports.
+--
+-- v3.0.0 (2025-12-24):
+-- - SECURITY: Replace JWT-claim org isolation with helper-based policies.
 
-CREATE TABLE public.device_repairs (
+CREATE TABLE IF NOT EXISTS public.device_repairs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL,
   device_id uuid NULL,
@@ -33,9 +31,9 @@ CREATE TABLE public.device_repairs (
   delivered_to_patient_at timestamp with time zone NULL,
   expected_delivery_meeting_id uuid NULL,
   last_status_changed timestamp with time zone NOT NULL DEFAULT now(),
+
   CONSTRAINT device_repairs_pkey PRIMARY KEY (id),
 
-  -- Foreign keys
   CONSTRAINT device_repairs_expected_delivery_meeting_id_fkey
     FOREIGN KEY (expected_delivery_meeting_id) REFERENCES public.meetings (id) ON DELETE SET NULL,
 
@@ -54,7 +52,6 @@ CREATE TABLE public.device_repairs (
   CONSTRAINT device_repairs_device_id_fkey
     FOREIGN KEY (device_id) REFERENCES public.devices (id) ON DELETE SET NULL,
 
-  -- Status validation
   CONSTRAINT device_repairs_status_check CHECK (
     status = ANY (
       ARRAY[
@@ -69,17 +66,14 @@ CREATE TABLE public.device_repairs (
   )
 ) TABLESPACE pg_default;
 
--- Index: Patient + Org
 CREATE INDEX IF NOT EXISTS device_repairs_org_patient_idx
 ON public.device_repairs USING btree (org_id, patient_id)
 TABLESPACE pg_default;
 
--- Index: Inventory reference
 CREATE INDEX IF NOT EXISTS device_repairs_inventory_idx
 ON public.device_repairs USING btree (inventory_item_id)
 TABLESPACE pg_default;
 
--- Index: Active repair workflow
 CREATE INDEX IF NOT EXISTS device_repairs_active_idx
 ON public.device_repairs USING btree (org_id, status)
 TABLESPACE pg_default
@@ -92,13 +86,23 @@ WHERE status = ANY (
   ]
 );
 
--- ============================================================
--- RLS POLICIES FOR public.device_repairs
--- ============================================================
-
 ALTER TABLE public.device_repairs ENABLE ROW LEVEL SECURITY;
 
--- 1) Org-level SELECT for all authenticated users (staff + admin)
+-- Drop legacy policies
+DROP POLICY IF EXISTS device_repairs_org_select ON public.device_repairs;
+DROP POLICY IF EXISTS device_repairs_org_write ON public.device_repairs;
+DROP POLICY IF EXISTS device_repairs_service_full_access ON public.device_repairs;
+
+-- service_role full access
+CREATE POLICY device_repairs_service_full_access
+ON public.device_repairs
+AS PERMISSIVE
+FOR ALL
+TO public
+USING (auth.role() = 'service_role'::text)
+WITH CHECK (auth.role() = 'service_role'::text);
+
+-- Org-level SELECT (staff + admin)
 CREATE POLICY device_repairs_org_select
 ON public.device_repairs
 AS PERMISSIVE
@@ -106,12 +110,10 @@ FOR SELECT
 TO authenticated
 USING (
   auth.role() = 'service_role'::text
-  OR device_repairs.org_id = (auth.jwt() ->> 'org_id')::uuid
+  OR org_id = public.current_user_org_id()
 );
 
--- 2) Org-level WRITE (INSERT/UPDATE/DELETE) for all authenticated users
---    Note: Postgres policy syntax only allows a single command token,
---    so we use FOR ALL to cover INSERT/UPDATE/DELETE together.
+-- Org-level WRITE (INSERT/UPDATE/DELETE) (staff + admin)
 CREATE POLICY device_repairs_org_write
 ON public.device_repairs
 AS PERMISSIVE
@@ -119,9 +121,13 @@ FOR ALL
 TO authenticated
 USING (
   auth.role() = 'service_role'::text
-  OR device_repairs.org_id = (auth.jwt() ->> 'org_id')::uuid
+  OR org_id = public.current_user_org_id()
 )
 WITH CHECK (
   auth.role() = 'service_role'::text
-  OR device_repairs.org_id = (auth.jwt() ->> 'org_id')::uuid
+  OR org_id = public.current_user_org_id()
 );
+
+REVOKE ALL ON TABLE public.device_repairs FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.device_repairs TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.device_repairs TO service_role;
