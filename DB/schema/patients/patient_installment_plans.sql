@@ -3,16 +3,9 @@
 -- Handles per-patient installment plans for a given org.
 -- Includes: CREATE TABLE, constraints, indexes and RLS policies.
 -- Enforces one active plan per patient per org.
--- Source of truth: Supabase table editor / migrations.
 --
--- [SECURITY NOTES]
---   - Row visibility:
---       * All authenticated users of the same org can SELECT.
---       * All authenticated users of the same org can INSERT/UPDATE/DELETE
---         installment plans (staff + admin).
---       * `service_role` bypasses org checks and has full access.
---   - Multi-tenant isolation:
---       * org_id is enforced via profiles.org_id (auth.uid() → profiles.org_id).
+-- v2.0.0 (2025-12-24):
+-- - SECURITY: Replace profiles subquery org check with public.current_user_org_id().
 
 CREATE TABLE public.patient_installment_plans (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -45,13 +38,12 @@ ON public.patient_installment_plans USING btree (org_id, patient_id)
 TABLESPACE pg_default
 WHERE status = 'active'::text;
 
--- ============================================================
--- RLS POLICIES FOR public.patient_installment_plans
--- ============================================================
-
 ALTER TABLE public.patient_installment_plans ENABLE ROW LEVEL SECURITY;
 
--- 1) Org-level SELECT for all authenticated users (staff + admin)
+DROP POLICY IF EXISTS patient_installment_plans_org_select ON public.patient_installment_plans;
+DROP POLICY IF EXISTS patient_installment_plans_org_write ON public.patient_installment_plans;
+DROP POLICY IF EXISTS patient_installment_plans_service_role_all ON public.patient_installment_plans;
+
 CREATE POLICY patient_installment_plans_org_select
 ON public.patient_installment_plans
 AS PERMISSIVE
@@ -59,14 +51,9 @@ FOR SELECT
 TO authenticated
 USING (
   auth.role() = 'service_role'::text
-  OR org_id IN (
-    SELECT p.org_id
-    FROM public.profiles AS p
-    WHERE p.id = auth.uid()
-  )
+  OR org_id = public.current_user_org_id()
 );
 
--- 2) Org-level WRITE (INSERT/UPDATE/DELETE) for all authenticated users
 CREATE POLICY patient_installment_plans_org_write
 ON public.patient_installment_plans
 AS PERMISSIVE
@@ -74,17 +61,21 @@ FOR ALL
 TO authenticated
 USING (
   auth.role() = 'service_role'::text
-  OR org_id IN (
-    SELECT p.org_id
-    FROM public.profiles AS p
-    WHERE p.id = auth.uid()
-  )
+  OR org_id = public.current_user_org_id()
 )
 WITH CHECK (
   auth.role() = 'service_role'::text
-  OR org_id IN (
-    SELECT p.org_id
-    FROM public.profiles AS p
-    WHERE p.id = auth.uid()
-  )
+  OR org_id = public.current_user_org_id()
 );
+
+CREATE POLICY patient_installment_plans_service_role_all
+ON public.patient_installment_plans
+AS PERMISSIVE
+FOR ALL
+TO public
+USING (auth.role() = 'service_role'::text)
+WITH CHECK (auth.role() = 'service_role'::text);
+
+REVOKE ALL ON TABLE public.patient_installment_plans FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.patient_installment_plans TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.patient_installment_plans TO service_role;
