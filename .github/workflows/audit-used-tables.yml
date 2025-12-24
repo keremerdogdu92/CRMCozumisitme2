@@ -1,0 +1,35 @@
+name: Audit Supabase Table Usage
+
+on:
+  # Elle tetikleme imkânı
+  workflow_dispatch:
+  # İsteğe bağlı: Her hafta Pazar 03:00 (UTC) çalışsın
+  schedule:
+    - cron: '0 3 * * 0'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          # Kendi personal token’ınızı kullanmadan push edebilmek için
+          persist-credentials: false
+          # Tüm Git geçmişini çekmek için
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Run used tables audit script
+        run: node scripts/audit-table-usage.mjs
+
+      - name: Commit & Push report
+        uses: actions-js/push@v1.5
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
+          message: 'chore: update used_tables.report.json'
