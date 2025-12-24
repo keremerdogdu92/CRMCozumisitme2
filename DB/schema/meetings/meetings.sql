@@ -1,12 +1,14 @@
--- db/schema/meetings/meetings.sql
--- Purpose: Supabase table definition for `meetings`.
--- Stores patient/trial/reference meetings with notes, satisfaction score and scheduling info.
--- Includes: CREATE TABLE, constraints, triggers and current RLS policies.
--- Source of truth: Supabase table editor / migrations.
+-- DB/schema/meetings/meetings.sql
+-- Purpose: Supabase table definition for `public.meetings`.
+-- Multi-org standard:
+-- - Org isolation via public.current_user_org_id().
+-- - Reference-type meetings visible/writable only to admin (within org).
+--
+-- v3.0.0:
+-- - Replace profiles-subquery org isolation with helper-based.
+-- - Add UPDATE policy (mirrors INSERT rule) to avoid edit failures.
 
--- TABLE DEFINITION -----------------------------------------------------------
-
-CREATE TABLE public.meetings (
+CREATE TABLE IF NOT EXISTS public.meetings (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL,
   subject text NULL,
@@ -50,76 +52,81 @@ CREATE TABLE public.meetings (
   )
 ) TABLESPACE pg_default;
 
--- TRIGGERS -------------------------------------------------------------------
+DROP TRIGGER IF EXISTS meeting_after_write_trigger ON public.meetings;
 
 CREATE TRIGGER meeting_after_write_trigger
 AFTER INSERT OR UPDATE ON public.meetings
 FOR EACH ROW
 EXECUTE FUNCTION meeting_after_write();
 
--- ROW LEVEL SECURITY (RLS) ---------------------------------------------------
--- These policies are copied from the Supabase UI (Policies tab for `public.meetings`).
-
 ALTER TABLE public.meetings ENABLE ROW LEVEL SECURITY;
 
--- Policy: meetings_select_by_org_and_type
--- Behavior: PERMISSIVE
--- Command:  SELECT
--- Roles:    authenticated
+-- Drop legacy policies
+DROP POLICY IF EXISTS "meetings_select_by_org_and_type" ON public.meetings;
+DROP POLICY IF EXISTS "meetings_insert_by_org_and_type" ON public.meetings;
+DROP POLICY IF EXISTS "meetings_update_by_org_and_type" ON public.meetings;
+
+-- SELECT
 CREATE POLICY "meetings_select_by_org_and_type"
-ON "public"."meetings"
+ON public.meetings
 AS PERMISSIVE
 FOR SELECT
 TO authenticated
 USING (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE
-      p.id = auth.uid()
-      AND p.org_id = meetings.org_id
-      AND (
-        p.role = 'admin'::text
-        OR meetings.meeting_type <> 'reference'::text
-      )
+  auth.role() = 'service_role'::text
+  OR (
+    org_id = public.current_user_org_id()
+    AND (
+      public.current_user_role() = 'admin'
+      OR meeting_type <> 'reference'::text
+    )
   )
 );
 
--- Policy: meetings_insert_by_org_and_type
--- Behavior: PERMISSIVE
--- Command:  INSERT
--- Roles:    authenticated
+-- INSERT
 CREATE POLICY "meetings_insert_by_org_and_type"
-ON "public"."meetings"
+ON public.meetings
 AS PERMISSIVE
 FOR INSERT
 TO authenticated
 WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE
-      p.id = auth.uid()
-      AND p.org_id = meetings.org_id
-      AND (
-        p.role = 'admin'::text
-        OR meetings.meeting_type <> 'reference'::text
-      )
+  auth.role() = 'service_role'::text
+  OR (
+    org_id = public.current_user_org_id()
+    AND (
+      public.current_user_role() = 'admin'
+      OR meeting_type <> 'reference'::text
+    )
   )
 );
 
--- DELETE STRATEGY / TODO -----------------------------------------------------
--- 1) Decide on delete model for meetings:
---    - Option A: add `deleted_at timestamptz` (soft delete),
---    - Option B: add `is_deleted boolean DEFAULT false`.
--- 2) Application default queries should exclude deleted meetings:
---    - e.g. WHERE deleted_at IS NULL (or is_deleted = false).
--- 3) Only admin users (profiles.role = 'admin') should be able to:
---    - hard DELETE meetings, or
---    - toggle the soft-delete flag.
--- 4) When a reference row is deleted/deactivated, decide how related
---    meetings should behave:
---    - keep history but hide in daily views,
---    - or show a warning in the UI when opening such meetings.
--- 5) After the soft-delete model is decided and implemented, add
---    corresponding RLS rules for DELETE (and/or UPDATE of deleted_at).
+-- UPDATE (needed for editing meetings)
+CREATE POLICY "meetings_update_by_org_and_type"
+ON public.meetings
+AS PERMISSIVE
+FOR UPDATE
+TO authenticated
+USING (
+  auth.role() = 'service_role'::text
+  OR (
+    org_id = public.current_user_org_id()
+    AND (
+      public.current_user_role() = 'admin'
+      OR meeting_type <> 'reference'::text
+    )
+  )
+)
+WITH CHECK (
+  auth.role() = 'service_role'::text
+  OR (
+    org_id = public.current_user_org_id()
+    AND (
+      public.current_user_role() = 'admin'
+      OR meeting_type <> 'reference'::text
+    )
+  )
+);
+
+REVOKE ALL ON TABLE public.meetings FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.meetings TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.meetings TO service_role;
