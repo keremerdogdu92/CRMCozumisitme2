@@ -1,9 +1,11 @@
--- db/schema/patients/patients.sql
--- Summary: Supabase table definition for `patients`, updated to include `sgk_recorded_to_system_at` (timestamptz).
+-- DB/schema/patients/patients.sql
+-- Summary: Supabase table definition for `patients`, includes `sgk_recorded_to_system_at` (timestamptz).
 -- Notes:
 -- - `sgk_recorded_to_system_at` is a nullable timestamptz with no default.
--- - TODO: `sgk_recorded_to_system_at` should be set when `sgk_recorded_to_system` is toggled to true (not implemented here).
--- - Source of truth: Supabase table editor / migrations.
+-- - TODO: `sgk_recorded_to_system_at` should be set when `sgk_recorded_to_system` is toggled to true (app-level).
+--
+-- v3.0.0 (2025-12-24):
+-- - SECURITY: Replace open RLS policy (USING true) with multi-org helper-based policies (no JWT trust).
 
 CREATE TABLE public.patients (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -40,11 +42,9 @@ CREATE TABLE public.patients (
   delete_reason text NULL,
 
   -- Battery patient marker:
-  -- True if patient ever received SGK battery prescription delivery.
-  -- This is used for reporting and UX (optional filters later).
   is_battery_patient boolean NOT NULL DEFAULT false,
 
-  -- New: timestamp for when sgk_recorded_to_system was recorded as true.
+  -- Timestamp for when sgk_recorded_to_system was recorded as true.
   sgk_recorded_to_system_at timestamptz NULL,
 
   CONSTRAINT patients_pkey PRIMARY KEY (id),
@@ -55,8 +55,6 @@ CREATE TABLE public.patients (
   CONSTRAINT patients_reference_id_fkey FOREIGN KEY (reference_id)
     REFERENCES public."references" (id) ON DELETE SET NULL,
 
-  -- IMPORTANT:
-  -- Allow legacy_unknown as a valid payment_method for legacy imports.
   CONSTRAINT patients_payment_method_check CHECK (
     payment_method IS NULL
     OR payment_method = ANY (
@@ -100,16 +98,71 @@ WHERE national_id IS NOT NULL
   AND deleted_at IS NULL;
 
 -- ============================================================
--- RLS POLICIES FOR public.patients
+-- RLS POLICIES FOR public.patients (multi-org, no JWT trust)
 -- ============================================================
 
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
 
--- Current production policy: allow ALL for authenticated role
-CREATE POLICY "patients_all_authenticated"
+DROP POLICY IF EXISTS patients_all_authenticated ON public.patients;
+DROP POLICY IF EXISTS patients_service_full_access ON public.patients;
+DROP POLICY IF EXISTS patients_select_by_org ON public.patients;
+DROP POLICY IF EXISTS patients_insert_by_org ON public.patients;
+DROP POLICY IF EXISTS patients_update_by_org ON public.patients;
+DROP POLICY IF EXISTS patients_delete_by_org ON public.patients;
+
+-- service_role bypass
+CREATE POLICY patients_service_full_access
 ON public.patients
 AS PERMISSIVE
 FOR ALL
+TO public
+USING (auth.role() = 'service_role'::text)
+WITH CHECK (auth.role() = 'service_role'::text);
+
+-- SELECT
+CREATE POLICY patients_select_by_org
+ON public.patients
+AS PERMISSIVE
+FOR SELECT
 TO authenticated
-USING (true)
-WITH CHECK (true);
+USING (
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
+);
+
+-- INSERT
+CREATE POLICY patients_insert_by_org
+ON public.patients
+AS PERMISSIVE
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
+);
+
+-- UPDATE
+CREATE POLICY patients_update_by_org
+ON public.patients
+AS PERMISSIVE
+FOR UPDATE
+TO authenticated
+USING (
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
+)
+WITH CHECK (
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
+);
+
+-- DELETE (hard delete allowed for now)
+CREATE POLICY patients_delete_by_org
+ON public.patients
+AS PERMISSIVE
+FOR DELETE
+TO authenticated
+USING (
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
+);
