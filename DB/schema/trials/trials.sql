@@ -4,12 +4,12 @@
 -- - Org isolation via public.current_user_org_id() (never JWT claims).
 -- - Staff SELECT: active-only (deleted_at IS NULL).
 -- - Admin SELECT: can see all (UI filter supports active/deleted/all).
--- - INSERT/UPDATE/DELETE: allowed within org (same as existing app behavior).
+-- - INSERT/UPDATE/DELETE: allowed within org (matches current app behavior).
 --
--- v3.0.0:
+-- v3.0.0 (2025-12-24):
 -- - REMOVE: JWT org_id usage.
--- - REMOVE: local current_user_role() re-definition (must be defined centrally in core/profiles.sql).
--- - ADD: deterministic policy set.
+-- - REQUIRE: helpers are defined centrally in core/profiles.sql.
+-- - ADD: deterministic policy set (drop + recreate).
 
 CREATE TABLE IF NOT EXISTS public.trials (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS public.trials (
   deleted_at timestamp with time zone NULL,
 
   CONSTRAINT trials_pkey PRIMARY KEY (id),
+
   CONSTRAINT trials_org_id_fkey
     FOREIGN KEY (org_id) REFERENCES public.orgs (id) ON DELETE CASCADE
 ) TABLESPACE pg_default;
@@ -40,7 +41,7 @@ DROP POLICY IF EXISTS "trials_org_insert" ON public.trials;
 DROP POLICY IF EXISTS "trials_org_update" ON public.trials;
 DROP POLICY IF EXISTS "trials_org_delete" ON public.trials;
 
--- Service role full access (optional but keeps parity with other tables)
+-- Service role full access
 CREATE POLICY "trials_service_full_access"
 ON public.trials
 AS PERMISSIVE
@@ -89,7 +90,7 @@ WITH CHECK (
   OR (org_id = public.current_user_org_id())
 );
 
--- DELETE: hard delete allowed within org (your current choice)
+-- DELETE: hard delete allowed within org (current choice)
 CREATE POLICY "trials_org_delete"
 ON public.trials
 AS PERMISSIVE
