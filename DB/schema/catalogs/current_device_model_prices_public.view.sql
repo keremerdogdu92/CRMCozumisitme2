@@ -4,7 +4,7 @@
 -- Security:
 --   - security_invoker = on → ensures RLS on underlying tables works correctly.
 
-CREATE VIEW public.current_device_model_prices_public
+CREATE OR REPLACE VIEW public.current_device_model_prices_public
 WITH (security_invoker = on) AS
 SELECT
   m.id,
