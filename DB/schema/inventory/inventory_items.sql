@@ -1,32 +1,14 @@
--- db/schema/inventory/inventory_items.sql
--- Purpose: Supabase table definition for `inventory_items`.
--- Includes: CREATE TABLE, constraints, indexes and RLS policies for inventory stock items.
--- Source of truth: Supabase table editor / migrations.
+-- DB/schema/inventory/inventory_items.sql
+-- Purpose: Supabase table definition for `public.inventory_items`.
+-- Multi-org standard:
+-- - Org isolation via public.current_user_org_id().
+-- - Soft delete via deleted_at (no hard delete policy by default).
 --
--- Deletion model: this table supports *soft delete* via `deleted_at`.
--- Hard DELETE için henüz RLS policy yok; PROD öncesi net karar ver.
---
--- [TODO-SECURITY-BEFORE-PROD]
---   1) Confirm that org isolation for inventory uses *profiles.org_id* consistently.
---      - Patients tarafında JWT org_id + user_metadata.org_id da kullanılıyor.
---      - Burada ise yalnızca profiles.org_id ile kontrol yapıyoruz.
---      Karar ver:
---        * Tüm sistem profiles.org_id mi kullanacak?
---        * Yoksa JWT claim'ine mi standardize edeceğiz?
---   2) Decide whether service_role should bypass RLS for this table.
---      - Şu an policies, service_role için özel bir istisna içermiyor.
---      - Eğer backend/cron işleri tüm org'ların stoklarını görmeli ise
---        auth.role() = 'service_role' için ayrı bir policy ekle.
---   3) Evaluate if DELETE operations are needed.
---      - Şu an sadece SELECT, INSERT, UPDATE için policy var.
---      - Eğer hard delete yapacaksan, DELETE için de org bazlı bir policy ekle
---        veya tamamen yasakla.
---   4) Re-run regression tests for:
---      - Single-org usage (stok CRUD)
---      - Multi-org izolasyonu (org A stokları org B tarafından görünmesin)
---      - Import jobs + inventory_import_rows ile birlikte çalışması.
+-- v3.0.0:
+-- - Replace profiles-subquery policies with helper-based policies.
+-- - Add service_role bypass policy (optional but typical for imports/backoffice).
 
-CREATE TABLE public.inventory_items (
+CREATE TABLE IF NOT EXISTS public.inventory_items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL,
   brand text NOT NULL,
@@ -49,108 +31,83 @@ CREATE TABLE public.inventory_items (
     REFERENCES public.orgs (id) ON DELETE CASCADE,
   CONSTRAINT inventory_items_ear_side_check CHECK (
     ear_side IS NULL
-    OR ear_side = ANY (
-      ARRAY['right'::text, 'left'::text, 'bilateral'::text]
-    )
+    OR ear_side = ANY (ARRAY['right'::text, 'left'::text, 'bilateral'::text])
   ),
   CONSTRAINT inventory_items_item_type_check CHECK (
-    item_type = ANY (
-      ARRAY['hearing_aid'::text, 'charger'::text]
-    )
+    item_type = ANY (ARRAY['hearing_aid'::text, 'charger'::text])
   ),
   CONSTRAINT inventory_items_status_check CHECK (
-    status = ANY (
-      ARRAY['in_stock'::text, 'sold'::text, 'repair'::text]
-    )
+    status = ANY (ARRAY['in_stock'::text, 'sold'::text, 'repair'::text])
   )
 ) TABLESPACE pg_default;
-
--- NOTE:
--- Barcode is NOT unique. Same model can have same barcode across multiple stock items,
--- and barcode may change with production series. We keep barcode as informational.
-
--- (Optional) If you ever need barcode search performance later, add a non-unique index.
--- CREATE INDEX IF NOT EXISTS inventory_items_org_barcode_idx
--- ON public.inventory_items USING btree (org_id, barcode)
--- TABLESPACE pg_default
--- WHERE barcode IS NOT NULL AND barcode <> '' AND deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS inventory_items_org_status_idx
 ON public.inventory_items USING btree (org_id, status)
 TABLESPACE pg_default;
 
--- Existing composite index (kept)
 CREATE INDEX IF NOT EXISTS inventory_items_org_brand_model_idx
 ON public.inventory_items USING btree (org_id, brand, model)
 TABLESPACE pg_default;
 
--- New: direct model index (helps when filtering/searching by model without brand)
 CREATE INDEX IF NOT EXISTS inventory_items_org_model_idx
 ON public.inventory_items USING btree (org_id, model)
 TABLESPACE pg_default
 WHERE deleted_at IS NULL;
 
--- ============================================================
--- RLS POLICIES FOR public.inventory_items
--- Exported from Supabase UI (policies tab).
--- ============================================================
-
 ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
 
--- 1) INSERT: only allow if there exists a profile with same org_id as the row
---    for the current auth.uid().
-CREATE POLICY "inventory_items_insert_by_org"
+-- Drop legacy policies
+DROP POLICY IF EXISTS "inventory_items_insert_by_org" ON public.inventory_items;
+DROP POLICY IF EXISTS "inventory_items_select_by_org" ON public.inventory_items;
+DROP POLICY IF EXISTS "inventory_items_update_by_org" ON public.inventory_items;
+DROP POLICY IF EXISTS "inventory_items_service_full_access" ON public.inventory_items;
+
+-- Service role full access (imports/backoffice)
+CREATE POLICY "inventory_items_service_full_access"
 ON public.inventory_items
 AS PERMISSIVE
-FOR INSERT
+FOR ALL
 TO public
-WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.org_id = inventory_items.org_id
-  )
-);
+USING (auth.role() = 'service_role'::text)
+WITH CHECK (auth.role() = 'service_role'::text);
 
--- 2) SELECT: only allow reading rows where user's profile org_id matches row org_id.
+-- Org-scoped SELECT
 CREATE POLICY "inventory_items_select_by_org"
 ON public.inventory_items
 AS PERMISSIVE
 FOR SELECT
-TO public
+TO authenticated
 USING (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.org_id = inventory_items.org_id
-  )
+  auth.role() = 'service_role'::text
+  OR (org_id = public.current_user_org_id())
 );
 
--- 3) UPDATE: only allow updating rows within user's org.
+-- Org-scoped INSERT
+CREATE POLICY "inventory_items_insert_by_org"
+ON public.inventory_items
+AS PERMISSIVE
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  auth.role() = 'service_role'::text
+  OR (org_id = public.current_user_org_id())
+);
+
+-- Org-scoped UPDATE
 CREATE POLICY "inventory_items_update_by_org"
 ON public.inventory_items
 AS PERMISSIVE
 FOR UPDATE
-TO public
+TO authenticated
 USING (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.org_id = inventory_items.org_id
-  )
+  auth.role() = 'service_role'::text
+  OR (org_id = public.current_user_org_id())
 )
 WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.org_id = inventory_items.org_id
-  )
+  auth.role() = 'service_role'::text
+  OR (org_id = public.current_user_org_id())
 );
 
--- NOTE:
--- - No DELETE policy is defined; prefer soft delete via `deleted_at`.
--- - Eğer hard DELETE eklenecekse, org_id kontrolü yukarıdaki ile birebir aynı olmalı.
+REVOKE ALL ON TABLE public.inventory_items FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.inventory_items TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.inventory_items TO service_role;
