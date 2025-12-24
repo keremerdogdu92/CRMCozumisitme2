@@ -1,8 +1,5 @@
 -- db/schema/patients/patient_list_with_device_all.view.sql
 -- Purpose: Admin/debug view for patient listing INCLUDING soft-deleted rows.
--- Same as patient_list_with_device, but without "p.deleted_at IS NULL" filter.
--- Adds deleted_at/deleted_by/delete_reason for admin UI.
---
 -- Security:
 --   - security_invoker = on → view runs with caller's permissions (RLS enforced on base tables).
 
@@ -25,14 +22,10 @@ WITH device_agg AS (
         THEN 'left'::text
       ELSE NULL::text
     END AS device_ear_side_summary
-  FROM
-    public.inventory_items AS i
-  WHERE
-    i.status = 'sold'::text
+  FROM public.inventory_items AS i
+  WHERE i.status = 'sold'::text
     AND i.sold_patient_id IS NOT NULL
-  GROUP BY
-    i.org_id,
-    i.sold_patient_id
+  GROUP BY i.org_id, i.sold_patient_id
 )
 SELECT
   p.org_id,
@@ -70,18 +63,9 @@ SELECT
   p.sgk_expected_reimbursement_month,
   p.is_battery_patient,
   p.sgk_recorded_to_system_at,
-
-  -- Soft delete audit fields (admin)
   p.deleted_at,
   p.deleted_by,
   p.delete_reason
-FROM
-  public.patients AS p
-  LEFT JOIN public."references" AS r
-    ON r.id = p.reference_id
-  LEFT JOIN device_agg AS da
-    ON da.patient_id = p.id
-   AND da.org_id = p.org_id;
-
--- NOTE:
--- RLS enforced on underlying tables.
+FROM public.patients AS p
+LEFT JOIN public."references" AS r ON r.id = p.reference_id
+LEFT JOIN device_agg AS da ON da.patient_id = p.id AND da.org_id = p.org_id;
