@@ -4,8 +4,9 @@
 -- - Org isolation via public.current_user_org_id()
 -- - Admin-only writes via public.current_user_role()
 --
--- v2.0.0:
--- - Use helper-based org isolation (no JWT, no ad-hoc profile subqueries).
+-- v2.0.1 (2025-12-24):
+-- - KEEP: table definition and indexes as-is to match DB.
+-- - SECURITY: policies remain helper-based + deterministic.
 
 CREATE TABLE IF NOT EXISTS public.reference_gifts (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
