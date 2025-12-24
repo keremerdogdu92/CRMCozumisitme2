@@ -1,119 +1,91 @@
--- db/schema/meetings/meeting_payments.sql
--- Purpose: Supabase table definition for `meeting_payments`.
--- Stores payments recorded during meetings for patients (Senet, Kredi Kartı, Nakit, etc.)
--- Includes: CREATE TABLE, constraints, indexes and RLS policies.
--- Source of truth: Supabase table editor / migrations.
--- Deletion model: meeting_payments currently has no soft-delete column.
--- Hard DELETE is not enabled via RLS (no DELETE policy). Prefer keeping rows,
--- or add a soft-delete column if deletion is needed later.
---
--- v2.0.0 (2025-12-24):
--- - SECURITY: Replace profiles subquery org check with public.current_user_org_id().
+-- db/schema/public/meeting_payments.sql
+-- Purpose: Supabase table definition for `public.meeting_payments`.
+-- Summary: Payment rows linked to meetings + patients.
+-- Source-of-truth: Mirrors current DB columns/constraints/indexes/RLS/policies/grants.
+-- v1.0.1
 
-CREATE TABLE public.meeting_payments (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  org_id uuid NOT NULL,
-  meeting_id uuid NOT NULL,
-  patient_id uuid NOT NULL,
-  amount numeric(12, 2) NOT NULL,
-  method text NOT NULL DEFAULT 'Senet'::text,
-  note text NULL,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
+create table if not exists public.meeting_payments (
+  id uuid not null default gen_random_uuid(),
+  org_id uuid not null,
+  meeting_id uuid not null,
+  patient_id uuid not null,
+  amount numeric not null,
+  method text not null default 'Senet'::text,
+  note text null,
+  created_at timestamptz not null default now(),
+  constraint meeting_payments_pkey primary key (id),
+  constraint meeting_payments_amount_check check (amount > 0::numeric),
+  constraint meeting_payments_method_check check (
+    method = any (array[
+      'Tim'::text,
+      'Sivantos'::text,
+      'Kredi_Kartı'::text,
+      'Nakit'::text,
+      'Senet'::text
+    ])
+  ),
+  constraint meeting_payments_meeting_id_fkey
+    foreign key (meeting_id) references public.meetings (id) on delete cascade,
+  constraint meeting_payments_patient_id_fkey
+    foreign key (patient_id) references public.patients (id) on delete restrict
+);
 
-  CONSTRAINT meeting_payments_pkey PRIMARY KEY (id),
+-- Indexes (DB-truth)
+create unique index if not exists meeting_payments_pkey
+  on public.meeting_payments using btree (id);
 
-  CONSTRAINT meeting_payments_meeting_id_fkey
-    FOREIGN KEY (meeting_id) REFERENCES public.meetings (id) ON DELETE CASCADE,
+create index if not exists idx_meeting_payments_org_id
+  on public.meeting_payments using btree (org_id);
 
-  CONSTRAINT meeting_payments_patient_id_fkey
-    FOREIGN KEY (patient_id) REFERENCES public.patients (id) ON DELETE RESTRICT,
+create index if not exists idx_meeting_payments_meeting_id
+  on public.meeting_payments using btree (meeting_id);
 
-  CONSTRAINT meeting_payments_amount_check CHECK (amount > 0),
+create index if not exists idx_meeting_payments_patient_id
+  on public.meeting_payments using btree (patient_id);
 
-  CONSTRAINT meeting_payments_method_check CHECK (
-    method = ANY (
-      ARRAY[
-        'Tim'::text,
-        'Sivantos'::text,
-        'Kredi_Kartı'::text,
-        'Nakit'::text,
-        'Senet'::text
-      ]
-    )
+-- RLS
+alter table public.meeting_payments enable row level security;
+
+-- Policies (DB-truth)
+drop policy if exists meeting_payments_select_by_org on public.meeting_payments;
+create policy meeting_payments_select_by_org
+  on public.meeting_payments
+  for select
+  to authenticated
+  using (
+    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+  );
+
+drop policy if exists meeting_payments_insert_by_org on public.meeting_payments;
+create policy meeting_payments_insert_by_org
+  on public.meeting_payments
+  for insert
+  to authenticated
+  with check (
+    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+  );
+
+drop policy if exists meeting_payments_update_by_org on public.meeting_payments;
+create policy meeting_payments_update_by_org
+  on public.meeting_payments
+  for update
+  to authenticated
+  using (
+    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
   )
-) TABLESPACE pg_default;
+  with check (
+    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+  );
 
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_meeting_payments_meeting_id
-  ON public.meeting_payments USING btree (meeting_id)
-  TABLESPACE pg_default;
+drop policy if exists meeting_payments_service_full_access on public.meeting_payments;
+create policy meeting_payments_service_full_access
+  on public.meeting_payments
+  for all
+  to public
+  using (auth.role() = 'service_role'::text)
+  with check (auth.role() = 'service_role'::text);
 
-CREATE INDEX IF NOT EXISTS idx_meeting_payments_patient_id
-  ON public.meeting_payments USING btree (patient_id)
-  TABLESPACE pg_default;
-
-CREATE INDEX IF NOT EXISTS idx_meeting_payments_org_id
-  ON public.meeting_payments USING btree (org_id)
-  TABLESPACE pg_default;
-
--- ---------------------------------------------------------------------------
--- Row Level Security (RLS)
--- ---------------------------------------------------------------------------
-
-ALTER TABLE public.meeting_payments ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS meeting_payments_select_by_org ON public.meeting_payments;
-DROP POLICY IF EXISTS meeting_payments_insert_by_org ON public.meeting_payments;
-DROP POLICY IF EXISTS meeting_payments_update_by_org ON public.meeting_payments;
-DROP POLICY IF EXISTS meeting_payments_service_role_all ON public.meeting_payments;
-
--- Org-scoped SELECT
-CREATE POLICY meeting_payments_select_by_org
-ON public.meeting_payments
-AS PERMISSIVE
-FOR SELECT
-TO authenticated
-USING (
-  auth.role() = 'service_role'::text
-  OR org_id = public.current_user_org_id()
-);
-
--- Org-scoped INSERT
-CREATE POLICY meeting_payments_insert_by_org
-ON public.meeting_payments
-AS PERMISSIVE
-FOR INSERT
-TO authenticated
-WITH CHECK (
-  auth.role() = 'service_role'::text
-  OR org_id = public.current_user_org_id()
-);
-
--- Org-scoped UPDATE
-CREATE POLICY meeting_payments_update_by_org
-ON public.meeting_payments
-AS PERMISSIVE
-FOR UPDATE
-TO authenticated
-USING (
-  auth.role() = 'service_role'::text
-  OR org_id = public.current_user_org_id()
-)
-WITH CHECK (
-  auth.role() = 'service_role'::text
-  OR org_id = public.current_user_org_id()
-);
-
--- Safety policy for service_role (in case bypassrls is not set)
-CREATE POLICY meeting_payments_service_role_all
-ON public.meeting_payments
-AS PERMISSIVE
-FOR ALL
-TO public
-USING (auth.role() = 'service_role'::text)
-WITH CHECK (auth.role() = 'service_role'::text);
-
--- Grants (RLS still applies)
-REVOKE ALL ON TABLE public.meeting_payments FROM anon;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.meeting_payments TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.meeting_payments TO service_role;
+-- Grants
+revoke all on table public.meeting_payments from public;
+grant all on table public.meeting_payments to authenticated;
+grant all on table public.meeting_payments to service_role;
