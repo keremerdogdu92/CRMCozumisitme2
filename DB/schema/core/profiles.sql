@@ -1,4 +1,4 @@
--- db/schema/core/profiles.sql
+-- DB/schema/core/profiles.sql
 -- Purpose: Supabase table definition for `public.profiles`.
 -- Stores per-user profile metadata such as org_id, role, and is_admin.
 -- Includes: CREATE TABLE, constraints, indexes, RLS + policies, grants,
@@ -9,10 +9,9 @@
 -- - Resolve org_id via profiles.id = auth.uid() using SECURITY DEFINER helper(s).
 -- - Prevent client-side changes to org_id/role/is_admin (protected fields) via trigger.
 --
--- v3.0.0:
--- - Add helper functions: current_user_org_id(), current_user_role()
--- - Replace JWT-based policies with helper-based policies
--- - Add trigger to protect org_id/role/is_admin from non-service updates
+-- v3.0.1 (2025-12-24):
+-- - FIX: helpers now use LIMIT 1 to avoid "more than one row" failure modes.
+-- - ADD: explicit function grants for authenticated + service_role.
 
 -- ============================================================
 -- TABLE
@@ -38,6 +37,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   )
 );
 
+-- Optional explicit unique index (PK already enforces this).
 CREATE UNIQUE INDEX IF NOT EXISTS profiles_pkey
   ON public.profiles USING btree (id);
 
@@ -57,6 +57,7 @@ AS $$
   SELECT p.org_id
   FROM public.profiles p
   WHERE p.id = auth.uid()
+  LIMIT 1;
 $$;
 
 CREATE OR REPLACE FUNCTION public.current_user_role()
@@ -69,7 +70,17 @@ AS $$
   SELECT p.role
   FROM public.profiles p
   WHERE p.id = auth.uid()
+  LIMIT 1;
 $$;
+
+REVOKE ALL ON FUNCTION public.current_user_org_id() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.current_user_role() FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.current_user_org_id() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.current_user_role() TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.current_user_org_id() TO service_role;
+GRANT EXECUTE ON FUNCTION public.current_user_role() TO service_role;
 
 -- ============================================================
 -- ROW LEVEL SECURITY
@@ -79,12 +90,13 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- Drop legacy policies (repo should be deterministic)
 DROP POLICY IF EXISTS profiles_select_self_and_org ON public.profiles;
-DROP POLICY IF EXISTS profiles_service_write ON public.profiles;
-DROP POLICY IF EXISTS profiles_write ON public.profiles;
+DROP POLICY IF EXISTS profiles_insert_service_only ON public.profiles;
+DROP POLICY IF EXISTS profiles_update_self ON public.profiles;
+DROP POLICY IF EXISTS profiles_delete_service_only ON public.profiles;
 
 -- SELECT:
 -- - User can always read own profile
--- - Users can read other profiles in their org (needed for admin/staff listings; safe because org-scoped)
+-- - Users can read other profiles in their org (needed for admin/staff listings)
 CREATE POLICY profiles_select_self_and_org
 ON public.profiles
 AS PERMISSIVE
@@ -96,8 +108,8 @@ USING (
 );
 
 -- INSERT:
--- Profiles rows are created only by the auth.users trigger (runs as SECURITY DEFINER)
--- and service_role (admin endpoints).
+-- Profiles rows should be created only by auth.users trigger (SECURITY DEFINER)
+-- and service_role.
 CREATE POLICY profiles_insert_service_only
 ON public.profiles
 AS PERMISSIVE
@@ -108,8 +120,8 @@ WITH CHECK (
 );
 
 -- UPDATE:
--- Allow a user to update their own row (e.g., name/phone if you add later),
--- but protected fields are enforced by a trigger below.
+-- Allow a user to update their own row (future: name/phone fields),
+-- protected fields are enforced by a trigger below.
 CREATE POLICY profiles_update_self
 ON public.profiles
 AS PERMISSIVE
@@ -215,11 +227,11 @@ EXECUTE FUNCTION public.handle_new_user_profile();
 -- GRANTS (RLS still applies)
 -- ============================================================
 
--- IMPORTANT:
--- - Do NOT grant anon write access. Keep minimal.
 REVOKE ALL ON TABLE public.profiles FROM anon;
 REVOKE ALL ON TABLE public.profiles FROM authenticated;
 
 GRANT SELECT ON TABLE public.profiles TO authenticated;
 GRANT UPDATE ON TABLE public.profiles TO authenticated; -- self-only via RLS
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.profiles TO service_role;
+
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+ON TABLE public.profiles TO service_role;
