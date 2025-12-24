@@ -1,17 +1,10 @@
 -- db/schema/patients/patient_sale_breakdown.sql
 -- Purpose: Supabase table definition for `patient_sale_breakdown`.
 -- Includes: CREATE TABLE, constraints, indexes and RLS policies for per-patient sale breakdown lines.
--- Source of truth: Supabase table editor / migrations.
 --
--- [TODO-SECURITY-BEFORE-PROD]
---   1) Confirm that org isolation for this table uses `public.profiles.org_id`
---      consistently with the rest of the system (patients, inventory, meetings).
---   2) Decide whether DELETE should be allowed on this table.
---      - Currently there is NO DELETE policy, so user-side deletes are blocked.
---      - If you add DELETE later, mirror the same org_id filter used below.
---   3) Decide whether `service_role` should bypass RLS here.
---      - Right now there is no explicit `auth.role() = 'service_role'` exception.
---      - If backend jobs must see all orgs, add a dedicated policy for that case.
+-- v2.0.0 (2025-12-24):
+-- - SECURITY: Replace profiles subquery org check with public.current_user_org_id().
+-- - ADD: explicit service_role safety policy.
 
 CREATE TABLE public.patient_sale_breakdown (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -35,67 +28,55 @@ CREATE INDEX IF NOT EXISTS idx_patient_sale_breakdown_org_patient
 ON public.patient_sale_breakdown USING btree (org_id, patient_id)
 TABLESPACE pg_default;
 
--- ============================================================
--- RLS POLICIES FOR public.patient_sale_breakdown
--- Exported / aligned with Supabase UI configuration.
--- ============================================================
-
 ALTER TABLE public.patient_sale_breakdown ENABLE ROW LEVEL SECURITY;
 
--- SELECT: only rows belonging to the current user's org
+DROP POLICY IF EXISTS patient_sale_breakdown_select_by_org ON public.patient_sale_breakdown;
+DROP POLICY IF EXISTS patient_sale_breakdown_insert_by_org ON public.patient_sale_breakdown;
+DROP POLICY IF EXISTS patient_sale_breakdown_update_by_org ON public.patient_sale_breakdown;
+DROP POLICY IF EXISTS patient_sale_breakdown_service_role_all ON public.patient_sale_breakdown;
+
 CREATE POLICY patient_sale_breakdown_select_by_org
 ON public.patient_sale_breakdown
 AS PERMISSIVE
 FOR SELECT
 TO authenticated
 USING (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.org_id = patient_sale_breakdown.org_id
-  )
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
 );
 
--- INSERT: user can only insert rows for their own org
 CREATE POLICY patient_sale_breakdown_insert_by_org
 ON public.patient_sale_breakdown
 AS PERMISSIVE
 FOR INSERT
 TO authenticated
 WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.org_id = patient_sale_breakdown.org_id
-  )
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
 );
 
--- UPDATE: user can only read/update rows for their own org
 CREATE POLICY patient_sale_breakdown_update_by_org
 ON public.patient_sale_breakdown
 AS PERMISSIVE
 FOR UPDATE
 TO authenticated
 USING (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.org_id = patient_sale_breakdown.org_id
-  )
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
 )
 WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.org_id = patient_sale_breakdown.org_id
-  )
+  auth.role() = 'service_role'::text
+  OR org_id = public.current_user_org_id()
 );
 
--- NOTE: No DELETE policy is defined.
---       As a result, regular users cannot delete rows from this table.
---       If delete support is required later, add a DELETE policy that
---       enforces the same org_id constraint as above.
+CREATE POLICY patient_sale_breakdown_service_role_all
+ON public.patient_sale_breakdown
+AS PERMISSIVE
+FOR ALL
+TO public
+USING (auth.role() = 'service_role'::text)
+WITH CHECK (auth.role() = 'service_role'::text);
+
+REVOKE ALL ON TABLE public.patient_sale_breakdown FROM anon;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.patient_sale_breakdown TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.patient_sale_breakdown TO service_role;
