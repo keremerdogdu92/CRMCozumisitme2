@@ -4,8 +4,8 @@
 -- - `sgk_recorded_to_system_at` is a nullable timestamptz with no default.
 -- - TODO: `sgk_recorded_to_system_at` should be set when `sgk_recorded_to_system` is toggled to true (app-level).
 --
--- v3.0.0 (2025-12-24):
--- - SECURITY: Replace open RLS policy (USING true) with multi-org helper-based policies (no JWT trust).
+-- v3.0.1 (2025-12-24):
+-- - SECURITY: helper-based RLS policies (no JWT trust) + deterministic policy set.
 
 CREATE TABLE public.patients (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -103,7 +103,6 @@ WHERE national_id IS NOT NULL
 
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS patients_all_authenticated ON public.patients;
 DROP POLICY IF EXISTS patients_service_full_access ON public.patients;
 DROP POLICY IF EXISTS patients_select_by_org ON public.patients;
 DROP POLICY IF EXISTS patients_insert_by_org ON public.patients;
@@ -166,3 +165,8 @@ USING (
   auth.role() = 'service_role'::text
   OR org_id = public.current_user_org_id()
 );
+
+-- Grants (RLS still applies)
+REVOKE ALL ON TABLE public.patients FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.patients TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.patients TO service_role;
