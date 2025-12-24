@@ -4,9 +4,9 @@
 -- - Org isolation via public.current_user_org_id().
 -- - Reference-type meetings visible/writable only to admin (within org).
 --
--- v3.0.0:
--- - Replace profiles-subquery org isolation with helper-based.
--- - Add UPDATE policy (mirrors INSERT rule) to avoid edit failures.
+-- v3.0.1 (2025-12-24):
+-- - KEEP: table + trigger as-is.
+-- - SECURITY: deterministic helper-based policies.
 
 CREATE TABLE IF NOT EXISTS public.meetings (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -62,12 +62,12 @@ EXECUTE FUNCTION meeting_after_write();
 ALTER TABLE public.meetings ENABLE ROW LEVEL SECURITY;
 
 -- Drop legacy policies
-DROP POLICY IF EXISTS "meetings_select_by_org_and_type" ON public.meetings;
-DROP POLICY IF EXISTS "meetings_insert_by_org_and_type" ON public.meetings;
-DROP POLICY IF EXISTS "meetings_update_by_org_and_type" ON public.meetings;
+DROP POLICY IF EXISTS meetings_select_by_org_and_type ON public.meetings;
+DROP POLICY IF EXISTS meetings_insert_by_org_and_type ON public.meetings;
+DROP POLICY IF EXISTS meetings_update_by_org_and_type ON public.meetings;
 
 -- SELECT
-CREATE POLICY "meetings_select_by_org_and_type"
+CREATE POLICY meetings_select_by_org_and_type
 ON public.meetings
 AS PERMISSIVE
 FOR SELECT
@@ -84,7 +84,7 @@ USING (
 );
 
 -- INSERT
-CREATE POLICY "meetings_insert_by_org_and_type"
+CREATE POLICY meetings_insert_by_org_and_type
 ON public.meetings
 AS PERMISSIVE
 FOR INSERT
@@ -101,7 +101,7 @@ WITH CHECK (
 );
 
 -- UPDATE (needed for editing meetings)
-CREATE POLICY "meetings_update_by_org_and_type"
+CREATE POLICY meetings_update_by_org_and_type
 ON public.meetings
 AS PERMISSIVE
 FOR UPDATE
