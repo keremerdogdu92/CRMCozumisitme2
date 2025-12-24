@@ -1,28 +1,13 @@
--- db/schema/trials/trial_devices.sql
--- Purpose: Supabase table definition for `trial_devices`.
--- Stores quoted devices (brand/model/side/price) attached to a trial.
--- Includes: CREATE TABLE, constraints and RLS policies.
--- Source of truth: Supabase table editor / migrations.
+-- DB/schema/trials/trial_devices.sql
+-- Purpose: Supabase table definition for `public.trial_devices`.
+-- Multi-org standard:
+-- - Org isolation via public.current_user_org_id().
 --
--- [RLS ÖNCEKİ DURUM NOTU]
---   Supabase UI’de eski policy’ler:
---     - debug_allow_all_trial_devices (ALL, USING true)
---     - Org insert for trial_devices
---     - Org insert for trial_devices via trials
---     - trial_devices_select
---     - trial_devices_write
---   Bunlar, org izolasyonu net olmadığı için yeniden yazıldı.
---
--- [TODO-SOFT-DELETE]
---   - Şu anda DELETE policy’leri gerçek (hard) delete yapar.
---   - Soft delete geçişinde:
---       * tabloya deleted_at (ve opsiyonel deleted_by) kolonu eklenecek,
---       * normal kullanıcılar için DELETE policy kaldırılacak,
---       * uygulama DELETE yerine UPDATE ... SET deleted_at = now() kullanacak,
---       * SELECT/UPDATE RLS, deleted_at IS NULL şartı ile güncellenecek.
---   - Ayrıntılı plan için: db/docs/soft_delete_plan.md
+-- v3.0.0:
+-- - Replace profiles-subquery policies with helper-based policies.
+-- - Keep hard delete for now.
 
-CREATE TABLE public.trial_devices (
+CREATE TABLE IF NOT EXISTS public.trial_devices (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL,
   trial_id uuid NOT NULL,
@@ -41,19 +26,20 @@ CREATE TABLE public.trial_devices (
 
   CONSTRAINT trial_devices_side_check CHECK (
     side IS NULL
-    OR side = ANY (
-      ARRAY['left'::text, 'right'::text, 'both'::text]
-    )
+    OR side = ANY (ARRAY['left'::text, 'right'::text, 'both'::text])
   )
 ) TABLESPACE pg_default;
 
--- ============================================================
--- RLS POLICIES FOR public.trial_devices
--- ============================================================
-
 ALTER TABLE public.trial_devices ENABLE ROW LEVEL SECURITY;
 
--- 1) Backend için full access (service_role)
+-- Drop legacy policies (names from your file + possible older ones)
+DROP POLICY IF EXISTS "trial_devices_service_full_access" ON public.trial_devices;
+DROP POLICY IF EXISTS "trial_devices_org_select" ON public.trial_devices;
+DROP POLICY IF EXISTS "trial_devices_org_insert" ON public.trial_devices;
+DROP POLICY IF EXISTS "trial_devices_org_update" ON public.trial_devices;
+DROP POLICY IF EXISTS "trial_devices_org_delete" ON public.trial_devices;
+
+-- Service role full access
 CREATE POLICY "trial_devices_service_full_access"
 ON public.trial_devices
 AS PERMISSIVE
@@ -62,65 +48,54 @@ TO public
 USING (auth.role() = 'service_role'::text)
 WITH CHECK (auth.role() = 'service_role'::text);
 
--- 2) Org-bazlı SELECT (normal kullanıcılar) – profiles üzerinden
+-- Org-scoped SELECT
 CREATE POLICY "trial_devices_org_select"
 ON public.trial_devices
 AS PERMISSIVE
 FOR SELECT
 TO authenticated
 USING (
-  org_id IN (
-    SELECT p.org_id
-    FROM public.profiles AS p
-    WHERE p.id = auth.uid()
-  )
+  auth.role() = 'service_role'::text
+  OR (org_id = public.current_user_org_id())
 );
 
--- 3) Org-bazlı INSERT (normal kullanıcılar) – profiles üzerinden
+-- Org-scoped INSERT
 CREATE POLICY "trial_devices_org_insert"
 ON public.trial_devices
 AS PERMISSIVE
 FOR INSERT
 TO authenticated
 WITH CHECK (
-  org_id IN (
-    SELECT p.org_id
-    FROM public.profiles AS p
-    WHERE p.id = auth.uid()
-  )
+  auth.role() = 'service_role'::text
+  OR (org_id = public.current_user_org_id())
 );
 
--- 4) Org-bazlı UPDATE (normal kullanıcılar) – profiles üzerinden
+-- Org-scoped UPDATE
 CREATE POLICY "trial_devices_org_update"
 ON public.trial_devices
 AS PERMISSIVE
 FOR UPDATE
 TO authenticated
 USING (
-  org_id IN (
-    SELECT p.org_id
-    FROM public.profiles AS p
-    WHERE p.id = auth.uid()
-  )
+  auth.role() = 'service_role'::text
+  OR (org_id = public.current_user_org_id())
 )
 WITH CHECK (
-  org_id IN (
-    SELECT p.org_id
-    FROM public.profiles AS p
-    WHERE p.id = auth.uid()
-  )
+  auth.role() = 'service_role'::text
+  OR (org_id = public.current_user_org_id())
 );
 
--- 5) Org-bazlı DELETE (normal kullanıcılar) – şu an HARD DELETE, profiles üzerinden
+-- Org-scoped DELETE (hard delete for now)
 CREATE POLICY "trial_devices_org_delete"
 ON public.trial_devices
 AS PERMISSIVE
 FOR DELETE
 TO authenticated
 USING (
-  org_id IN (
-    SELECT p.org_id
-    FROM public.profiles AS p
-    WHERE p.id = auth.uid()
-  )
+  auth.role() = 'service_role'::text
+  OR (org_id = public.current_user_org_id())
 );
+
+REVOKE ALL ON TABLE public.trial_devices FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.trial_devices TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.trial_devices TO service_role;
