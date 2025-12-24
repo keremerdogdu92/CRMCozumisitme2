@@ -3,15 +3,16 @@
 -- Stores per-user profile metadata such as org_id, role, and is_admin.
 -- Includes: CREATE TABLE, constraints, indexes, RLS + policies, grants,
 --           and auth.users -> profiles bootstrap function/trigger.
--- Source of truth: Supabase live DB schema (verified via SQL Editor).
 --
--- Patch v2.4 (DB-aligned, snapshot-style):
--- - Matches live columns, defaults, constraints.
--- - Matches live RLS policies.
--- - Matches live handle_new_user_profile() function.
--- - Matches live auth.users trigger:
---     on_auth_user_created_create_profile
--- - No duplicate-trigger cleanup logic (already cleaned in DB).
+-- Multi-org standard:
+-- - Never trust org_id from JWT claims in RLS.
+-- - Resolve org_id via profiles.id = auth.uid() using SECURITY DEFINER helper(s).
+-- - Prevent client-side changes to org_id/role/is_admin (protected fields) via trigger.
+--
+-- v3.0.0:
+-- - Add helper functions: current_user_org_id(), current_user_role()
+-- - Replace JWT-based policies with helper-based policies
+-- - Add trigger to protect org_id/role/is_admin from non-service updates
 
 -- ============================================================
 -- TABLE
@@ -37,9 +38,38 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   )
 );
 
--- Primary key index (as in DB)
 CREATE UNIQUE INDEX IF NOT EXISTS profiles_pkey
   ON public.profiles USING btree (id);
+
+-- ============================================================
+-- HELPERS (RLS foundation)
+-- ============================================================
+
+-- Resolve the caller's org_id via profiles.
+-- SECURITY DEFINER is required so RLS checks don't deadlock on profiles access.
+CREATE OR REPLACE FUNCTION public.current_user_org_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT p.org_id
+  FROM public.profiles p
+  WHERE p.id = auth.uid()
+$$;
+
+CREATE OR REPLACE FUNCTION public.current_user_role()
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT p.role
+  FROM public.profiles p
+  WHERE p.id = auth.uid()
+$$;
 
 -- ============================================================
 -- ROW LEVEL SECURITY
@@ -47,8 +77,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS profiles_pkey
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- 1) SELECT: self OR same-org (JWT org_id fallback to user_metadata.org_id)
+-- Drop legacy policies (repo should be deterministic)
 DROP POLICY IF EXISTS profiles_select_self_and_org ON public.profiles;
+DROP POLICY IF EXISTS profiles_service_write ON public.profiles;
+DROP POLICY IF EXISTS profiles_write ON public.profiles;
+
+-- SELECT:
+-- - User can always read own profile
+-- - Users can read other profiles in their org (needed for admin/staff listings; safe because org-scoped)
 CREATE POLICY profiles_select_self_and_org
 ON public.profiles
 AS PERMISSIVE
@@ -56,82 +92,117 @@ FOR SELECT
 TO authenticated
 USING (
   (id = auth.uid())
-  OR ((org_id)::text = COALESCE(
-    (auth.jwt() ->> 'org_id'::text),
-    ((auth.jwt() -> 'user_metadata'::text) ->> 'org_id'::text)
-  ))
+  OR (org_id = public.current_user_org_id())
 );
 
--- 2) Service role: full access
-DROP POLICY IF EXISTS profiles_service_write ON public.profiles;
-CREATE POLICY profiles_service_write
+-- INSERT:
+-- Profiles rows are created only by the auth.users trigger (runs as SECURITY DEFINER)
+-- and service_role (admin endpoints).
+CREATE POLICY profiles_insert_service_only
 ON public.profiles
 AS PERMISSIVE
-FOR ALL
+FOR INSERT
 TO public
-USING (
-  auth.role() = 'service_role'::text
-)
 WITH CHECK (
   auth.role() = 'service_role'::text
 );
 
--- 3) Org-scoped writes
-DROP POLICY IF EXISTS profiles_write ON public.profiles;
-CREATE POLICY profiles_write
+-- UPDATE:
+-- Allow a user to update their own row (e.g., name/phone if you add later),
+-- but protected fields are enforced by a trigger below.
+CREATE POLICY profiles_update_self
 ON public.profiles
 AS PERMISSIVE
-FOR ALL
+FOR UPDATE
+TO authenticated
+USING (id = auth.uid())
+WITH CHECK (id = auth.uid());
+
+-- DELETE:
+CREATE POLICY profiles_delete_service_only
+ON public.profiles
+AS PERMISSIVE
+FOR DELETE
 TO public
 USING (
-  (auth.role() = 'service_role'::text)
-  OR ((org_id)::text = (auth.jwt() ->> 'org_id'::text))
-)
-WITH CHECK (
-  (auth.role() = 'service_role'::text)
-  OR ((org_id)::text = (auth.jwt() ->> 'org_id'::text))
+  auth.role() = 'service_role'::text
 );
+
+-- ============================================================
+-- PROTECT PROTECTED FIELDS (org_id / role / is_admin)
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.profiles_protect_fields()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $function$
+BEGIN
+  -- service_role can do anything
+  IF auth.role() = 'service_role'::text THEN
+    RETURN NEW;
+  END IF;
+
+  -- Block changes to protected fields for non-service callers
+  IF (NEW.org_id IS DISTINCT FROM OLD.org_id) THEN
+    RAISE EXCEPTION 'profiles.org_id is immutable for non-service updates';
+  END IF;
+
+  IF (NEW.role IS DISTINCT FROM OLD.role) THEN
+    RAISE EXCEPTION 'profiles.role is immutable for non-service updates';
+  END IF;
+
+  IF (NEW.is_admin IS DISTINCT FROM OLD.is_admin) THEN
+    RAISE EXCEPTION 'profiles.is_admin is immutable for non-service updates';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS trg_profiles_protect_fields ON public.profiles;
+
+CREATE TRIGGER trg_profiles_protect_fields
+BEFORE UPDATE ON public.profiles
+FOR EACH ROW
+EXECUTE FUNCTION public.profiles_protect_fields();
 
 -- ============================================================
 -- AUTH → PROFILES BOOTSTRAP
 -- ============================================================
 
--- Function: public.handle_new_user_profile()
--- Called by auth.users trigger after INSERT.
 CREATE OR REPLACE FUNCTION public.handle_new_user_profile()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $function$
-declare
+DECLARE
   v_org_id uuid;
   v_role text;
-begin
+BEGIN
   -- org_id must come from user_metadata
   v_org_id := nullif(new.raw_user_meta_data->>'org_id', '')::uuid;
 
   -- role defaults to staff
   v_role := coalesce(nullif(new.raw_user_meta_data->>'role', ''), 'staff');
 
-  if v_role not in ('admin','staff') then
+  IF v_role NOT IN ('admin','staff') THEN
     v_role := 'staff';
-  end if;
+  END IF;
 
-  if v_org_id is null then
-    raise exception 'org_id is required in user_metadata to create profile';
-  end if;
+  IF v_org_id IS NULL THEN
+    RAISE EXCEPTION 'org_id is required in user_metadata to create profile';
+  END IF;
 
-  insert into public.profiles (id, org_id, role, is_admin)
-  values (new.id, v_org_id, v_role, (v_role = 'admin'))
-  on conflict (id) do nothing;
+  INSERT INTO public.profiles (id, org_id, role, is_admin)
+  VALUES (new.id, v_org_id, v_role, (v_role = 'admin'))
+  ON CONFLICT (id) DO NOTHING;
 
-  return new;
-end;
+  RETURN new;
+END;
 $function$;
-
--- ============================================================
--- TRIGGER (live DB)
--- ============================================================
 
 DROP TRIGGER IF EXISTS on_auth_user_created_create_profile ON auth.users;
 
@@ -141,14 +212,14 @@ FOR EACH ROW
 EXECUTE FUNCTION public.handle_new_user_profile();
 
 -- ============================================================
--- GRANTS (as in DB; RLS still applies)
+-- GRANTS (RLS still applies)
 -- ============================================================
 
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
-  ON TABLE public.profiles TO anon;
+-- IMPORTANT:
+-- - Do NOT grant anon write access. Keep minimal.
+REVOKE ALL ON TABLE public.profiles FROM anon;
+REVOKE ALL ON TABLE public.profiles FROM authenticated;
 
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
-  ON TABLE public.profiles TO authenticated;
-
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
-  ON TABLE public.profiles TO service_role;
+GRANT SELECT ON TABLE public.profiles TO authenticated;
+GRANT UPDATE ON TABLE public.profiles TO authenticated; -- self-only via RLS
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.profiles TO service_role;
