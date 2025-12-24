@@ -1,138 +1,94 @@
--- DB/schema/patients/patients_import_rows.sql
--- Purpose: Staging table for patients CSV imports.
--- Flow: CSV → import_jobs + patients_import_rows → processing → patients.
--- Each row represents a single CSV row, with raw data, normalized payload,
--- validation status and optional error/duplicate info.
---
--- Source of truth: Supabase table editor / migrations.
---
--- Notes:
--- - org_id should always match the org_id of the related import_jobs row.
---   The application layer is responsible for keeping them consistent.
--- - RLS is aligned with patients/import_jobs: users can only see rows
---   for their own org; service_role can see all.
+-- db/schema/public/patients_import_rows.sql
+-- Purpose: Supabase table definition for `public.patients_import_rows`.
+-- Summary: Per-row staging for patient CSV imports (raw+normalized payload, status, error tracking).
+-- Source-of-truth: Mirrors current DB columns/constraints/indexes/RLS/policies/grants.
+-- v1.0.1
 
-CREATE TABLE public.patients_import_rows (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  org_id uuid NOT NULL,
-  job_id uuid NOT NULL,
-  row_index integer NOT NULL,
-  raw_row jsonb NOT NULL,
-  normalized_payload jsonb NULL,
-  status text NOT NULL DEFAULT 'pending',
-  error_message text NULL,
-  duplicate_of_patient_id uuid NULL,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  validated_at timestamp with time zone NULL,
-  imported_at timestamp with time zone NULL,
-  CONSTRAINT patients_import_rows_pkey PRIMARY KEY (id),
-  CONSTRAINT patients_import_rows_org_id_fkey FOREIGN KEY (org_id)
-    REFERENCES public.orgs (id) ON DELETE CASCADE,
-  CONSTRAINT patients_import_rows_job_id_fkey FOREIGN KEY (job_id)
-    REFERENCES public.import_jobs (id) ON DELETE CASCADE,
-  CONSTRAINT patients_import_rows_duplicate_patient_fkey FOREIGN KEY (duplicate_of_patient_id)
-    REFERENCES public.patients (id) ON DELETE SET NULL,
-  CONSTRAINT patients_import_rows_status_check CHECK (
-    status = ANY (
-      ARRAY[
-        'pending'::text,
-        'validated'::text,
-        'error'::text,
-        'imported'::text
-      ]
-    )
+create table if not exists public.patients_import_rows (
+  id uuid not null default gen_random_uuid(),
+  org_id uuid not null,
+  job_id uuid not null,
+  row_index integer not null,
+  raw_row jsonb not null,
+  normalized_payload jsonb null,
+  status text not null default 'pending'::text,
+  error_message text null,
+  duplicate_of_patient_id uuid null,
+  created_at timestamptz not null default now(),
+  validated_at timestamptz null,
+  imported_at timestamptz null,
+  constraint patients_import_rows_pkey primary key (id),
+  constraint patients_import_rows_status_check
+    check (status = any (array[
+      'pending'::text,
+      'validated'::text,
+      'error'::text,
+      'imported'::text
+    ])),
+  constraint patients_import_rows_org_id_fkey
+    foreign key (org_id) references public.orgs (id) on delete cascade,
+  constraint patients_import_rows_job_id_fkey
+    foreign key (job_id) references public.import_jobs (id) on delete cascade,
+  constraint patients_import_rows_duplicate_patient_fkey
+    foreign key (duplicate_of_patient_id) references public.patients (id) on delete set null
+);
+
+-- Indexes (DB-truth)
+create unique index if not exists patients_import_rows_pkey
+  on public.patients_import_rows using btree (id);
+
+create index if not exists patients_import_rows_org_id_idx
+  on public.patients_import_rows using btree (org_id);
+
+create index if not exists patients_import_rows_job_id_idx
+  on public.patients_import_rows using btree (job_id);
+
+create index if not exists patients_import_rows_job_status_idx
+  on public.patients_import_rows using btree (job_id, status);
+
+-- RLS
+alter table public.patients_import_rows enable row level security;
+
+-- Policies (DB-truth)
+drop policy if exists patients_import_rows_select_by_org on public.patients_import_rows;
+create policy patients_import_rows_select_by_org
+  on public.patients_import_rows
+  for select
+  to authenticated
+  using (
+    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+  );
+
+drop policy if exists patients_import_rows_insert_by_org on public.patients_import_rows;
+create policy patients_import_rows_insert_by_org
+  on public.patients_import_rows
+  for insert
+  to authenticated
+  with check (
+    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+  );
+
+drop policy if exists patients_import_rows_update_by_org on public.patients_import_rows;
+create policy patients_import_rows_update_by_org
+  on public.patients_import_rows
+  for update
+  to authenticated
+  using (
+    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
   )
-) TABLESPACE pg_default;
+  with check (
+    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+  );
 
--- Helpful indexes for import processing (by job and status).
-CREATE INDEX patients_import_rows_job_id_idx
-  ON public.patients_import_rows (job_id);
+drop policy if exists patients_import_rows_service_full_access on public.patients_import_rows;
+create policy patients_import_rows_service_full_access
+  on public.patients_import_rows
+  for all
+  to public
+  using (auth.role() = 'service_role'::text)
+  with check (auth.role() = 'service_role'::text);
 
-CREATE INDEX patients_import_rows_job_status_idx
-  ON public.patients_import_rows (job_id, status);
-
-CREATE INDEX patients_import_rows_org_id_idx
-  ON public.patients_import_rows (org_id);
-
--- ============================================================
--- RLS POLICIES FOR public.patients_import_rows
--- Pattern is similar to patients/import_jobs:
---  - Service role can access all orgs.
---  - Authenticated users are restricted to their org_id.
---  - org_id is resolved from JWT user_metadata.org_id or JWT root org_id.
---
--- [TODO-SECURITY-BEFORE-PROD]
---   1) Decide a single org resolution strategy (user_metadata.org_id vs root org_id).
---   2) Remove redundant policies after settling on one strategy.
---   3) Review that clients never leak other orgs' import rows.
--- ============================================================
-
-ALTER TABLE public.patients_import_rows ENABLE ROW LEVEL SECURITY;
-
--- 1) Debug policy: allow all rows for authenticated users (SELECT only).
---    [TODO-SECURITY-BEFORE-PROD] Remove or disable this policy.
-CREATE POLICY "patients_import_rows_debug_allow_all"
-ON public.patients_import_rows
-AS PERMISSIVE
-FOR SELECT
-TO authenticated
-USING (true);
-
--- 2) Authenticated INSERT: org_id must match JWT user_metadata.org_id.
-CREATE POLICY "patients_import_rows_org_insert"
-ON public.patients_import_rows
-AS PERMISSIVE
-FOR INSERT
-TO authenticated
-WITH CHECK (
-  (org_id)::text = ((auth.jwt() -> 'user_metadata'::text) ->> 'org_id'::text)
-);
-
--- 3) Authenticated SELECT: org_id must match JWT user_metadata.org_id.
-CREATE POLICY "patients_import_rows_org_select"
-ON public.patients_import_rows
-AS PERMISSIVE
-FOR SELECT
-TO authenticated
-USING (
-  (org_id)::text = ((auth.jwt() -> 'user_metadata'::text) ->> 'org_id'::text)
-);
-
--- 4) Authenticated UPDATE: same org rule for both read and write sides.
-CREATE POLICY "patients_import_rows_org_update"
-ON public.patients_import_rows
-AS PERMISSIVE
-FOR UPDATE
-TO authenticated
-USING (
-  (org_id)::text = ((auth.jwt() -> 'user_metadata'::text) ->> 'org_id'::text)
-)
-WITH CHECK (
-  (org_id)::text = ((auth.jwt() -> 'user_metadata'::text) ->> 'org_id'::text)
-);
-
--- 5) Public SELECT: service_role bypass OR JWT root claim org_id match.
-CREATE POLICY "patients_import_rows_select"
-ON public.patients_import_rows
-AS PERMISSIVE
-FOR SELECT
-TO public
-USING (
-  auth.role() = 'service_role'::text
-  OR (org_id)::text = (auth.jwt() ->> 'org_id'::text)
-);
-
--- 6) Public ALL (INSERT/UPDATE/DELETE): service_role or JWT root claim org_id match.
-CREATE POLICY "patients_import_rows_write"
-ON public.patients_import_rows
-AS PERMISSIVE
-FOR ALL
-TO public
-USING (
-  auth.role() = 'service_role'::text
-  OR (org_id)::text = (auth.jwt() ->> 'org_id'::text)
-)
-WITH CHECK (
-  auth.role() = 'service_role'::text
-  OR (org_id)::text = (auth.jwt() ->> 'org_id'::text)
-);
+-- Grants
+revoke all on table public.patients_import_rows from public;
+grant all on table public.patients_import_rows to authenticated;
+grant all on table public.patients_import_rows to service_role;
