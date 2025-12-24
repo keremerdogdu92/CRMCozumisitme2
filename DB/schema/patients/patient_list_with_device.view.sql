@@ -1,9 +1,6 @@
 -- db/schema/patients/patient_list_with_device.view.sql
 -- Purpose: View definition for `patient_list_with_device`.
 -- Combines patients with their sold devices and reference info for listing screens.
--- Includes: CREATE VIEW with internal CTE aggregation over inventory_items.
--- Source of truth: Supabase view definition.
---
 -- Security:
 --   - security_invoker = on → view runs with caller's permissions,
 --     so RLS on patients / inventory_items / references is enforced.
@@ -27,14 +24,10 @@ WITH device_agg AS (
         THEN 'left'::text
       ELSE NULL::text
     END AS device_ear_side_summary
-  FROM
-    public.inventory_items AS i
-  WHERE
-    i.status = 'sold'::text
+  FROM public.inventory_items AS i
+  WHERE i.status = 'sold'::text
     AND i.sold_patient_id IS NOT NULL
-  GROUP BY
-    i.org_id,
-    i.sold_patient_id
+  GROUP BY i.org_id, i.sold_patient_id
 )
 SELECT
   p.org_id,
@@ -72,22 +65,7 @@ SELECT
   p.sgk_expected_reimbursement_month,
   p.is_battery_patient,
   p.sgk_recorded_to_system_at
-FROM
-  public.patients AS p
-  LEFT JOIN public."references" AS r
-    ON r.id = p.reference_id
-  LEFT JOIN device_agg AS da
-    ON da.patient_id = p.id
-   AND da.org_id = p.org_id
-WHERE
-  p.deleted_at IS NULL;
-
--- NOTE:
--- - RLS is enforced on the underlying tables (patients, inventory_items, references),
---   not on the view itself. This view should not have its own RLS policies.
---
--- Migration note:
--- - If you ever change the view column order/names, prefer:
---   DROP VIEW public.patient_list_with_device;
---   then CREATE VIEW public.patient_list_with_device AS ...
---   to avoid Postgres 42P16 errors.
+FROM public.patients AS p
+LEFT JOIN public."references" AS r ON r.id = p.reference_id
+LEFT JOIN device_agg AS da ON da.patient_id = p.id AND da.org_id = p.org_id
+WHERE p.deleted_at IS NULL;
