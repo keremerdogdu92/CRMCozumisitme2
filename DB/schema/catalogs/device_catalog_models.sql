@@ -2,39 +2,36 @@
 -- Purpose: Supabase table definition for `public.device_catalog_models`.
 -- Stores per-organisation device catalog models (brand/model/type) used by catalog import and pricing history.
 --
--- DB parity notes (from live DB output you provided):
--- - RLS: enabled, not forced.
--- - Constraints: PK(id), FK(org_id -> orgs.id ON DELETE CASCADE), CHECK(item_type in hearing_aid/charger/receiver/battery).
--- - Indexes: only PK btree(id).
--- - Triggers: none.
--- - Policies: exactly ONE SELECT policy named `device_catalog_models_select_own_org`, roles = {public}.
--- - Grants: anon/authenticated/service_role have table privileges (RLS still applies).
+-- Multi-org standard:
+-- - Never trust JWT org claims in RLS.
+-- - Resolve org_id via public.current_user_org_id() (SECURITY DEFINER).
 --
--- v1.0.1:
--- - Align policies with DB (single SELECT policy for role public).
--- - Keep grants aligned with DB output.
+-- v1.1.0 (2025-12-24):
+-- - CHANGE: RLS policies now use public.current_user_org_id() (no subquery, no JWT).
+-- - ADD: org-scoped INSERT/UPDATE/DELETE policies for authenticated (required by catalog import).
+-- - ADD: service_role safety policy for ALL commands.
 
 -- -----------------------------
 -- Table
 -- -----------------------------
-create table if not exists public.device_catalog_models (
-  id uuid not null default gen_random_uuid(),
-  org_id uuid not null,
-  brand text not null,
-  model text not null,
-  item_type text not null,
-  battery_type text null,
-  details text null,
-  notes text null,
-  is_active boolean not null default true,
-  created_at timestamptz null default now(),
-  updated_at timestamptz null default now(),
-  constraint device_catalog_models_pkey primary key (id),
-  constraint device_catalog_models_org_id_fkey
-    foreign key (org_id) references public.orgs (id) on delete cascade,
-  constraint device_catalog_models_item_type_check
-    check (
-      item_type = any (array[
+CREATE TABLE IF NOT EXISTS public.device_catalog_models (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL,
+  brand text NOT NULL,
+  model text NOT NULL,
+  item_type text NOT NULL,
+  battery_type text NULL,
+  details text NULL,
+  notes text NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NULL DEFAULT now(),
+  updated_at timestamptz NULL DEFAULT now(),
+  CONSTRAINT device_catalog_models_pkey PRIMARY KEY (id),
+  CONSTRAINT device_catalog_models_org_id_fkey
+    FOREIGN KEY (org_id) REFERENCES public.orgs (id) ON DELETE CASCADE,
+  CONSTRAINT device_catalog_models_item_type_check
+    CHECK (
+      item_type = ANY (ARRAY[
         'hearing_aid'::text,
         'charger'::text,
         'receiver'::text,
@@ -44,38 +41,67 @@ create table if not exists public.device_catalog_models (
 );
 
 -- -----------------------------
--- Indexes (DB has only the PK index)
+-- Indexes
 -- -----------------------------
--- Note: Postgres auto-creates the PK index; Supabase introspection showed it explicitly.
-create unique index if not exists device_catalog_models_pkey
-  on public.device_catalog_models using btree (id);
+-- Postgres auto-creates the PK index; keep explicit for determinism.
+CREATE UNIQUE INDEX IF NOT EXISTS device_catalog_models_pkey
+  ON public.device_catalog_models USING btree (id);
 
 -- -----------------------------
 -- RLS
 -- -----------------------------
-alter table public.device_catalog_models enable row level security;
+ALTER TABLE public.device_catalog_models ENABLE ROW LEVEL SECURITY;
 
 -- -----------------------------
--- Policies (DB parity: exactly one SELECT policy, role = public)
+-- Policies
 -- -----------------------------
-drop policy if exists device_catalog_models_select_own_org on public.device_catalog_models;
+DROP POLICY IF EXISTS device_catalog_models_select_own_org ON public.device_catalog_models;
+DROP POLICY IF EXISTS device_catalog_models_insert_own_org ON public.device_catalog_models;
+DROP POLICY IF EXISTS device_catalog_models_update_own_org ON public.device_catalog_models;
+DROP POLICY IF EXISTS device_catalog_models_delete_own_org ON public.device_catalog_models;
+DROP POLICY IF EXISTS device_catalog_models_service_role_all ON public.device_catalog_models;
 
-create policy device_catalog_models_select_own_org
-on public.device_catalog_models
-as permissive
-for select
-to public
-using (
-  org_id = (
-    select p.org_id
-    from public.profiles p
-    where p.id = auth.uid()
-  )
-);
+CREATE POLICY device_catalog_models_select_own_org
+ON public.device_catalog_models
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
+USING (org_id = public.current_user_org_id());
+
+CREATE POLICY device_catalog_models_insert_own_org
+ON public.device_catalog_models
+AS PERMISSIVE
+FOR INSERT
+TO authenticated
+WITH CHECK (org_id = public.current_user_org_id());
+
+CREATE POLICY device_catalog_models_update_own_org
+ON public.device_catalog_models
+AS PERMISSIVE
+FOR UPDATE
+TO authenticated
+USING (org_id = public.current_user_org_id())
+WITH CHECK (org_id = public.current_user_org_id());
+
+CREATE POLICY device_catalog_models_delete_own_org
+ON public.device_catalog_models
+AS PERMISSIVE
+FOR DELETE
+TO authenticated
+USING (org_id = public.current_user_org_id());
+
+-- Safety policy for service_role (in case bypassrls is not set)
+CREATE POLICY device_catalog_models_service_role_all
+ON public.device_catalog_models
+AS PERMISSIVE
+FOR ALL
+TO public
+USING (auth.role() = 'service_role'::text)
+WITH CHECK (auth.role() = 'service_role'::text);
 
 -- -----------------------------
--- Grants (mirrors DB output you sent)
+-- Grants (RLS still applies)
 -- -----------------------------
-grant select, insert, update, delete, truncate, references, trigger
-on table public.device_catalog_models
-to anon, authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+ON TABLE public.device_catalog_models
+TO anon, authenticated, service_role;
