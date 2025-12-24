@@ -1,22 +1,35 @@
 {
   "tables": [
+    "import_jobs",
+    "patients_legacy_devices_import_rows",
+    "patients_import_rows",
+    "patients",
+    "inventory_items",
+    "trials",
+    "trial_devices",
+    "profiles",
+    "meeting_payments",
+    "patient_installment_plans",
+    "meetings",
+    "meeting_accessories",
+    "meeting_satisfaction_question_lists",
+    "meeting_satisfaction_questions",
+    "meeting_satisfaction_answers",
+    "references",
+    "org_settings",
+    "device_catalog_models",
+    "device_catalog_prices",
+    "patient_sale_breakdown",
+    "battery_prescription_deliveries",
+    "device_repairs",
+    "inventory_import_rows",
+    "reference_gifts"
+  ],
+  "views": [
     "current_device_catalog_prices_public",
     "current_device_model_prices_public",
-    "device_repairs",
-    "import_jobs",
-    "inventory_import_rows",
-    "inventory_items",
-    "meeting_accessories",
-    "meeting_payments",
-    "meetings",
-    "patient_installment_plans",
+    "trial_devices_with_catalog_public",
     "patient_list_with_device",
-    "patient_sale_breakdown",
-    "patients",
-    "profiles",
-    "references",
-    "trial_devices",
-    "trials"
-  ],
-  "rpc_functions": []
+    "patient_list_with_device_all"
+  ]
 }
