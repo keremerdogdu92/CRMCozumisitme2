@@ -7,7 +7,7 @@
 --   - security_invoker = on → runs with caller's permissions,
 --     so RLS on underlying tables/views is respected.
 
-CREATE VIEW public.current_device_catalog_prices_public
+CREATE OR REPLACE VIEW public.current_device_catalog_prices_public
 WITH (security_invoker = on) AS
 SELECT
   id,
