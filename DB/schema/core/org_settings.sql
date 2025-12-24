@@ -1,10 +1,11 @@
--- DB/schema/core/org_settings.sql
--- Purpose: Per-organization settings used for quote / offer printouts and
---          other organization-level configuration (branding, contact info).
+-- db/schema/core/org_settings.sql
+-- Purpose: Per-organization settings used for quote / offer printouts and other org config.
 -- Notes:
---   - One row per org_id (PRIMARY KEY = org_id).
---   - Multi-tenant isolation via org_id resolved from profiles.org_id (auth.uid()).
---   - Exposed via PostgREST as /rest/v1/org_settings.
+-- - One row per org_id (PRIMARY KEY = org_id).
+-- - Multi-tenant isolation via org_id resolved from profiles (auth.uid()) using helper.
+--
+-- v2.0.0:
+-- - RLS uses public.current_user_org_id() (no JWT trust, no subquery duplication)
 
 CREATE TABLE IF NOT EXISTS public.org_settings (
   org_id uuid NOT NULL,
@@ -20,13 +21,12 @@ CREATE TABLE IF NOT EXISTS public.org_settings (
   CONSTRAINT org_settings_pkey PRIMARY KEY (org_id)
 );
 
--- Link to orgs.id (matches DB: REFERENCES orgs(id) ON DELETE CASCADE)
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1
-    FROM   pg_constraint
-    WHERE  conname = 'org_settings_org_id_fkey'
+    FROM pg_constraint
+    WHERE conname = 'org_settings_org_id_fkey'
   ) THEN
     ALTER TABLE public.org_settings
       ADD CONSTRAINT org_settings_org_id_fkey
@@ -36,111 +36,33 @@ BEGIN
   END IF;
 END$$;
 
--- Make sure RLS is enabled (matches DB)
 ALTER TABLE public.org_settings ENABLE ROW LEVEL SECURITY;
 
--- Drop old/legacy policies (from earlier repo versions) so repo matches DB
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename  = 'org_settings'
-      AND policyname = 'org_settings_select_own_org'
-  ) THEN
-    DROP POLICY org_settings_select_own_org ON public.org_settings;
-  END IF;
+-- Drop any older policies to keep repo deterministic
+DROP POLICY IF EXISTS org_settings_select_by_profile ON public.org_settings;
+DROP POLICY IF EXISTS org_settings_insert_by_profile ON public.org_settings;
+DROP POLICY IF EXISTS org_settings_update_by_profile ON public.org_settings;
 
-  IF EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename  = 'org_settings'
-      AND policyname = 'org_settings_upsert_own_org'
-  ) THEN
-    DROP POLICY org_settings_upsert_own_org ON public.org_settings;
-  END IF;
-END$$;
+CREATE POLICY org_settings_select_by_profile
+  ON public.org_settings
+  FOR SELECT
+  TO authenticated
+  USING (org_id = public.current_user_org_id());
 
--- Policies (match DB exactly: resolve org_id via profiles.org_id for auth.uid())
+CREATE POLICY org_settings_insert_by_profile
+  ON public.org_settings
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (org_id = public.current_user_org_id());
 
--- SELECT
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename  = 'org_settings'
-      AND policyname = 'org_settings_select_by_profile'
-  ) THEN
-    CREATE POLICY org_settings_select_by_profile
-      ON public.org_settings
-      FOR SELECT
-      TO public
-      USING (
-        org_id = (
-          SELECT profiles.org_id
-          FROM profiles
-          WHERE profiles.id = auth.uid()
-        )
-      );
-  END IF;
-END$$;
+CREATE POLICY org_settings_update_by_profile
+  ON public.org_settings
+  FOR UPDATE
+  TO authenticated
+  USING (org_id = public.current_user_org_id())
+  WITH CHECK (org_id = public.current_user_org_id());
 
--- INSERT
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename  = 'org_settings'
-      AND policyname = 'org_settings_insert_by_profile'
-  ) THEN
-    CREATE POLICY org_settings_insert_by_profile
-      ON public.org_settings
-      FOR INSERT
-      TO public
-      WITH CHECK (
-        org_id = (
-          SELECT profiles.org_id
-          FROM profiles
-          WHERE profiles.id = auth.uid()
-        )
-      );
-  END IF;
-END$$;
+REVOKE ALL ON TABLE public.org_settings FROM anon;
 
--- UPDATE
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename  = 'org_settings'
-      AND policyname = 'org_settings_update_by_profile'
-  ) THEN
-    CREATE POLICY org_settings_update_by_profile
-      ON public.org_settings
-      FOR UPDATE
-      TO public
-      USING (
-        org_id = (
-          SELECT profiles.org_id
-          FROM profiles
-          WHERE profiles.id = auth.uid()
-        )
-      )
-      WITH CHECK (
-        org_id = (
-          SELECT profiles.org_id
-          FROM profiles
-          WHERE profiles.id = auth.uid()
-        )
-      );
-  END IF;
-END$$;
-
--- Grants (match DB output)
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.org_settings TO anon;
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.org_settings TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.org_settings TO service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.org_settings TO postgres;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.org_settings TO authenticated;
