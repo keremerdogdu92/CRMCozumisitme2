@@ -2,11 +2,13 @@
 -- Purpose: Reference-level gifts/commission payments tracking (admin-managed).
 -- Multi-org standard:
 -- - Org isolation via public.current_user_org_id()
--- - Admin-only writes via public.current_user_role()
+-- - Admin-only reads/writes (staff sees nothing).
+-- - Soft delete via deleted_at + deleted_by + delete_reason.
 --
--- v2.0.1 (2025-12-24):
--- - KEEP: table definition and indexes as-is to match DB.
--- - SECURITY: policies remain helper-based + deterministic.
+-- v2.1.0 (2025-12-25):
+-- - SECURITY: Make reference_gifts fully admin-only for authenticated users.
+-- - SOFT DELETE: Add deleted_by + delete_reason, and auto-set deleted_by on soft delete.
+-- - HARD DELETE: Remove authenticated DELETE policy (service_role only).
 
 CREATE TABLE IF NOT EXISTS public.reference_gifts (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -17,12 +19,19 @@ CREATE TABLE IF NOT EXISTS public.reference_gifts (
   gift_note text NULL,
   gift_at date NOT NULL DEFAULT (now() AT TIME ZONE 'UTC')::date,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  deleted_at timestamp with time zone NULL,
+
+  -- Soft delete columns
+  deleted_at timestamptz NULL,
+  deleted_by uuid NULL,
+  delete_reason text NULL,
+
   CONSTRAINT reference_gifts_pkey PRIMARY KEY (id),
   CONSTRAINT reference_gifts_org_id_fkey FOREIGN KEY (org_id)
     REFERENCES public.orgs (id) ON DELETE CASCADE,
   CONSTRAINT reference_gifts_reference_id_fkey FOREIGN KEY (reference_id)
-    REFERENCES public.references (id) ON DELETE CASCADE
+    REFERENCES public.references (id) ON DELETE CASCADE,
+  CONSTRAINT reference_gifts_deleted_by_fkey FOREIGN KEY (deleted_by)
+    REFERENCES auth.users (id) ON DELETE SET NULL
 ) TABLESPACE pg_default;
 
 CREATE INDEX IF NOT EXISTS reference_gifts_org_id_idx
@@ -37,23 +46,70 @@ CREATE INDEX IF NOT EXISTS reference_gifts_deleted_at_idx
 ON public.reference_gifts USING btree (deleted_at)
 TABLESPACE pg_default;
 
+-- ============================================================
+-- SOFT DELETE HELPERS
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.trg_soft_delete_set_deleted_by()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- If row is being soft-deleted (deleted_at transitions NULL -> NOT NULL),
+  -- stamp deleted_by automatically.
+  IF (OLD.deleted_at IS NULL) AND (NEW.deleted_at IS NOT NULL) THEN
+    IF NEW.deleted_by IS NULL THEN
+      NEW.deleted_by := auth.uid();
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_reference_gifts_soft_delete_stamp ON public.reference_gifts;
+
+CREATE TRIGGER trg_reference_gifts_soft_delete_stamp
+BEFORE UPDATE OF deleted_at, deleted_by ON public.reference_gifts
+FOR EACH ROW
+EXECUTE FUNCTION public.trg_soft_delete_set_deleted_by();
+
+-- ============================================================
+-- RLS
+-- ============================================================
+
 ALTER TABLE public.reference_gifts ENABLE ROW LEVEL SECURITY;
 
 -- Drop legacy policies (deterministic)
-DROP POLICY IF EXISTS reference_gifts_org_select ON public.reference_gifts;
+DROP POLICY IF EXISTS reference_gifts_service_full_access ON public.reference_gifts;
+DROP POLICY IF EXISTS reference_gifts_admin_select ON public.reference_gifts;
 DROP POLICY IF EXISTS reference_gifts_admin_insert ON public.reference_gifts;
 DROP POLICY IF EXISTS reference_gifts_admin_update ON public.reference_gifts;
 DROP POLICY IF EXISTS reference_gifts_admin_delete ON public.reference_gifts;
 
--- Org-level SELECT for authenticated users
-CREATE POLICY reference_gifts_org_select
+-- service_role bypass
+CREATE POLICY reference_gifts_service_full_access
+ON public.reference_gifts
+AS PERMISSIVE
+FOR ALL
+TO public
+USING (auth.role() = 'service_role'::text)
+WITH CHECK (auth.role() = 'service_role'::text);
+
+-- Admin-only SELECT (staff sees nothing)
+CREATE POLICY reference_gifts_admin_select
 ON public.reference_gifts
 AS PERMISSIVE
 FOR SELECT
 TO authenticated
 USING (
   auth.role() = 'service_role'::text
-  OR (org_id = public.current_user_org_id())
+  OR (
+    org_id = public.current_user_org_id()
+    AND public.current_user_role() = 'admin'
+  )
 );
 
 -- Admin-only INSERT
@@ -70,7 +126,7 @@ WITH CHECK (
   )
 );
 
--- Admin-only UPDATE
+-- Admin-only UPDATE (soft delete happens here via UPDATE)
 CREATE POLICY reference_gifts_admin_update
 ON public.reference_gifts
 AS PERMISSIVE
@@ -91,20 +147,12 @@ WITH CHECK (
   )
 );
 
--- Admin-only DELETE (temporary; replace with soft delete in app)
-CREATE POLICY reference_gifts_admin_delete
-ON public.reference_gifts
-AS PERMISSIVE
-FOR DELETE
-TO authenticated
-USING (
-  auth.role() = 'service_role'::text
-  OR (
-    org_id = public.current_user_org_id()
-    AND public.current_user_role() = 'admin'
-  )
-);
+-- NO authenticated DELETE policy (hard delete disabled)
+-- service_role can still hard delete via reference_gifts_service_full_access.
 
+-- Grants (RLS still applies)
 REVOKE ALL ON TABLE public.reference_gifts FROM anon;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.reference_gifts TO authenticated;
+REVOKE ALL ON TABLE public.reference_gifts FROM authenticated;
+
+GRANT SELECT, INSERT, UPDATE ON TABLE public.reference_gifts TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.reference_gifts TO service_role;
