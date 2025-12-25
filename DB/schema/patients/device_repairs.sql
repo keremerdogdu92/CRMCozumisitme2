@@ -1,4 +1,4 @@
--- db/schema/public/device_repairs.sql
+-- db/schema/device_repairs.sql
 -- Purpose: Supabase table definition for `public.device_repairs`.
 -- Summary: Repairs workflow tracking per org, with status lifecycle and timeline timestamps.
 -- Source-of-truth: Mirrors current DB columns/constraints/indexes/RLS/policies/grants.
