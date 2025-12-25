@@ -1,4 +1,4 @@
--- db/schema/public/patient_installment_plans.sql
+-- db/schema/patient_installment_plans.sql
 -- Purpose: Supabase table definition for `public.patient_installment_plans`.
 -- Summary: Single active installment plan per (org_id, patient_id) enforced via partial unique index.
 -- Source-of-truth: Mirrors current DB columns/constraints/indexes/RLS/policies/grants.
