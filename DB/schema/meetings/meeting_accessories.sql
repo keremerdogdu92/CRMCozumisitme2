@@ -1,83 +1,179 @@
--- db/schema/public/meeting_accessories.sql
+-- DB/schema/meetings/meeting_accessories.sql
 -- Purpose: Supabase table definition for `public.meeting_accessories`.
 -- Summary: Accessory line-items attached to meetings and patients.
--- Source-of-truth: Mirrors current DB columns/constraints/indexes/RLS/policies/grants.
--- v1.0.1
+-- Multi-org + soft delete standard:
+-- - Org isolation via public.current_user_org_id()
+-- - Soft delete via deleted_at + deleted_by + delete_reason
+-- - Hard delete disabled for authenticated users (service_role only)
+-- - Staff must NOT see rows that belong to reference meetings
+--
+-- v1.1.0 (2025-12-25):
+-- - SOFT DELETE: add deleted_* columns + trigger stamp deleted_by.
+-- - SECURITY: enforce meeting_type='reference' visibility rule (admin-only) via join to meetings.
+-- - HARD DELETE: remove authenticated DELETE policy.
 
-create table if not exists public.meeting_accessories (
-  id uuid not null default gen_random_uuid(),
-  org_id uuid not null,
-  meeting_id uuid not null,
-  patient_id uuid not null,
-  name text not null,
-  cost_price numeric not null default 0,
-  sale_price numeric not null default 0,
-  created_at timestamptz not null default now(),
-  constraint meeting_accessories_pkey primary key (id),
-  constraint meeting_accessories_cost_price_check check (cost_price >= 0::numeric),
-  constraint meeting_accessories_sale_price_check check (sale_price >= 0::numeric),
-  constraint meeting_accessories_meeting_id_fkey
-    foreign key (meeting_id) references public.meetings (id) on delete cascade,
-  constraint meeting_accessories_patient_id_fkey
-    foreign key (patient_id) references public.patients (id) on delete restrict
+CREATE TABLE IF NOT EXISTS public.meeting_accessories (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL,
+  meeting_id uuid NOT NULL,
+  patient_id uuid NOT NULL,
+  name text NOT NULL,
+  cost_price numeric NOT NULL DEFAULT 0,
+  sale_price numeric NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+
+  -- Soft delete
+  deleted_at timestamptz NULL,
+  deleted_by uuid NULL,
+  delete_reason text NULL,
+
+  CONSTRAINT meeting_accessories_pkey PRIMARY KEY (id),
+  CONSTRAINT meeting_accessories_cost_price_check CHECK (cost_price >= 0::numeric),
+  CONSTRAINT meeting_accessories_sale_price_check CHECK (sale_price >= 0::numeric),
+  CONSTRAINT meeting_accessories_meeting_id_fkey
+    FOREIGN KEY (meeting_id) REFERENCES public.meetings (id) ON DELETE CASCADE,
+  CONSTRAINT meeting_accessories_patient_id_fkey
+    FOREIGN KEY (patient_id) REFERENCES public.patients (id) ON DELETE RESTRICT,
+  CONSTRAINT meeting_accessories_deleted_by_fkey
+    FOREIGN KEY (deleted_by) REFERENCES auth.users (id) ON DELETE SET NULL
 );
 
--- Indexes (DB-truth)
-create unique index if not exists meeting_accessories_pkey
-  on public.meeting_accessories using btree (id);
+-- Indexes
+CREATE UNIQUE INDEX IF NOT EXISTS meeting_accessories_pkey
+  ON public.meeting_accessories USING btree (id);
 
-create index if not exists idx_meeting_accessories_org_id
-  on public.meeting_accessories using btree (org_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_accessories_org_id
+  ON public.meeting_accessories USING btree (org_id);
 
-create index if not exists idx_meeting_accessories_meeting_id
-  on public.meeting_accessories using btree (meeting_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_accessories_meeting_id
+  ON public.meeting_accessories USING btree (meeting_id);
 
-create index if not exists idx_meeting_accessories_patient_id
-  on public.meeting_accessories using btree (patient_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_accessories_patient_id
+  ON public.meeting_accessories USING btree (patient_id);
 
+CREATE INDEX IF NOT EXISTS idx_meeting_accessories_deleted_at
+  ON public.meeting_accessories USING btree (deleted_at);
+
+-- ============================================================
+-- SOFT DELETE TRIGGER
+-- ============================================================
+
+DROP TRIGGER IF EXISTS trg_meeting_accessories_soft_delete_stamp ON public.meeting_accessories;
+
+CREATE TRIGGER trg_meeting_accessories_soft_delete_stamp
+BEFORE UPDATE OF deleted_at, deleted_by ON public.meeting_accessories
+FOR EACH ROW
+EXECUTE FUNCTION public.trg_soft_delete_set_deleted_by();
+
+-- ============================================================
 -- RLS
-alter table public.meeting_accessories enable row level security;
+-- ============================================================
 
--- Policies (DB-truth)
-drop policy if exists meeting_accessories_select_by_org on public.meeting_accessories;
-create policy meeting_accessories_select_by_org
-  on public.meeting_accessories
-  for select
-  to authenticated
-  using (
-    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+ALTER TABLE public.meeting_accessories ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS meeting_accessories_service_full_access ON public.meeting_accessories;
+DROP POLICY IF EXISTS meeting_accessories_select_by_org_and_meeting_type ON public.meeting_accessories;
+DROP POLICY IF EXISTS meeting_accessories_insert_by_org_and_meeting_type ON public.meeting_accessories;
+DROP POLICY IF EXISTS meeting_accessories_update_by_org_and_meeting_type ON public.meeting_accessories;
+DROP POLICY IF EXISTS meeting_accessories_delete_by_org ON public.meeting_accessories;
+
+-- service_role bypass
+CREATE POLICY meeting_accessories_service_full_access
+  ON public.meeting_accessories
+  AS PERMISSIVE
+  FOR ALL
+  TO public
+  USING (auth.role() = 'service_role'::text)
+  WITH CHECK (auth.role() = 'service_role'::text);
+
+-- Same meeting_type gating via join to meetings
+CREATE POLICY meeting_accessories_select_by_org_and_meeting_type
+  ON public.meeting_accessories
+  AS PERMISSIVE
+  FOR SELECT
+  TO authenticated
+  USING (
+    auth.role() = 'service_role'::text
+    OR (
+      org_id = public.current_user_org_id()
+      AND EXISTS (
+        SELECT 1
+        FROM public.meetings m
+        WHERE m.id = meeting_accessories.meeting_id
+          AND m.org_id = meeting_accessories.org_id
+          AND (
+            public.current_user_role() = 'admin'
+            OR m.meeting_type <> 'reference'::text
+          )
+      )
+    )
   );
 
-drop policy if exists meeting_accessories_insert_by_org on public.meeting_accessories;
-create policy meeting_accessories_insert_by_org
-  on public.meeting_accessories
-  for insert
-  to authenticated
-  with check (
-    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+CREATE POLICY meeting_accessories_insert_by_org_and_meeting_type
+  ON public.meeting_accessories
+  AS PERMISSIVE
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    auth.role() = 'service_role'::text
+    OR (
+      org_id = public.current_user_org_id()
+      AND EXISTS (
+        SELECT 1
+        FROM public.meetings m
+        WHERE m.id = meeting_accessories.meeting_id
+          AND m.org_id = meeting_accessories.org_id
+          AND (
+            public.current_user_role() = 'admin'
+            OR m.meeting_type <> 'reference'::text
+          )
+      )
+    )
   );
 
-drop policy if exists meeting_accessories_update_by_org on public.meeting_accessories;
-create policy meeting_accessories_update_by_org
-  on public.meeting_accessories
-  for update
-  to authenticated
-  using (
-    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+CREATE POLICY meeting_accessories_update_by_org_and_meeting_type
+  ON public.meeting_accessories
+  AS PERMISSIVE
+  FOR UPDATE
+  TO authenticated
+  USING (
+    auth.role() = 'service_role'::text
+    OR (
+      org_id = public.current_user_org_id()
+      AND EXISTS (
+        SELECT 1
+        FROM public.meetings m
+        WHERE m.id = meeting_accessories.meeting_id
+          AND m.org_id = meeting_accessories.org_id
+          AND (
+            public.current_user_role() = 'admin'
+            OR m.meeting_type <> 'reference'::text
+          )
+      )
+    )
   )
-  with check (
-    (auth.role() = 'service_role'::text) or (org_id = current_user_org_id())
+  WITH CHECK (
+    auth.role() = 'service_role'::text
+    OR (
+      org_id = public.current_user_org_id()
+      AND EXISTS (
+        SELECT 1
+        FROM public.meetings m
+        WHERE m.id = meeting_accessories.meeting_id
+          AND m.org_id = meeting_accessories.org_id
+          AND (
+            public.current_user_role() = 'admin'
+            OR m.meeting_type <> 'reference'::text
+          )
+      )
+    )
   );
 
-drop policy if exists meeting_accessories_service_full_access on public.meeting_accessories;
-create policy meeting_accessories_service_full_access
-  on public.meeting_accessories
-  for all
-  to public
-  using (auth.role() = 'service_role'::text)
-  with check (auth.role() = 'service_role'::text);
+-- NO authenticated DELETE policy (hard delete disabled)
 
 -- Grants
-revoke all on table public.meeting_accessories from public;
-grant all on table public.meeting_accessories to authenticated;
-grant all on table public.meeting_accessories to service_role;
+REVOKE ALL ON TABLE public.meeting_accessories FROM anon;
+REVOKE ALL ON TABLE public.meeting_accessories FROM authenticated;
+
+GRANT SELECT, INSERT, UPDATE ON TABLE public.meeting_accessories TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.meeting_accessories TO service_role;
