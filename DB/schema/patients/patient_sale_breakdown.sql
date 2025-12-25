@@ -1,4 +1,4 @@
--- db/schema/public/patient_sale_breakdown.sql
+-- db/schema/patient_sale_breakdown.sql
 -- Purpose: Supabase table definition for `public.patient_sale_breakdown`.
 -- Summary: Captures sale split rows (method/amount) per patient+org.
 -- Source-of-truth: Mirrors current DB columns/constraints/indexes/RLS/policies/grants.
