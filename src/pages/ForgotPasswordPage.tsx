@@ -1,12 +1,20 @@
 // src/pages/ForgotPasswordPage.tsx
 // Summary: Sends a password reset email using Supabase recovery flow.
-// Notes:
-// - The redirect URL must be allowed in Supabase Auth settings (Redirect URLs).
-// - We redirect back to /reset-password where the user sets a new password.
+// Debug additions:
+// - Logs Supabase error details (code, message, status, name)
+// - Logs redirectTo and email
+// - Optional debug block for development (console-first, UI-safe)
 
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabaseClient } from '../utils/supabaseClient';
+
+type DebugError = {
+  name?: string;
+  message?: string;
+  status?: number;
+  code?: string;
+};
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -14,15 +22,16 @@ export default function ForgotPasswordPage() {
     'idle',
   );
   const [err, setErr] = useState('');
+  const [debugError, setDebugError] = useState<DebugError | null>(null);
 
   const redirectTo = useMemo(() => {
-    // Ensures correct host on localhost / production.
     return `${window.location.origin}/reset-password`;
   }, []);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr('');
+    setDebugError(null);
     setStatus('sending');
 
     const trimmed = email.trim();
@@ -32,12 +41,26 @@ export default function ForgotPasswordPage() {
       return;
     }
 
+    console.group('[AUTH][FORGOT_PASSWORD]');
+    console.info('Email:', trimmed);
+    console.info('RedirectTo:', redirectTo);
+
     const { error } = await supabaseClient.auth.resetPasswordForEmail(trimmed, {
       redirectTo,
     });
 
     if (error) {
-      console.error('AUTH_FORGOT_PASSWORD_SEND:', error);
+      const detailed: DebugError = {
+        name: (error as any).name,
+        message: error.message,
+        status: (error as any).status,
+        code: (error as any).code,
+      };
+
+      console.error('Supabase resetPasswordForEmail error:', detailed);
+      console.groupEnd();
+
+      setDebugError(detailed);
       setErr(
         'Şifre sıfırlama e-postası gönderilemedi. Lütfen e-posta adresinizi kontrol edin.',
       );
@@ -45,8 +68,12 @@ export default function ForgotPasswordPage() {
       return;
     }
 
+    console.info('Password recovery email request accepted');
+    console.groupEnd();
     setStatus('sent');
   };
+
+  const isDev = import.meta.env.DEV;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-6">
@@ -68,6 +95,13 @@ export default function ForgotPasswordPage() {
               <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 {err}
               </p>
+            )}
+
+            {/* DEV-ONLY DEBUG BLOCK */}
+            {isDev && debugError && (
+              <pre className="text-xs bg-slate-900 text-slate-100 rounded p-2 overflow-auto">
+{JSON.stringify(debugError, null, 2)}
+              </pre>
             )}
 
             <label className="block">
