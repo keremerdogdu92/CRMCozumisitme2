@@ -27,6 +27,7 @@ WITH device_agg AS (
   FROM public.inventory_items AS i
   WHERE i.status = 'sold'::text
     AND i.sold_patient_id IS NOT NULL
+    AND i.deleted_at IS NULL
   GROUP BY i.org_id, i.sold_patient_id
 )
 SELECT
