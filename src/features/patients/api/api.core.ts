@@ -1,5 +1,10 @@
 // src/features/patients/api/api.core.ts
-// Core patient API helpers: query keys, listing, search and shared utilities.
+// Summary: Core patient API helpers: query keys, listing, search and shared utilities.
+// Integrations:
+// - Reads from patient_list_with_device (active-only) and patient_list_with_device_all (includes deleted rows).
+// - Soft delete visibility is controlled via SoftDeleteMode.
+// - IMPORTANT: PostgREST errors if you select columns that do not exist in a view.
+//   Therefore, deleted_* columns are requested ONLY when querying the *_all view.
 
 import { supabaseClient } from '../../../utils/supabaseClient';
 import type { PatientRow } from '../types';
@@ -66,64 +71,68 @@ export async function fetchPatientsByReferenceId(
 /**
  * Full patient list with device + reference info.
  * Backed by:
- * - patient_list_with_device (default, NOT deleted)
- * - patient_list_with_device_all (admin/all, includes deleted rows)
+ * - patient_list_with_device (default, active-only)
+ * - patient_list_with_device_all (includes deleted rows)
  */
 export async function fetchPatients(params?: {
   mode?: SoftDeleteMode;
 }): Promise<PatientRow[]> {
   const mode: SoftDeleteMode = params?.mode ?? 'active';
 
-  const source = needsIncludeDeleted(mode)
+  const includeDeleted = needsIncludeDeleted(mode);
+  const source = includeDeleted
     ? 'patient_list_with_device_all'
     : 'patient_list_with_device';
 
+  // NOTE:
+  // Keep select lists explicit to avoid accidental schema drift.
+  // Do NOT request deleted_* columns from the non-all view; PostgREST will error.
+  const baseColumns: string[] = [
+    'id',
+    'full_name',
+    'phone',
+    'created_at',
+    'last_visit_at',
+    'sgk_flag',
+    'sgk_prescription_no',
+    'sgk_docs_received',
+    'sgk_processed',
+    'satisfaction_10',
+    'sgk_prescription_received',
+    'sgk_recorded_to_system',
+    'sgk_recorded_to_system_at',
+    'national_id',
+    'address',
+    'kin_phone',
+    'reference_id',
+    'reference_name',
+    'reference_phone',
+    'archive_code',
+    'payment_method',
+    'sale_total_amount',
+    'card_fee_rate',
+    'card_fee_amount',
+    'device_brand',
+    'device_model',
+    'device_total_price',
+    'device_ear_side_summary',
+    'invoice_issued',
+    'invoice_issued_at',
+    'sgk_profile',
+    'sgk_expected_reimbursement',
+    'sgk_expected_reimbursement_month',
+    'is_battery_patient',
+  ];
+
+  const deletedColumns: string[] = includeDeleted
+    ? ['deleted_at', 'deleted_by', 'delete_reason']
+    : [];
+
+  const selectList = [...baseColumns, ...deletedColumns].join(', ');
+
   const { data, error } = await supabaseClient
     .from(source)
-    .select(
-      [
-        'id',
-        'full_name',
-        'phone',
-        'created_at',
-        'last_visit_at',
-        'sgk_flag',
-        'sgk_prescription_no',
-        'sgk_docs_received',
-        'sgk_processed',
-        'satisfaction_10',
-        'sgk_prescription_received',
-        'sgk_recorded_to_system',
-        'sgk_recorded_to_system_at',
-        'national_id',
-        'address',
-        'kin_phone',
-        'reference_id',
-        'reference_name',
-        'reference_phone',
-        'archive_code',
-        'payment_method',
-        'sale_total_amount',
-        'card_fee_rate',
-        'card_fee_amount',
-        'device_brand',
-        'device_model',
-        'device_total_price',
-        'device_ear_side_summary',
-        'invoice_issued',
-        'invoice_issued_at',
-        'sgk_profile',
-        'sgk_expected_reimbursement',
-        'sgk_expected_reimbursement_month',
-        'is_battery_patient',
-
-        // NOTE: Only exists in *_all view. Safe to request; in non-all view it won't be selected.
-        // We keep this here so admin UI can filter deleted-only client-side when needed.
-        'deleted_at',
-        'deleted_by',
-        'delete_reason',
-      ].join(', '),
-    )
+    .select(selectList)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -207,18 +216,23 @@ export async function fetchPatients(params?: {
       is_battery_patient: (row.is_battery_patient as boolean | null) ?? null,
     };
 
-    // NOTE:
-    // PatientRow type may not currently include deleted fields. We intentionally do NOT assign them here.
-    // Deleted-only filtering is done in the page using raw row.deleted_at presence.
-    (patient as any).deleted_at = (row.deleted_at as string | null) ?? null;
-    (patient as any).deleted_by = (row.deleted_by as string | null) ?? null;
-    (patient as any).delete_reason =
-      (row.delete_reason as string | null) ?? null;
+    // Keep deleted fields available for UI without forcing PatientRow to include them today.
+    // This avoids a large refactor but keeps the data accessible.
+    if (includeDeleted) {
+      (patient as any).deleted_at = (row.deleted_at as string | null) ?? null;
+      (patient as any).deleted_by = (row.deleted_by as string | null) ?? null;
+      (patient as any).delete_reason =
+        (row.delete_reason as string | null) ?? null;
+    } else {
+      (patient as any).deleted_at = null;
+      (patient as any).deleted_by = null;
+      (patient as any).delete_reason = null;
+    }
 
     return patient;
   });
 
-  if (!needsIncludeDeleted(mode)) {
+  if (!includeDeleted) {
     return mapped;
   }
 
