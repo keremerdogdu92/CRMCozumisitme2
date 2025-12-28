@@ -1,6 +1,15 @@
 // src/pages/PatientsPage.tsx
-// Container page for Patients with responsive layout and filters.
-// NOTE: Hasta CSV import işlemleri yalnızca Settings sayfasından yönetilir.
+// Summary: Container page for Patients with responsive layout and filters.
+// Integrations:
+// - React Query fetch via fetchPatients({ mode }) with soft delete visibility mode.
+// - Deep-link support: /patients?focusId=<patientId> forces effective mode='all' to avoid hiding the target row.
+// - Trial conversion flow can pass ?trialId=<uuid> and/or location.state.fromTrial.
+//
+// Patch v2.2 (soft delete visibility for staff + focusId safety):
+// - CHANGE: SoftDeleteModeFilter is no longer admin-only; staff can also view deleted/all.
+// - ADD: focusId forces effectiveSoftDeleteMode='all' (same rationale as TrialsPage).
+// - KEEP: Existing SGK filter + search filter behavior.
+// - UI: SoftDeleteModeFilter is disabled when focusId is active (readability/consistency).
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -21,28 +30,25 @@ import { useCurrentProfile } from '../features/auth/useCurrentProfile';
 import type { SoftDeleteMode } from '../utils/softDelete/softDeleteTypes';
 import { SoftDeleteModeFilter } from '../components/table/SoftDeleteModeFilter';
 
-type PatientDetailTabId =
-  | 'info'
-  | 'devices'
-  | 'meetings'
-  | 'payments'
-  | 'audiogram';
+type PatientDetailTabId = 'info' | 'devices' | 'meetings' | 'payments' | 'audiogram';
 
-type PatientsPageLocationState = {
-  fromTrial?: {
-    trialId: string;
-    fullName: string;
-    phone: string | null;
-    referenceId: string | null;
-    referenceName?: string | null;
-    note?: string | null;
-  };
-  fromTrialDevices?: {
-    side: string | null;
-    brand: string | null;
-    model: string | null;
-  }[];
-} | undefined;
+type PatientsPageLocationState =
+  | {
+      fromTrial?: {
+        trialId: string;
+        fullName: string;
+        phone: string | null;
+        referenceId: string | null;
+        referenceName?: string | null;
+        note?: string | null;
+      };
+      fromTrialDevices?: {
+        side: string | null;
+        brand: string | null;
+        model: string | null;
+      }[];
+    }
+  | undefined;
 
 export default function PatientsPage() {
   const queryClient = useQueryClient();
@@ -52,12 +58,10 @@ export default function PatientsPage() {
   const { data: profile } = useCurrentProfile();
   const isAdmin = profile?.role === 'admin';
 
-  // Optional: if PatientsPage is opened from a Trial context,
-  // ?trialId=<uuid> can be passed in the URL.
+  // Optional: if PatientsPage is opened from a Trial context, ?trialId=<uuid> can be passed.
   const linkedTrialId = searchParams.get('trialId');
 
-  // Optional: if PatientsPage is opened from Meetings / another place,
-  // ?focusId=<patientId> geçilirse sadece bu hasta listede gösterilir.
+  // Optional: deep link, show only one patient row
   const focusPatientId = searchParams.get('focusId');
 
   const openedFromTrial = !!location.state?.fromTrial;
@@ -66,17 +70,14 @@ export default function PatientsPage() {
   const [sgkFilter, setSgkFilter] = useState<'all' | 'sgk' | 'non-sgk'>('all');
   const [showCreateForm, setShowCreateForm] = useState<boolean>(openedFromTrial);
   const [detailPatient, setDetailPatient] = useState<PatientRow | null>(null);
-  const [detailInitialTab, setDetailInitialTab] =
-    useState<PatientDetailTabId>('info');
-  const [detailInitialShowPlan, setDetailInitialShowPlan] =
-    useState<boolean>(false);
+  const [detailInitialTab, setDetailInitialTab] = useState<PatientDetailTabId>('info');
+  const [detailInitialShowPlan, setDetailInitialShowPlan] = useState<boolean>(false);
 
-  // Soft delete filter (admin only):
-  // - staff always uses 'active'
+  // Soft delete filter (visible for everyone)
   const [softDeleteMode, setSoftDeleteMode] = useState<SoftDeleteMode>('active');
-  const effectiveSoftDeleteMode: SoftDeleteMode = isAdmin
-    ? softDeleteMode
-    : 'active';
+
+  // If focusId is present, force mode='all' to avoid hiding the target row.
+  const effectiveSoftDeleteMode: SoftDeleteMode = focusPatientId ? 'all' : softDeleteMode;
 
   const { data, isLoading, isError } = useQuery({
     queryKey: [...PATIENTS_QUERY_KEY, { mode: effectiveSoftDeleteMode }],
@@ -85,10 +86,7 @@ export default function PatientsPage() {
 
   const createMutation = useMutation({
     mutationFn: async (values: NewPatientForm) => {
-      const patient = await createPatientFromForm(
-        values,
-        linkedTrialId ? { linkedTrialId } : undefined,
-      );
+      const patient = await createPatientFromForm(values, linkedTrialId ? { linkedTrialId } : undefined);
       return patient;
     },
     onSuccess: (createdPatient, variables) => {
@@ -121,8 +119,7 @@ export default function PatientsPage() {
   if (isError) {
     return (
       <div className="p-4 text-sm text-red-600 sm:p-8">
-        Hasta verileri alınırken bir hata oluştu. Lütfen Supabase
-        bağlantısını ve RLS ayarlarını kontrol edin.
+        Hasta verileri alınırken bir hata oluştu. Lütfen Supabase bağlantısını ve RLS ayarlarını kontrol edin.
       </div>
     );
   }
@@ -130,9 +127,7 @@ export default function PatientsPage() {
   const patients = data ?? [];
 
   const focusPatient: PatientRow | null =
-    focusPatientId && patients.length > 0
-      ? patients.find((p) => p.id === focusPatientId) ?? null
-      : null;
+    focusPatientId && patients.length > 0 ? patients.find((p) => p.id === focusPatientId) ?? null : null;
 
   const filteredPatients = useMemo(() => {
     if (focusPatient) return [focusPatient];
@@ -153,8 +148,7 @@ export default function PatientsPage() {
     });
   }, [focusPatient, patients, search, sgkFilter]);
 
-  const mutationError =
-    (createMutation.error as Error | null | undefined)?.message ?? '';
+  const mutationError = (createMutation.error as Error | null | undefined)?.message ?? '';
 
   const handleToggleCreateForm = () => {
     setShowCreateForm((prev) => !prev);
@@ -178,27 +172,27 @@ export default function PatientsPage() {
     <div className="space-y-5 px-3 py-4 sm:px-4 sm:py-6 lg:px-8 lg:py-8">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
-            Hastalar
-          </h2>
+          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Hastalar</h2>
           <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs">
             Toplam {filteredPatients.length} kayıt
           </p>
+          {focusPatientId && (
+            <p className="mt-1 text-[11px] text-primary-700">
+              Görüşmeden gelindi. Sadece seçilen hasta kaydı gösteriliyor.
+            </p>
+          )}
         </div>
       </div>
 
       <div className="space-y-3 rounded-lg border border-slate-100 bg-slate-50/70 p-3 shadow-sm sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:space-y-0 sm:bg-slate-50">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-500 sm:text-xs">
-              SGK filtre:
-            </span>
+            <span className="text-[11px] text-slate-500 sm:text-xs">SGK filtre:</span>
             <select
               value={sgkFilter}
-              onChange={(e) =>
-                setSgkFilter(e.target.value as 'all' | 'sgk' | 'non-sgk')
-              }
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              onChange={(e) => setSgkFilter(e.target.value as 'all' | 'sgk' | 'non-sgk')}
+              disabled={!!focusPatientId}
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-60"
             >
               <option value="all">Hepsi</option>
               <option value="sgk">Sadece SGK</option>
@@ -206,12 +200,12 @@ export default function PatientsPage() {
             </select>
           </div>
 
-          {isAdmin && !focusPatient && (
-            <SoftDeleteModeFilter
-              value={softDeleteMode}
-              onChange={setSoftDeleteMode}
-            />
-          )}
+          {/* Soft delete mode: visible for everyone (admin + staff) */}
+          <SoftDeleteModeFilter
+            value={softDeleteMode}
+            onChange={setSoftDeleteMode}
+            className={focusPatientId ? 'opacity-60 pointer-events-none' : ''}
+          />
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
@@ -221,7 +215,7 @@ export default function PatientsPage() {
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            disabled={!!focusPatient}
+            disabled={!!focusPatientId}
           />
 
           <button
@@ -242,10 +236,7 @@ export default function PatientsPage() {
         errorMessage={createMutation.isError ? mutationError : undefined}
       />
 
-      <PatientsTable
-        patients={filteredPatients}
-        onSelectPatient={handleSelectPatient}
-      />
+      <PatientsTable patients={filteredPatients} onSelectPatient={handleSelectPatient} />
 
       {detailPatient && (
         <PatientDetailDrawer
@@ -263,9 +254,7 @@ export default function PatientsPage() {
             })
           }
           isSaving={sgkUpdateMutation.isPending}
-          errorMsg={
-            (sgkUpdateMutation.error as Error | null | undefined)?.message ?? ''
-          }
+          errorMsg={(sgkUpdateMutation.error as Error | null | undefined)?.message ?? ''}
           initialTab={detailInitialTab}
           initialShowPlanForm={detailInitialShowPlan}
         />
