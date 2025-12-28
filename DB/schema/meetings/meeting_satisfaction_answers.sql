@@ -1,16 +1,23 @@
 -- DB/schema/meetings/meeting_satisfaction_answers.sql
--- Purpose: Stores per-question 1-5 satisfaction scores for a given meeting.
---
--- Multi-org standard:
--- - Org isolation via public.current_user_org_id() (never JWT claims).
--- - Inserts allowed within org (staff/admin) because staff will submit surveys.
--- - Updates/deletes restricted to admin/service_role (answers should be mostly immutable).
+-- Summary: Supabase table definition for `public.meeting_satisfaction_answers`.
+-- Stores per-question 1-5 satisfaction scores for a meeting.
+-- Integrates with:
+-- - public.meetings (meeting_id)
+-- - public.patients (patient_id)
+-- - public.meeting_satisfaction_question_lists (list_id)
+-- - public.meeting_satisfaction_questions (question_id)
+-- - public.orgs (org_id)
+-- Security model:
+-- - Multi-org isolation via public.current_user_org_id()
+-- - Staff/admin can INSERT within org (survey submission)
+-- - UPDATE/DELETE are admin-only within org (answers mostly immutable)
+-- - service_role full access
+-- - anon no access
+-- Data integrity:
+-- - SECURITY DEFINER trigger enforces org_id consistency across referenced rows
 --
 -- v1.2.0 (2025-12-24):
--- - ADD: org_id FK -> public.orgs
--- - ADD: RLS + policies + grants
--- - ADD: SECURITY DEFINER trigger to enforce org_id consistency across referenced rows
--- - KEEP: reporting indexes
+-- - Org integrity enforcement trigger + org-scoped RLS
 
 CREATE TABLE IF NOT EXISTS public.meeting_satisfaction_answers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -51,7 +58,7 @@ CREATE OR REPLACE FUNCTION public.meeting_satisfaction_answers_enforce_org()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_meeting_org uuid;
@@ -59,7 +66,7 @@ DECLARE
   v_list_org uuid;
   v_question_org uuid;
 BEGIN
-  -- service_role can bypass (data repair/import), but still validate if you want strictness.
+  -- service_role can bypass for backoffice repair/import operations.
   IF auth.role() = 'service_role'::text THEN
     RETURN NEW;
   END IF;
@@ -121,7 +128,6 @@ EXECUTE FUNCTION public.meeting_satisfaction_answers_enforce_org();
 
 ALTER TABLE public.meeting_satisfaction_answers ENABLE ROW LEVEL SECURITY;
 
--- Drop legacy policies (deterministic repo)
 DROP POLICY IF EXISTS meeting_satisfaction_answers_service_full_access
   ON public.meeting_satisfaction_answers;
 DROP POLICY IF EXISTS meeting_satisfaction_answers_org_select
@@ -133,7 +139,6 @@ DROP POLICY IF EXISTS meeting_satisfaction_answers_org_update_admin
 DROP POLICY IF EXISTS meeting_satisfaction_answers_org_delete_admin
   ON public.meeting_satisfaction_answers;
 
--- Service role full access
 CREATE POLICY meeting_satisfaction_answers_service_full_access
 ON public.meeting_satisfaction_answers
 AS PERMISSIVE
@@ -142,7 +147,6 @@ TO public
 USING (auth.role() = 'service_role'::text)
 WITH CHECK (auth.role() = 'service_role'::text);
 
--- SELECT: org-scoped for authenticated
 CREATE POLICY meeting_satisfaction_answers_org_select
 ON public.meeting_satisfaction_answers
 AS PERMISSIVE
@@ -153,7 +157,6 @@ USING (
   OR org_id = public.current_user_org_id()
 );
 
--- INSERT: within org for authenticated (staff/admin)
 CREATE POLICY meeting_satisfaction_answers_org_insert
 ON public.meeting_satisfaction_answers
 AS PERMISSIVE
@@ -164,7 +167,6 @@ WITH CHECK (
   OR org_id = public.current_user_org_id()
 );
 
--- UPDATE: admin-only within org
 CREATE POLICY meeting_satisfaction_answers_org_update_admin
 ON public.meeting_satisfaction_answers
 AS PERMISSIVE
@@ -185,7 +187,6 @@ WITH CHECK (
   )
 );
 
--- DELETE: admin-only within org
 CREATE POLICY meeting_satisfaction_answers_org_delete_admin
 ON public.meeting_satisfaction_answers
 AS PERMISSIVE
@@ -209,4 +210,5 @@ REVOKE ALL ON TABLE public.meeting_satisfaction_answers FROM authenticated;
 GRANT SELECT, INSERT ON TABLE public.meeting_satisfaction_answers TO authenticated;
 
 GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
-ON TABLE public.meeting_satisfaction_answers TO service_role;
+ON TABLE public.meeting_satisfaction_answers
+TO service_role;
