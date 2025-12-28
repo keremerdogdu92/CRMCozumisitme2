@@ -8,7 +8,7 @@
 // - Org scoping is enforced server-side via public.current_user_org_id() inside the RPCs.
 //
 // IMPORTANT:
-// - Do not UPDATE deleted_* columns directly from UI. Keep behavior canonical via RPCs.
+// - UI must not UPDATE deleted_* columns directly. Keep behavior canonical via RPCs.
 
 import { supabaseClient } from '../../../utils/supabaseClient';
 
