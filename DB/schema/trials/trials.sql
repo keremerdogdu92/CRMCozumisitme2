@@ -5,12 +5,13 @@
 -- - Soft delete via deleted_at/deleted_by/delete_reason + RPCs:
 --   - public.soft_delete_trials(p_id, p_reason)
 --   - public.restore_trials(p_id)
+-- - Soft delete deleted_by stamping via trigger:
+--   - public.trg_soft_delete_set_deleted_by() (core/soft_delete_helpers.sql)
 --
--- v3.1.0 (2025-12-28):
--- - ALIGN WITH DB: add deleted_by + delete_reason (trials already had deleted_at).
--- - ALIGN WITH DB: add RPCs (soft delete + restore) and grant execute.
--- - ALIGN WITH DECISION: everyone can SELECT deleted rows; UI filters by deleted_at.
--- - ALIGN WITH DB: disable hard delete for authenticated (no DELETE policy, no DELETE grant).
+-- v3.2.0 (2025-12-28):
+-- - SECURITY: Make soft_delete_trials idempotent (do not re-stamp already deleted rows).
+-- - CONSISTENCY: Add soft delete trigger to stamp deleted_by via shared helper.
+-- - KEEP: helper-based org policies; no authenticated hard delete.
 
 CREATE TABLE IF NOT EXISTS public.trials (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -42,6 +43,17 @@ CREATE INDEX IF NOT EXISTS trials_org_deleted_at_idx
   ON public.trials (org_id, deleted_at);
 
 -- ============================================================
+-- SOFT DELETE TRIGGER (shared helper)
+-- ============================================================
+
+DROP TRIGGER IF EXISTS trg_trials_soft_delete_stamp ON public.trials;
+
+CREATE TRIGGER trg_trials_soft_delete_stamp
+BEFORE UPDATE OF deleted_at, deleted_by ON public.trials
+FOR EACH ROW
+EXECUTE FUNCTION public.trg_soft_delete_set_deleted_by();
+
+-- ============================================================
 -- SOFT DELETE RPCs (UI must call RPC; hard delete is disabled)
 -- ============================================================
 
@@ -54,10 +66,10 @@ AS $function$
 BEGIN
   UPDATE public.trials
   SET deleted_at = now(),
-      deleted_by = auth.uid(),
       delete_reason = p_reason
   WHERE id = p_id
-    AND org_id = public.current_user_org_id();
+    AND org_id = public.current_user_org_id()
+    AND deleted_at IS NULL;
 END;
 $function$;
 
@@ -76,7 +88,8 @@ BEGIN
       deleted_by = NULL,
       delete_reason = NULL
   WHERE id = p_id
-    AND org_id = public.current_user_org_id();
+    AND org_id = public.current_user_org_id()
+    AND deleted_at IS NOT NULL;
 END;
 $function$;
 
@@ -127,7 +140,7 @@ WITH CHECK (
   OR (org_id = public.current_user_org_id())
 );
 
--- UPDATE: within org (needed for edits + soft delete/restore updates via RPC)
+-- UPDATE: within org
 CREATE POLICY "trials_org_update"
 ON public.trials
 AS PERMISSIVE
