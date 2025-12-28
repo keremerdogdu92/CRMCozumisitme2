@@ -5,10 +5,12 @@
 -- - Admin-only reads/writes (staff sees nothing).
 -- - Soft delete via deleted_at + deleted_by + delete_reason.
 --
--- v2.1.0 (2025-12-25):
--- - SECURITY: Make reference_gifts fully admin-only for authenticated users.
--- - SOFT DELETE: Add deleted_by + delete_reason, and auto-set deleted_by on soft delete.
--- - HARD DELETE: Remove authenticated DELETE policy (service_role only).
+-- Dependencies:
+-- - Requires DB/schema/core/soft_delete_helpers.sql (public.trg_soft_delete_set_deleted_by()) to exist.
+--
+-- v2.2.0 (2025-12-28):
+-- - REFACTOR: Move trg_soft_delete_set_deleted_by() into core/soft_delete_helpers.sql (single source of truth).
+-- - KEEP: policies, grants, triggers unchanged.
 
 CREATE TABLE IF NOT EXISTS public.reference_gifts (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -47,27 +49,8 @@ ON public.reference_gifts USING btree (deleted_at)
 TABLESPACE pg_default;
 
 -- ============================================================
--- SOFT DELETE HELPERS
+-- SOFT DELETE TRIGGER (uses shared helper)
 -- ============================================================
-
-CREATE OR REPLACE FUNCTION public.trg_soft_delete_set_deleted_by()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  -- If row is being soft-deleted (deleted_at transitions NULL -> NOT NULL),
-  -- stamp deleted_by automatically.
-  IF (OLD.deleted_at IS NULL) AND (NEW.deleted_at IS NOT NULL) THEN
-    IF NEW.deleted_by IS NULL THEN
-      NEW.deleted_by := auth.uid();
-    END IF;
-  END IF;
-
-  RETURN NEW;
-END;
-$$;
 
 DROP TRIGGER IF EXISTS trg_reference_gifts_soft_delete_stamp ON public.reference_gifts;
 
