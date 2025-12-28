@@ -1,12 +1,13 @@
 // src/components/table/useTablePreferences.ts
-// Summary: Manages per-table preferences (columns + sorting + UI toggles) with localStorage.
+// Summary: Manages per-table column visibility, sorting, and UI toggle preferences (with localStorage).
 // Integrations:
-// - Used by tables to persist column visibility and sort state.
-// - Also supports lightweight per-table UI toggles (e.g., show/hide filters).
-// - Optional per-user scoping via userId.
+// - Used by feature tables to persist column visibility and sorting.
+// - Also supports UI toggles (e.g., show/hide SoftDeleteModeFilter) stored under state.ui.
 //
-// Backward compatibility:
-// - Older saved payloads may not include `ui`. This code merges safely.
+// Patch v2.2:
+// - ADD: state.ui to persist table-level UI toggles.
+// - ADD: isUiFlagEnabled / toggleUiFlag helpers.
+// - CHANGE: Preserve unknown saved column keys (do not wipe prefs if columns list is empty or changes).
 
 import { useEffect, useMemo, useState } from 'react';
 import type { SortDirection, TableColumnDef } from './tableTypes';
@@ -15,13 +16,7 @@ export type TablePrefsState = {
   columns: Record<string, boolean>; // columnId -> visible?
   sortBy: string | null;
   sortDir: SortDirection;
-
-  /**
-   * Per-table UI flags (not columns).
-   * Example flags:
-   * - showSoftDeleteFilter: boolean
-   */
-  ui?: Record<string, boolean>;
+  ui?: Record<string, boolean>; // uiFlagId -> enabled?
 };
 
 const STORAGE_KEY_PREFIX = 'crm-table-prefs:';
@@ -61,18 +56,12 @@ function loadInitialState<TRow>(
 ): TablePrefsState {
   const defaultColumns = buildDefaultColumns(columns);
 
-  // Default UI flags (table-level).
-  // Add new flags here with a sensible default.
-  const defaultUi: Record<string, boolean> = {
-    showSoftDeleteFilter: true,
-  };
-
   if (typeof window === 'undefined') {
     return {
       columns: defaultColumns,
       sortBy: null,
       sortDir: 'asc',
-      ui: { ...defaultUi },
+      ui: {},
     };
   }
 
@@ -82,23 +71,24 @@ function loadInitialState<TRow>(
       columns: defaultColumns,
       sortBy: null,
       sortDir: 'asc',
-      ui: { ...defaultUi },
+      ui: {},
     };
   }
 
-  // Merge saved columns with current columns (new columns may have been added)
-  const mergedColumns: Record<string, boolean> = { ...defaultColumns };
-  for (const key of Object.keys(saved.columns ?? {})) {
-    if (key in mergedColumns) {
-      mergedColumns[key] = saved.columns[key];
+  // Preserve all saved keys (even if current columns list differs),
+  // then ensure defaults exist for any new columns.
+  const mergedColumns: Record<string, boolean> = {
+    ...(saved.columns ?? {}),
+  };
+  for (const key of Object.keys(defaultColumns)) {
+    if (!(key in mergedColumns)) {
+      mergedColumns[key] = defaultColumns[key];
     }
   }
 
-  // Merge saved UI flags with defaults
-  const mergedUi: Record<string, boolean> = { ...defaultUi };
-  for (const key of Object.keys(saved.ui ?? {})) {
-    mergedUi[key] = (saved.ui as any)[key] === true;
-  }
+  const mergedUi: Record<string, boolean> = {
+    ...(saved.ui ?? {}),
+  };
 
   return {
     columns: mergedColumns,
@@ -144,7 +134,7 @@ export function useTablePreferences<TRow>(
       ...prev,
       columns: {
         ...prev.columns,
-        [columnId]: !prev.columns[columnId],
+        [columnId]: !(prev.columns[columnId] !== false),
       },
     }));
   };
@@ -167,24 +157,27 @@ export function useTablePreferences<TRow>(
     });
   };
 
+  const isColumnVisible = (id: string) => state.columns[id] !== false;
+
   const isUiFlagEnabled = (flagId: string, defaultValue = true) => {
     const ui = state.ui ?? {};
-    if (!(flagId in ui)) return defaultValue;
-    return ui[flagId] === true;
-  };
-
-  const setUiFlag = (flagId: string, value: boolean) => {
-    setState((prev) => ({
-      ...prev,
-      ui: {
-        ...(prev.ui ?? {}),
-        [flagId]: value,
-      },
-    }));
+    const v = ui[flagId];
+    return typeof v === 'boolean' ? v : defaultValue;
   };
 
   const toggleUiFlag = (flagId: string) => {
-    setUiFlag(flagId, !isUiFlagEnabled(flagId, true));
+    setState((prev) => {
+      const current = prev.ui ?? {};
+      const nextValue = !(typeof current[flagId] === 'boolean' ? current[flagId] : true);
+
+      return {
+        ...prev,
+        ui: {
+          ...current,
+          [flagId]: nextValue,
+        },
+      };
+    });
   };
 
   return {
@@ -192,11 +185,9 @@ export function useTablePreferences<TRow>(
     visibleColumns,
     toggleColumn,
     setSort,
-    isColumnVisible: (id: string) => state.columns[id] !== false,
-
-    // UI toggles (optional consumers)
+    isColumnVisible,
+    // UI toggles
     isUiFlagEnabled,
-    setUiFlag,
     toggleUiFlag,
   };
 }
