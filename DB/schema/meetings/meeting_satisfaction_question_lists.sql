@@ -1,15 +1,17 @@
 -- DB/schema/meetings/meeting_satisfaction_question_lists.sql
--- Purpose: Stores survey question lists/templates for meeting satisfaction.
--- Each org can define multiple lists, e.g. "Genel Kontrol", "Teslimat Sonrası" etc.
---
--- Multi-org standard:
--- - Org isolation via public.current_user_org_id() (never JWT claims).
--- - Admin-only write for settings tables (question lists).
+-- Summary: Supabase table definition for `public.meeting_satisfaction_question_lists`.
+-- Stores survey question list templates (per org).
+-- Integrates with:
+-- - `public.orgs` (org_id)
+-- Security model:
+-- - Multi-org isolation via public.current_user_org_id()
+-- - SELECT allowed for authenticated within org
+-- - INSERT/UPDATE/DELETE admin-only within org
+-- - `service_role` full access
+-- - `anon` has no access
 --
 -- v1.1.0 (2025-12-24):
--- - ADD: org_id FK -> public.orgs
--- - ADD: RLS + policies + grants
--- - ADD: basic indexes
+-- - Org-scoped RLS with admin-only write
 
 CREATE TABLE IF NOT EXISTS public.meeting_satisfaction_question_lists (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -35,7 +37,6 @@ CREATE INDEX IF NOT EXISTS meeting_satisfaction_question_lists_org_active_idx
 
 ALTER TABLE public.meeting_satisfaction_question_lists ENABLE ROW LEVEL SECURITY;
 
--- Drop legacy policies (deterministic repo)
 DROP POLICY IF EXISTS meeting_satisfaction_question_lists_service_full_access
   ON public.meeting_satisfaction_question_lists;
 DROP POLICY IF EXISTS meeting_satisfaction_question_lists_org_select
@@ -47,7 +48,6 @@ DROP POLICY IF EXISTS meeting_satisfaction_question_lists_org_update_admin
 DROP POLICY IF EXISTS meeting_satisfaction_question_lists_org_delete_admin
   ON public.meeting_satisfaction_question_lists;
 
--- Service role full access
 CREATE POLICY meeting_satisfaction_question_lists_service_full_access
 ON public.meeting_satisfaction_question_lists
 AS PERMISSIVE
@@ -56,7 +56,6 @@ TO public
 USING (auth.role() = 'service_role'::text)
 WITH CHECK (auth.role() = 'service_role'::text);
 
--- SELECT: org-scoped for authenticated
 CREATE POLICY meeting_satisfaction_question_lists_org_select
 ON public.meeting_satisfaction_question_lists
 AS PERMISSIVE
@@ -67,7 +66,6 @@ USING (
   OR org_id = public.current_user_org_id()
 );
 
--- INSERT: admin-only within org
 CREATE POLICY meeting_satisfaction_question_lists_org_insert_admin
 ON public.meeting_satisfaction_question_lists
 AS PERMISSIVE
@@ -81,7 +79,6 @@ WITH CHECK (
   )
 );
 
--- UPDATE: admin-only within org
 CREATE POLICY meeting_satisfaction_question_lists_org_update_admin
 ON public.meeting_satisfaction_question_lists
 AS PERMISSIVE
@@ -102,7 +99,6 @@ WITH CHECK (
   )
 );
 
--- DELETE: admin-only within org
 CREATE POLICY meeting_satisfaction_question_lists_org_delete_admin
 ON public.meeting_satisfaction_question_lists
 AS PERMISSIVE
@@ -126,4 +122,5 @@ REVOKE ALL ON TABLE public.meeting_satisfaction_question_lists FROM authenticate
 GRANT SELECT ON TABLE public.meeting_satisfaction_question_lists TO authenticated;
 
 GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
-ON TABLE public.meeting_satisfaction_question_lists TO service_role;
+ON TABLE public.meeting_satisfaction_question_lists
+TO service_role;
