@@ -1,11 +1,17 @@
 // src/features/trials/api.ts
-// Summary: Supabase-backed API helpers and React Query keys for trial (deneme) data.
+// Summary: Supabase-backed API helpers and React Query keys for trial (deneme) lead pipeline data.
+// Integrations:
+// - Reads/writes from public.trials (lead pipeline + soft delete).
+// - Soft-delete visibility filtering is UI-driven via deleted_at checks.
+// - Conversion RPC wrapper calls public.link_trial_to_patient_and_delete() which
+//   now marks the trial as status='converted' and sets converted_patient_id
+//   WITHOUT deleting the trial row.
 //
-// Patch v2.1 (fix build + soft delete filter typing):
-// - Fixes Vercel/TS build errors by removing incorrect builder typing in applySoftDeleteModeFilter.
-//   Supabase select() returns a PostgrestFilterBuilder which supports .is() / .not().
+// Patch v3.0 (lead pipeline alignment):
+// - Adds lead pipeline fields to select payload: status, lost_at, lost_reason, converted_patient_id.
 // - Keeps default fetch behavior as active-only (deleted_at IS NULL).
-// - Admin UI can request mode=deleted/all; RLS can still restrict staff to active-only.
+// - Updates conversion RPC wrapper docs to reflect "no delete" behavior.
+// - Keeps soft delete filter typing permissive to avoid Postgrest generic coupling.
 
 import { supabaseClient } from '../../utils/supabaseClient';
 import type {
@@ -78,7 +84,13 @@ export async function fetchTrials(
       created_at,
       reference_id,
       note,
-      deleted_at
+      deleted_at,
+
+      -- Lead pipeline
+      status,
+      lost_at,
+      lost_reason,
+      converted_patient_id
     `,
   );
 
@@ -119,7 +131,13 @@ export async function fetchTrialsByReferenceId(
       created_at,
       reference_id,
       note,
-      deleted_at
+      deleted_at,
+
+      -- Lead pipeline
+      status,
+      lost_at,
+      lost_reason,
+      converted_patient_id
     `,
   );
 
@@ -143,7 +161,7 @@ export async function fetchTrialsByReferenceId(
  *
  * NOTE:
  * - Defaults to active-only (deleted rows are excluded).
- * - Add an opts.mode parameter later only if you truly need to search deleted.
+ * - Intentionally excludes converted/lost filtering; the picker should decide if it needs it later.
  */
 export interface TrialLite {
   id: string;
@@ -237,7 +255,8 @@ export async function fetchDeviceModelsByBrand(
  * Fetch trial_devices rows for a single trial, enriched with
  * catalog model data via trial_devices_with_catalog_public view.
  *
- * NOTE: trial_devices are not soft-deleted in this project (by design).
+ * NOTE: trial_devices have soft delete columns in DB, but current UI does not
+ * filter them. Keep as-is unless you want deleted device lines hidden.
  */
 export async function fetchTrialDevicesByTrialId(
   trialId: string,
@@ -296,7 +315,8 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
   }
 
   // 1) Current user
-  const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+  const { data: userData, error: userError } =
+    await supabaseClient.auth.getUser();
   if (userError) {
     console.error('Failed to get current user (TRIAL_STEP_USER):', userError);
     throw new Error('TRIAL_STEP_USER: ' + userError.message);
@@ -341,6 +361,8 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
         : null,
       reference_id: input.referenceId ?? null,
       note: input.note.trim() || null,
+
+      // Lead pipeline defaults are handled by DB (status='active')
     })
     .select('id')
     .limit(1);
@@ -352,7 +374,10 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
 
   const trialId = insertedTrials?.[0]?.id as string | undefined;
   if (!trialId) {
-    console.error('Trial insert did not return an id (TRIAL_STEP_NO_ID)', insertedTrials);
+    console.error(
+      'Trial insert did not return an id (TRIAL_STEP_NO_ID)',
+      insertedTrials,
+    );
     throw new Error('TRIAL_STEP_NO_ID: Trial insert did not return an id');
   }
 
@@ -380,10 +405,12 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
 }
 
 /**
- * RPC wrapper: link a trial to a newly created patient and then delete the trial.
+ * RPC wrapper: link a trial to a patient and mark it converted.
  *
- * IMPORTANT (soft delete plan):
- * Prefer updating the RPC to set trials.deleted_at = now() (soft delete) instead of hard DELETE.
+ * IMPORTANT:
+ * - Backend function name is kept for compatibility.
+ * - New backend behavior: DOES NOT delete the trial.
+ *   It sets trials.status='converted' and trials.converted_patient_id.
  */
 export async function linkTrialToPatientAndDelete(
   trialId: string,
@@ -395,19 +422,13 @@ export async function linkTrialToPatientAndDelete(
     );
   }
 
-  const { error } = await supabaseClient.rpc(
-    'link_trial_to_patient_and_delete',
-    {
-      p_trial_id: trialId,
-      p_patient_id: patientId,
-    },
-  );
+  const { error } = await supabaseClient.rpc('link_trial_to_patient_and_delete', {
+    p_trial_id: trialId,
+    p_patient_id: patientId,
+  });
 
   if (error) {
-    console.error(
-      'Supabase link_trial_to_patient_and_delete RPC error:',
-      error,
-    );
+    console.error('Supabase link_trial_to_patient_and_delete RPC error:', error);
     throw new Error(
       `TRIAL_LINK_RPC_FAILED: ${error.message ?? 'Unknown Supabase RPC error'}`,
     );
