@@ -1,16 +1,24 @@
 -- DB/schema/meetings/meeting_payments.sql
--- Purpose: Supabase table definition for `public.meeting_payments`.
--- Summary: Payment rows linked to meetings + patients.
--- Multi-org + soft delete standard:
--- - Org isolation via public.current_user_org_id()
--- - Soft delete via deleted_at + deleted_by + delete_reason
--- - Hard delete disabled for authenticated users (service_role only)
--- - Staff must NOT see rows that belong to reference meetings
+-- Summary: Supabase table definition for `public.meeting_payments`.
+-- Payment rows linked to meetings + patients.
+-- Integrates with:
+-- - `public.meetings` (meeting_id) for meeting_type gating and cascade behavior
+-- - `public.patients` (patient_id)
+-- - Soft delete + restore RPCs:
+--   - public.soft_delete_meeting_payments(p_id uuid, p_reason text)
+--   - public.restore_meeting_payments(p_id uuid)
+-- Security model:
+-- - Multi-org isolation via public.current_user_org_id()
+-- - Staff must not see rows belonging to meetings where meeting_type='reference' (admin-only)
+-- - Soft delete supported (deleted_at/deleted_by/delete_reason)
+-- - Hard delete disabled for authenticated (no DELETE policy; no DELETE privilege)
+-- - `service_role` has full access
+-- - `anon` has no access
 --
--- v1.1.0 (2025-12-25):
--- - SOFT DELETE: add deleted_* columns + trigger stamp deleted_by.
--- - SECURITY: enforce meeting_type='reference' visibility rule (admin-only) via join to meetings.
--- - HARD DELETE: remove authenticated DELETE policy.
+-- v2.0.0 (2025-12-28):
+-- - RPC: add soft_delete + restore functions (SECURITY DEFINER)
+-- - INDEX: add (org_id, deleted_at)
+-- - GRANTS: authenticated SELECT/INSERT/UPDATE only (no DELETE)
 
 CREATE TABLE IF NOT EXISTS public.meeting_payments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -46,28 +54,32 @@ CREATE TABLE IF NOT EXISTS public.meeting_payments (
     FOREIGN KEY (deleted_by) REFERENCES auth.users (id) ON DELETE SET NULL
 );
 
--- Indexes (DB-truth + soft-delete support)
+-- ============================================================
+-- INDEXES
+-- ============================================================
+
 CREATE UNIQUE INDEX IF NOT EXISTS meeting_payments_pkey
   ON public.meeting_payments USING btree (id);
 
-CREATE INDEX IF NOT EXISTS idx_meeting_payments_org_id
+CREATE INDEX IF NOT EXISTS meeting_payments_org_id_idx
   ON public.meeting_payments USING btree (org_id);
 
-CREATE INDEX IF NOT EXISTS idx_meeting_payments_meeting_id
+CREATE INDEX IF NOT EXISTS meeting_payments_meeting_id_idx
   ON public.meeting_payments USING btree (meeting_id);
 
-CREATE INDEX IF NOT EXISTS idx_meeting_payments_patient_id
+CREATE INDEX IF NOT EXISTS meeting_payments_patient_id_idx
   ON public.meeting_payments USING btree (patient_id);
 
-CREATE INDEX IF NOT EXISTS idx_meeting_payments_deleted_at
+CREATE INDEX IF NOT EXISTS meeting_payments_deleted_at_idx
   ON public.meeting_payments USING btree (deleted_at);
 
--- ============================================================
--- SOFT DELETE TRIGGER (shared helper name)
--- ============================================================
+-- Performance: common filters (org + active/deleted)
+CREATE INDEX IF NOT EXISTS meeting_payments_org_deleted_at_idx
+  ON public.meeting_payments USING btree (org_id, deleted_at);
 
--- Uses public.trg_soft_delete_set_deleted_by() created in core/reference_gifts.sql patch.
--- If you prefer, we can move it to a dedicated core/helpers.sql later.
+-- ============================================================
+-- SOFT DELETE TRIGGER
+-- ============================================================
 
 DROP TRIGGER IF EXISTS trg_meeting_payments_soft_delete_stamp ON public.meeting_payments;
 
@@ -77,117 +89,160 @@ FOR EACH ROW
 EXECUTE FUNCTION public.trg_soft_delete_set_deleted_by();
 
 -- ============================================================
+-- RPCs (soft delete + restore)
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.soft_delete_meeting_payments(
+  p_id uuid,
+  p_reason text DEFAULT NULL::text
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+BEGIN
+  UPDATE public.meeting_payments
+  SET deleted_at = now(),
+      deleted_by = auth.uid(),
+      delete_reason = p_reason
+  WHERE id = p_id
+    AND org_id = public.current_user_org_id();
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.restore_meeting_payments(
+  p_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+BEGIN
+  UPDATE public.meeting_payments
+  SET deleted_at = NULL,
+      deleted_by = NULL,
+      delete_reason = NULL
+  WHERE id = p_id
+    AND org_id = public.current_user_org_id();
+END;
+$function$;
+
+-- ============================================================
 -- RLS
 -- ============================================================
 
 ALTER TABLE public.meeting_payments ENABLE ROW LEVEL SECURITY;
 
--- Drop policies (deterministic)
 DROP POLICY IF EXISTS meeting_payments_service_full_access ON public.meeting_payments;
 DROP POLICY IF EXISTS meeting_payments_select_by_org_and_meeting_type ON public.meeting_payments;
 DROP POLICY IF EXISTS meeting_payments_insert_by_org_and_meeting_type ON public.meeting_payments;
 DROP POLICY IF EXISTS meeting_payments_update_by_org_and_meeting_type ON public.meeting_payments;
-DROP POLICY IF EXISTS meeting_payments_delete_by_org ON public.meeting_payments;
 
 -- service_role bypass
 CREATE POLICY meeting_payments_service_full_access
-  ON public.meeting_payments
-  AS PERMISSIVE
-  FOR ALL
-  TO public
-  USING (auth.role() = 'service_role'::text)
-  WITH CHECK (auth.role() = 'service_role'::text);
+ON public.meeting_payments
+AS PERMISSIVE
+FOR ALL
+TO public
+USING (auth.role() = 'service_role'::text)
+WITH CHECK (auth.role() = 'service_role'::text);
 
--- Helper predicate:
--- Staff cannot see reference meeting rows; admin can.
--- Note: we join meetings to reuse the same meeting_type rule.
+-- Staff cannot see reference meeting rows; admin can (join to meetings).
 CREATE POLICY meeting_payments_select_by_org_and_meeting_type
-  ON public.meeting_payments
-  AS PERMISSIVE
-  FOR SELECT
-  TO authenticated
-  USING (
-    auth.role() = 'service_role'::text
-    OR (
-      org_id = public.current_user_org_id()
-      AND EXISTS (
-        SELECT 1
-        FROM public.meetings m
-        WHERE m.id = meeting_payments.meeting_id
-          AND m.org_id = meeting_payments.org_id
-          AND (
-            public.current_user_role() = 'admin'
-            OR m.meeting_type <> 'reference'::text
-          )
-      )
-    )
-  );
-
-CREATE POLICY meeting_payments_insert_by_org_and_meeting_type
-  ON public.meeting_payments
-  AS PERMISSIVE
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    auth.role() = 'service_role'::text
-    OR (
-      org_id = public.current_user_org_id()
-      AND EXISTS (
-        SELECT 1
-        FROM public.meetings m
-        WHERE m.id = meeting_payments.meeting_id
-          AND m.org_id = meeting_payments.org_id
-          AND (
-            public.current_user_role() = 'admin'
-            OR m.meeting_type <> 'reference'::text
-          )
-      )
-    )
-  );
-
-CREATE POLICY meeting_payments_update_by_org_and_meeting_type
-  ON public.meeting_payments
-  AS PERMISSIVE
-  FOR UPDATE
-  TO authenticated
-  USING (
-    auth.role() = 'service_role'::text
-    OR (
-      org_id = public.current_user_org_id()
-      AND EXISTS (
-        SELECT 1
-        FROM public.meetings m
-        WHERE m.id = meeting_payments.meeting_id
-          AND m.org_id = meeting_payments.org_id
-          AND (
-            public.current_user_role() = 'admin'
-            OR m.meeting_type <> 'reference'::text
-          )
-      )
+ON public.meeting_payments
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
+USING (
+  auth.role() = 'service_role'::text
+  OR (
+    org_id = public.current_user_org_id()
+    AND EXISTS (
+      SELECT 1
+      FROM public.meetings m
+      WHERE m.id = meeting_payments.meeting_id
+        AND m.org_id = meeting_payments.org_id
+        AND (
+          public.current_user_role() = 'admin'
+          OR m.meeting_type <> 'reference'::text
+        )
     )
   )
-  WITH CHECK (
-    auth.role() = 'service_role'::text
-    OR (
-      org_id = public.current_user_org_id()
-      AND EXISTS (
-        SELECT 1
-        FROM public.meetings m
-        WHERE m.id = meeting_payments.meeting_id
-          AND m.org_id = meeting_payments.org_id
-          AND (
-            public.current_user_role() = 'admin'
-            OR m.meeting_type <> 'reference'::text
-          )
-      )
+);
+
+CREATE POLICY meeting_payments_insert_by_org_and_meeting_type
+ON public.meeting_payments
+AS PERMISSIVE
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  auth.role() = 'service_role'::text
+  OR (
+    org_id = public.current_user_org_id()
+    AND EXISTS (
+      SELECT 1
+      FROM public.meetings m
+      WHERE m.id = meeting_payments.meeting_id
+        AND m.org_id = meeting_payments.org_id
+        AND (
+          public.current_user_role() = 'admin'
+          OR m.meeting_type <> 'reference'::text
+        )
     )
-  );
+  )
+);
 
--- NO authenticated DELETE policy (hard delete disabled)
+CREATE POLICY meeting_payments_update_by_org_and_meeting_type
+ON public.meeting_payments
+AS PERMISSIVE
+FOR UPDATE
+TO authenticated
+USING (
+  auth.role() = 'service_role'::text
+  OR (
+    org_id = public.current_user_org_id()
+    AND EXISTS (
+      SELECT 1
+      FROM public.meetings m
+      WHERE m.id = meeting_payments.meeting_id
+        AND m.org_id = meeting_payments.org_id
+        AND (
+          public.current_user_role() = 'admin'
+          OR m.meeting_type <> 'reference'::text
+        )
+    )
+  )
+)
+WITH CHECK (
+  auth.role() = 'service_role'::text
+  OR (
+    org_id = public.current_user_org_id()
+    AND EXISTS (
+      SELECT 1
+      FROM public.meetings m
+      WHERE m.id = meeting_payments.meeting_id
+        AND m.org_id = meeting_payments.org_id
+        AND (
+          public.current_user_role() = 'admin'
+          OR m.meeting_type <> 'reference'::text
+        )
+    )
+  )
+);
 
--- Grants
+-- NO authenticated DELETE policy (hard delete disabled by privileges)
+
+-- ============================================================
+-- GRANTS (RLS still applies)
+-- ============================================================
+
 REVOKE ALL ON TABLE public.meeting_payments FROM anon;
 REVOKE ALL ON TABLE public.meeting_payments FROM authenticated;
 
 GRANT SELECT, INSERT, UPDATE ON TABLE public.meeting_payments TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.meeting_payments TO service_role;
+
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+ON TABLE public.meeting_payments
+TO service_role;
