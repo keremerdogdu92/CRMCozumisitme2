@@ -1,16 +1,17 @@
 // src/features/patients/components/list/PatientsTable.tsx
-// Patients listing table with responsive layout: mobile cards + desktop table.
-// Desktop table supports column visibility toggling, basic sorting and export (CSV / XLSX).
+// Summary: Patients listing UI with responsive layout: mobile cards + desktop table.
+// Integrations:
+// - Uses useTablePreferences for per-user persistence of:
+//    * column visibility
+//    * sorting
+//    * table-level UI toggles (e.g., show/hide SoftDeleteModeFilter on PatientsPage)
+// - Desktop toolbar includes TableColumnsControl + TableExportButtons.
+// - Export uses csvUtils helpers and respects visible columns + current sorted order.
 //
-// Patch v2.1:
-// - ADD: Table export buttons (CSV + XLSX) on desktop toolbar, next to column visibility control.
-// - Export respects current visible columns and current sorted order.
-// - Uses shared csvUtils helpers (exportToCsvFile / exportToXlsxFile).
-//
-// Patch v2.2 (responsive polish):
-// - Mobile cards: better grid behavior on very small screens (1 column <640px, 2 columns >=640px).
-// - Slight padding/typography tweaks for better readability on 720p and tablet screens.
-// - Keeps behavior and API identical.
+// Patch v2.3 (soft delete filter toggle wiring):
+// - Adds a "Görünüm" toggle in the Columns dropdown: "Silinenler filtresi".
+// - Toggle persists via useTablePreferences.ui.showSoftDeleteFilter.
+// - Aligns tableId to "patients" so PatientsPage and PatientsTable share the same preference bucket.
 
 import { useMemo } from 'react';
 import type { PatientRow } from '../../types';
@@ -220,13 +221,26 @@ export function PatientsTable({
     onDeletePatient(patient);
   };
 
+  // IMPORTANT:
+  // Use the same tableId as PatientsPage so the UI toggle ("Silinenler filtresi") is shared.
   const {
     state: prefsState,
     visibleColumns,
     toggleColumn,
     setSort,
     isColumnVisible,
-  } = useTablePreferences<PatientRow>('patients-table', PATIENT_COLUMNS, userId);
+    isUiFlagEnabled,
+    toggleUiFlag,
+  } = useTablePreferences<PatientRow>('patients', PATIENT_COLUMNS, userId);
+
+  const uiToggles = [
+    {
+      id: 'showSoftDeleteFilter',
+      label: 'Silinenler filtresi',
+      checked: isUiFlagEnabled('showSoftDeleteFilter', true),
+      onToggle: () => toggleUiFlag('showSoftDeleteFilter'),
+    },
+  ];
 
   const sortedPatients = useMemo(() => {
     if (!prefsState.sortBy) return patients;
@@ -519,6 +533,7 @@ export function PatientsTable({
               columns={PATIENT_COLUMNS}
               isColumnVisible={isColumnVisible}
               toggleColumn={toggleColumn}
+              uiToggles={uiToggles}
             />
             <TableExportButtons
               onExportCsv={() => handleExport('csv')}
