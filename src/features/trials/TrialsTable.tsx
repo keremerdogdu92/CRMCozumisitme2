@@ -1,24 +1,17 @@
 // src/features/trials/TrialsTable.tsx
-// Tabular list view for trial rows with column visibility toggles and sorting.
-// Preferences are stored per user via useTablePreferences(userId).
+// Summary: Tabular and mobile-card list view for trial lead pipeline rows.
+// Integrations:
+// - Uses useTablePreferences(userId) for per-user visible columns and sorting.
+// - Supports export (CSV/XLSX) via shared helpers.
+// - Supports focusedId highlighting for deep-links.
 //
-// Patch v2.1:
-// - Existing: sorting + column visibility controls.
-// Patch v2.2:
-// - ADD: Export buttons (CSV + XLSX) next to column visibility control.
-// - Export respects current visible columns and current sorted order.
-// - Uses shared csv/xlsx helpers (exportToCsvFile / exportToXlsxFile).
-// Patch v2.3:
-// - ADD: focusedId desteği. focusId ile gelen kayıt satırı listede highlight edilir.
-// Patch v2.4 (responsive polish):
-// - ADD: Mobile card view (md altı) → deneme listesini telefon ekranında daha okunur hale getirir.
-// - Desktop/tablet tablosu ResponsiveTableShell içine alındı.
-// - Toolbar mobile-first düzene çekildi.
-// Patch v2.5:
-// - ADD: Optional toolbarRight slot so pages can attach extra filters (e.g., SoftDeleteModeFilter).
+// Patch v2.6 (lead pipeline UI):
+// - ADD: status column (default visible).
+// - Mobile cards show status badge: Aktif / Dönüştü / Kaybedildi.
+// - Export includes status if the column is visible.
 
 import { useMemo, type ReactNode } from 'react';
-import type { TrialRow } from './types';
+import type { TrialRow, TrialStatus } from './types';
 import { useTablePreferences } from '../../components/table/useTablePreferences';
 import { TableColumnsControl } from '../../components/table/TableColumnsControl';
 import type { TableColumnDef } from '../../components/table/tableTypes';
@@ -45,6 +38,7 @@ type TrialsTableProps = {
 
 type TrialTableColumnId =
   | 'created_at'
+  | 'status'
   | 'full_name'
   | 'phone'
   | 'first_meet_at'
@@ -62,6 +56,13 @@ const TRIAL_COLUMNS: TableColumnDef<
     sortable: true,
     isDefaultVisible: true,
     accessor: (t) => t.created_at ?? null,
+  },
+  {
+    id: 'status',
+    label: 'Durum',
+    sortable: true,
+    isDefaultVisible: true,
+    accessor: (t) => t.status ?? 'active',
   },
   {
     id: 'full_name',
@@ -139,6 +140,22 @@ function formatShortDate(value: string | null): string {
   } catch {
     return '-';
   }
+}
+
+function getStatusLabel(status: TrialStatus): string {
+  if (status === 'converted') return 'Dönüştü';
+  if (status === 'lost') return 'Kaybedildi';
+  return 'Aktif';
+}
+
+function getStatusBadgeClass(status: TrialStatus): string {
+  if (status === 'converted') {
+    return 'bg-emerald-50 text-emerald-700';
+  }
+  if (status === 'lost') {
+    return 'bg-rose-50 text-rose-700';
+  }
+  return 'bg-slate-50 text-slate-600';
 }
 
 export function TrialsTable({
@@ -221,6 +238,8 @@ export function TrialsTable({
         switch (col.id as TrialTableColumnId) {
           case 'created_at':
             return formatShortDate(t.created_at);
+          case 'status':
+            return getStatusLabel(t.status);
           case 'full_name':
             return t.full_name ?? '';
           case 'phone':
@@ -314,15 +333,27 @@ export function TrialsTable({
                     Kayıt: {formatShortDate(t.created_at)}
                   </p>
                 </div>
-                {t.reference_id ? (
-                  <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                    Referanslı
+
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span
+                    className={
+                      'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ' +
+                      getStatusBadgeClass(t.status)
+                    }
+                  >
+                    {getStatusLabel(t.status)}
                   </span>
-                ) : (
-                  <span className="inline-flex shrink-0 items-center rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500">
-                    Referans yok
-                  </span>
-                )}
+
+                  {t.reference_id ? (
+                    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                      Referanslı
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                      Referans yok
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-700">
@@ -371,7 +402,7 @@ export function TrialsTable({
         })}
       </div>
 
-      {/* Desktop / tablet: klasik tablo (md ve üzeri) */}
+      {/* Desktop / tablet: classic table (md and up) */}
       <ResponsiveTableShell className="hidden md:block">
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="min-w-full text-xs md:text-sm">
@@ -426,6 +457,19 @@ export function TrialsTable({
                               className="whitespace-nowrap px-4 py-2 text-slate-700"
                             >
                               {formatDate(t.created_at)}
+                            </td>
+                          );
+                        case 'status':
+                          return (
+                            <td key={col.id} className="px-4 py-2">
+                              <span
+                                className={
+                                  'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ' +
+                                  getStatusBadgeClass(t.status)
+                                }
+                              >
+                                {getStatusLabel(t.status)}
+                              </span>
                             </td>
                           );
                         case 'full_name':
