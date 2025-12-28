@@ -5,11 +5,10 @@
 // - Deep-link support: /patients?focusId=<patientId> forces effective mode='all' to avoid hiding the target row.
 // - Trial conversion flow can pass ?trialId=<uuid> and/or location.state.fromTrial.
 //
-// Patch v2.2 (soft delete visibility for staff + focusId safety):
-// - CHANGE: SoftDeleteModeFilter is no longer admin-only; staff can also view deleted/all.
-// - ADD: focusId forces effectiveSoftDeleteMode='all' (same rationale as TrialsPage).
-// - KEEP: Existing SGK filter + search filter behavior.
-// - UI: SoftDeleteModeFilter is disabled when focusId is active (readability/consistency).
+// Patch v2.3 (soft-delete filter hide/show via table prefs):
+// - Adds table UI preference flag: showSoftDeleteFilter (default true).
+// - SoftDeleteModeFilter is rendered only when that flag is enabled.
+// - Preference lives in useTablePreferences localStorage under table key "patients".
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -29,6 +28,8 @@ import {
 import { useCurrentProfile } from '../features/auth/useCurrentProfile';
 import type { SoftDeleteMode } from '../utils/softDelete/softDeleteTypes';
 import { SoftDeleteModeFilter } from '../components/table/SoftDeleteModeFilter';
+import { useTablePreferences } from '../components/table/useTablePreferences';
+import type { TableColumnDef } from '../components/table/tableTypes';
 
 type PatientDetailTabId = 'info' | 'devices' | 'meetings' | 'payments' | 'audiogram';
 
@@ -73,11 +74,25 @@ export default function PatientsPage() {
   const [detailInitialTab, setDetailInitialTab] = useState<PatientDetailTabId>('info');
   const [detailInitialShowPlan, setDetailInitialShowPlan] = useState<boolean>(false);
 
-  // Soft delete filter (visible for everyone)
+  // Soft delete filter (visible for everyone unless user hides it via table prefs)
   const [softDeleteMode, setSoftDeleteMode] = useState<SoftDeleteMode>('active');
 
   // If focusId is present, force mode='all' to avoid hiding the target row.
   const effectiveSoftDeleteMode: SoftDeleteMode = focusPatientId ? 'all' : softDeleteMode;
+
+  /**
+   * Table UI preferences
+   * IMPORTANT:
+   * We use a stable tableId ("patients") for per-table view preferences.
+   * Column definitions are irrelevant here; we pass an empty list safely.
+   */
+  const tablePrefs = useTablePreferences<PatientRow>(
+    'patients',
+    [] as TableColumnDef<PatientRow>[],
+    null,
+  );
+
+  const showSoftDeleteFilter = tablePrefs.isUiFlagEnabled('showSoftDeleteFilter', true);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: [...PATIENTS_QUERY_KEY, { mode: effectiveSoftDeleteMode }],
@@ -200,12 +215,14 @@ export default function PatientsPage() {
             </select>
           </div>
 
-          {/* Soft delete mode: visible for everyone (admin + staff) */}
-          <SoftDeleteModeFilter
-            value={softDeleteMode}
-            onChange={setSoftDeleteMode}
-            className={focusPatientId ? 'opacity-60 pointer-events-none' : ''}
-          />
+          {/* Soft delete mode: visible for everyone unless hidden via table prefs */}
+          {showSoftDeleteFilter && (
+            <SoftDeleteModeFilter
+              value={softDeleteMode}
+              onChange={setSoftDeleteMode}
+              className={focusPatientId ? 'opacity-60 pointer-events-none' : ''}
+            />
+          )}
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
