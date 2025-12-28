@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-12-24T12:25:58.840Z",
+  "generatedAt": "2025-12-28T04:08:11.190Z",
   "scannedDirs": [
     "src",
     "api",
@@ -7,7 +7,7 @@
     "scripts",
     "DB/schema"
   ],
-  "filesScanned": 201,
+  "filesScanned": 206,
   "tables": [
     {
       "name": "profiles",
@@ -15,7 +15,7 @@
         "supabase.from",
         "raw.sql"
       ],
-      "hitCount": 52,
+      "hitCount": 35,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/auth/useCurrentProfile.ts",
@@ -73,7 +73,7 @@
         "raw.sql",
         "supabase.from"
       ],
-      "hitCount": 28,
+      "hitCount": 32,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.fetch.ts",
@@ -131,7 +131,7 @@
         "supabase.from",
         "raw.sql"
       ],
-      "hitCount": 26,
+      "hitCount": 30,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.create.ts",
@@ -180,6 +180,63 @@
           "line": 158,
           "kind": "supabase.from",
           "snippet": ".from('inventory_items')"
+        }
+      ]
+    },
+    {
+      "name": "anon",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 24,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
+          "line": 103,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_question_lists FROM anon;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
+          "line": 188,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_questions FROM anon;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
+          "line": 270,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_answers FROM anon;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Lastbatch.sql",
+          "line": 99,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.meeting_payments FROM anon;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Lastbatch.sql",
+          "line": 155,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.meeting_accessories FROM anon;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Lastbatch.sql",
+          "line": 200,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.patient_installment_plans FROM anon;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Lastbatch.sql",
+          "line": 256,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.patient_sale_breakdown FROM anon;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Lastbatch.sql",
+          "line": 315,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.patients_import_rows FROM anon;"
         }
       ]
     },
@@ -242,59 +299,117 @@
       ]
     },
     {
-      "name": "anon",
+      "name": "meetings",
+      "kinds": [
+        "supabase.from",
+        "raw.sql"
+      ],
+      "hitCount": 15,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
+          "line": 42,
+          "kind": "supabase.from",
+          "snippet": ".from('meetings')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
+          "line": 83,
+          "kind": "supabase.from",
+          "snippet": ".from('meetings')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
+          "line": 121,
+          "kind": "supabase.from",
+          "snippet": ".from('meetings')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
+          "line": 343,
+          "kind": "supabase.from",
+          "snippet": ".from('meetings')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/dashboard/dashboard_upcoming_meetings.rpc.sql",
+          "line": 33,
+          "kind": "raw.sql",
+          "snippet": "from public.meetings m"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_accessories.sql",
+          "line": 101,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meetings m"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_accessories.sql",
+          "line": 123,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meetings m"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_accessories.sql",
+          "line": 145,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meetings m"
+        }
+      ]
+    },
+    {
+      "name": "the",
       "kinds": [
         "raw.sql"
       ],
-      "hitCount": 14,
+      "hitCount": 12,
       "sample": [
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
-          "line": 103,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/auth/useCurrentProfile.ts",
+          "line": 17,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_question_lists FROM anon;"
+          "snippet": "* Map the raw role value from the database into a safe UserRole union."
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
-          "line": 188,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/dashboard/types.ts",
+          "line": 27,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_questions FROM anon;"
+          "snippet": "* Sum of expected SGK reimbursement for patients whose SGK record was entered into the SGK system"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
-          "line": 270,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
+          "line": 21,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_answers FROM anon;"
+          "snippet": "//   * patient_sale_breakdown rows are now managed only from the Payments tab"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/org_settings.sql",
-          "line": 65,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
+          "line": 327,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.org_settings FROM anon;"
+          "snippet": "* Create a new patient row with org_id taken from the current profile."
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 230,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
+          "line": 585,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.profiles FROM anon;"
+          "snippet": "// patient_sale_breakdown rows are edited/saved exclusively from the Payments tab."
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/reference_gifts.sql",
-          "line": 107,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/types.ts",
+          "line": 108,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.reference_gifts FROM anon;"
+          "snippet": "* Convenience fields coming from the joined references table."
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/references.sql",
-          "line": 140,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/TrialNewFormCard.tsx",
+          "line": 189,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.references FROM anon;"
+          "snippet": "// picking from the list will set it again."
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/inventory/inventory_items.sql",
-          "line": 111,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
+          "line": 183,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.inventory_items FROM anon;"
+          "snippet": "* from the current_device_catalog_prices_public view."
         }
       ]
     },
@@ -357,111 +472,230 @@
       ]
     },
     {
-      "name": "the",
+      "name": "authenticated",
       "kinds": [
         "raw.sql"
       ],
-      "hitCount": 11,
+      "hitCount": 12,
       "sample": [
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/auth/useCurrentProfile.ts",
-          "line": 17,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
+          "line": 104,
           "kind": "raw.sql",
-          "snippet": "* Map the raw role value from the database into a safe UserRole union."
+          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_question_lists FROM authenticated;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/dashboard/types.ts",
-          "line": 27,
-          "kind": "raw.sql",
-          "snippet": "* Sum of expected SGK reimbursement for patients whose SGK record was entered into the SGK system"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 21,
-          "kind": "raw.sql",
-          "snippet": "//   * patient_sale_breakdown rows are now managed only from the Payments tab"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 327,
-          "kind": "raw.sql",
-          "snippet": "* Create a new patient row with org_id taken from the current profile."
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 585,
-          "kind": "raw.sql",
-          "snippet": "// patient_sale_breakdown rows are edited/saved exclusively from the Payments tab."
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/types.ts",
-          "line": 108,
-          "kind": "raw.sql",
-          "snippet": "* Convenience fields coming from the joined references table."
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/TrialNewFormCard.tsx",
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
           "line": 189,
           "kind": "raw.sql",
-          "snippet": "// picking from the list will set it again."
+          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_questions FROM authenticated;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 183,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
+          "line": 271,
           "kind": "raw.sql",
-          "snippet": "* from the current_device_catalog_prices_public view."
+          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_answers FROM authenticated;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
+          "line": 231,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.profiles FROM authenticated;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/reference_gifts.sql",
+          "line": 155,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.reference_gifts FROM authenticated;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/references.sql",
+          "line": 144,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.references FROM authenticated;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_accessories.sql",
+          "line": 176,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.meeting_accessories FROM authenticated;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_payments.sql",
+          "line": 190,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.meeting_payments FROM authenticated;"
         }
       ]
     },
     {
-      "name": "meetings",
+      "name": "device_catalog_models",
       "kinds": [
-        "supabase.from",
         "raw.sql"
       ],
-      "hitCount": 7,
+      "hitCount": 10,
       "sample": [
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
-          "line": 42,
-          "kind": "supabase.from",
-          "snippet": ".from('meetings')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
-          "line": 83,
-          "kind": "supabase.from",
-          "snippet": ".from('meetings')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Core_context_catalog_current_price_views.sql",
           "line": 121,
-          "kind": "supabase.from",
-          "snippet": ".from('meetings')"
+          "kind": "raw.sql",
+          "snippet": "FROM public.device_catalog_models m"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
-          "line": 343,
-          "kind": "supabase.from",
-          "snippet": ".from('meetings')"
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Core_context_catalog_current_price_views.sql",
+          "line": 135,
+          "kind": "raw.sql",
+          "snippet": "FROM public.device_catalog_models m"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Core_context_catalog_current_price_views.sql",
+          "line": 149,
+          "kind": "raw.sql",
+          "snippet": "FROM public.device_catalog_models m"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Core_context_catalog_current_price_views.sql",
+          "line": 157,
+          "kind": "raw.sql",
+          "snippet": "FROM public.device_catalog_models m"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Core_context_catalog_current_price_views.sql",
+          "line": 171,
+          "kind": "raw.sql",
+          "snippet": "FROM public.device_catalog_models m"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/catalogs/device_catalog_prices.sql",
+          "line": 60,
+          "kind": "raw.sql",
+          "snippet": "FROM public.device_catalog_models m"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/catalogs/device_catalog_prices.sql",
+          "line": 74,
+          "kind": "raw.sql",
+          "snippet": "FROM public.device_catalog_models m"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/catalogs/device_catalog_prices.sql",
+          "line": 88,
+          "kind": "raw.sql",
+          "snippet": "FROM public.device_catalog_models m"
+        }
+      ]
+    },
+    {
+      "name": "OF",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 10,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/reference_gifts.sql",
+          "line": 75,
+          "kind": "raw.sql",
+          "snippet": "BEFORE UPDATE OF deleted_at, deleted_by ON public.reference_gifts"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/references.sql",
+          "line": 66,
+          "kind": "raw.sql",
+          "snippet": "BEFORE UPDATE OF deleted_at, deleted_by ON public.references"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_accessories.sql",
+          "line": 64,
+          "kind": "raw.sql",
+          "snippet": "BEFORE UPDATE OF deleted_at, deleted_by ON public.meeting_accessories"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_payments.sql",
+          "line": 75,
+          "kind": "raw.sql",
+          "snippet": "BEFORE UPDATE OF deleted_at, deleted_by ON public.meeting_payments"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/battery_prescription_deliveries.sql",
+          "line": 81,
+          "kind": "raw.sql",
+          "snippet": "BEFORE UPDATE OF deleted_at, deleted_by ON public.battery_prescription_deliveries"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/battery_prescription_deliveries.sql",
+          "line": 159,
+          "kind": "raw.sql",
+          "snippet": "AFTER INSERT OR UPDATE OF patient_id, org_id, deleted_at"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/device_repairs.sql",
+          "line": 95,
+          "kind": "raw.sql",
+          "snippet": "BEFORE UPDATE OF deleted_at, deleted_by ON public.device_repairs"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patient_installment_plans.sql",
+          "line": 61,
+          "kind": "raw.sql",
+          "snippet": "BEFORE UPDATE OF deleted_at, deleted_by ON public.patient_installment_plans"
+        }
+      ]
+    },
+    {
+      "name": "public",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 8,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/dashboard/dashboard_kpis.rpc.sql",
+          "line": 211,
+          "kind": "raw.sql",
+          "snippet": "revoke all on function public.dashboard_kpis(timestamptz, uuid) from public, anon;"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/dashboard/dashboard_upcoming_meetings.rpc.sql",
-          "line": 33,
+          "line": 45,
           "kind": "raw.sql",
-          "snippet": "from public.meetings m"
+          "snippet": "revoke all on function public.dashboard_upcoming_meetings(int, uuid) from public, anon;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
-          "line": 68,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/battery_prescription_deliveries.sql",
+          "line": 129,
           "kind": "raw.sql",
-          "snippet": "FROM public.meetings m"
+          "snippet": "REVOKE ALL ON TABLE public.battery_prescription_deliveries FROM public;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/trials/trials_convert_to_patient.rpc.sql",
-          "line": 61,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/device_repairs.sql",
+          "line": 136,
           "kind": "raw.sql",
-          "snippet": "UPDATE public.meetings"
+          "snippet": "REVOKE ALL ON TABLE public.device_repairs FROM public;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patient_installment_plans.sql",
+          "line": 101,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.patient_installment_plans FROM public;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patient_sale_breakdown.sql",
+          "line": 100,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON TABLE public.patient_sale_breakdown FROM public;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patients_import_rows.sql",
+          "line": 92,
+          "kind": "raw.sql",
+          "snippet": "revoke all on table public.patients_import_rows from public;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patients_legacy_devices_import_rows.sql",
+          "line": 72,
+          "kind": "raw.sql",
+          "snippet": "revoke all on table public.patients_legacy_devices_import_rows from public;"
         }
       ]
     },
@@ -513,57 +747,6 @@
           "line": 567,
           "kind": "raw.sql",
           "snippet": "'Update staging row (duplicate validated) failed:',"
-        }
-      ]
-    },
-    {
-      "name": "authenticated",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 7,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
-          "line": 104,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_question_lists FROM authenticated;"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
-          "line": 189,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_questions FROM authenticated;"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
-          "line": 271,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_answers FROM authenticated;"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 231,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.profiles FROM authenticated;"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
-          "line": 207,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_answers FROM authenticated;"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_question_lists.sql",
-          "line": 124,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_question_lists FROM authenticated;"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_questions.sql",
-          "line": 129,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_questions FROM authenticated;"
         }
       ]
     },
@@ -652,7 +835,7 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/battery_prescription_deliveries.sql",
-          "line": 172,
+          "line": 170,
           "kind": "raw.sql",
           "snippet": "FROM public.battery_prescription_deliveries b"
         }
@@ -1366,33 +1549,6 @@
       ]
     },
     {
-      "name": "this",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 3,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/deviceCatalog/api.import.ts",
-          "line": 103,
-          "kind": "raw.sql",
-          "snippet": "* a concrete \"from this day\" value."
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.delete.ts",
-          "line": 13,
-          "kind": "raw.sql",
-          "snippet": "* - Only same-org authenticated users can update this row."
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patient_sale_breakdown.sql",
-          "line": 99,
-          "kind": "raw.sql",
-          "snippet": "--       As a result, regular users cannot delete rows from this table."
-        }
-      ]
-    },
-    {
       "name": "DB",
       "kinds": [
         "raw.sql"
@@ -1582,33 +1738,6 @@
       ]
     },
     {
-      "name": "JWT",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 3,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 8,
-          "kind": "raw.sql",
-          "snippet": "-- - Never trust org_id from JWT claims in RLS."
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_payments.sql",
-          "line": 124,
-          "kind": "raw.sql",
-          "snippet": "-- - Frontend must never allow editing `org_id` directly; it should come from JWT/profile."
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patients_import_rows.sql",
-          "line": 62,
-          "kind": "raw.sql",
-          "snippet": "--  - org_id is resolved from JWT user_metadata.org_id or JWT root org_id."
-        }
-      ]
-    },
-    {
       "name": "OLD",
       "kinds": [
         "raw.sql"
@@ -1636,29 +1765,23 @@
       ]
     },
     {
-      "name": "rows",
+      "name": "this",
       "kinds": [
         "raw.sql"
       ],
-      "hitCount": 3,
+      "hitCount": 2,
       "sample": [
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_accessories.sql",
-          "line": 87,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/deviceCatalog/api.import.ts",
+          "line": 103,
           "kind": "raw.sql",
-          "snippet": "-- UPDATE: user can only read/update rows for their own org."
+          "snippet": "* a concrete \"from this day\" value."
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_payments.sql",
-          "line": 93,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.delete.ts",
+          "line": 13,
           "kind": "raw.sql",
-          "snippet": "-- Org-scoped UPDATE: user can only read/update rows for their own org."
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patient_sale_breakdown.sql",
-          "line": 75,
-          "kind": "raw.sql",
-          "snippet": "-- UPDATE: user can only read/update rows for their own org"
+          "snippet": "* - Only same-org authenticated users can update this row."
         }
       ]
     },
@@ -1810,27 +1933,6 @@
       ]
     },
     {
-      "name": "devices",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 2,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/types.ts",
-          "line": 336,
-          "kind": "raw.sql",
-          "snippet": "* - sgkDeviceCount is a manual choice (NOT derived from devices)."
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patients_legacy_devices_import_rows.sql",
-          "line": 4,
-          "kind": "raw.sql",
-          "snippet": "-- Final normalized payload will later be used to insert into devices + patient_devices."
-        }
-      ]
-    },
-    {
       "name": "org_settings",
       "kinds": [
         "supabase.from"
@@ -1916,23 +2018,23 @@
       ]
     },
     {
-      "name": "public",
+      "name": "pg_proc",
       "kinds": [
         "raw.sql"
       ],
       "hitCount": 2,
       "sample": [
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/dashboard/dashboard_kpis.rpc.sql",
-          "line": 211,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Lastbatch.sql",
+          "line": 27,
           "kind": "raw.sql",
-          "snippet": "revoke all on function public.dashboard_kpis(timestamptz, uuid) from public, anon;"
+          "snippet": "FROM pg_proc p"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/dashboard/dashboard_upcoming_meetings.rpc.sql",
-          "line": 45,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Lastbatch.sql",
+          "line": 37,
           "kind": "raw.sql",
-          "snippet": "revoke all on function public.dashboard_upcoming_meetings(int, uuid) from public, anon;"
+          "snippet": "FROM pg_proc p"
         }
       ]
     },
@@ -2029,13 +2131,13 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/battery_prescription_deliveries.sql",
-          "line": 151,
+          "line": 148,
           "kind": "raw.sql",
           "snippet": "AND p.is_battery_patient IS DISTINCT FROM TRUE;"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/battery_prescription_deliveries.sql",
-          "line": 169,
+          "line": 167,
           "kind": "raw.sql",
           "snippet": "WHERE p.is_battery_patient IS DISTINCT FROM TRUE"
         }
@@ -2417,6 +2519,21 @@
       ]
     },
     {
+      "name": "devices",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/types.ts",
+          "line": 336,
+          "kind": "raw.sql",
+          "snippet": "* - sgkDeviceCount is a manual choice (NOT derived from devices)."
+        }
+      ]
+    },
+    {
       "name": "price",
       "kinds": [
         "raw.sql"
@@ -2522,6 +2639,21 @@
       ]
     },
     {
+      "name": "JWT",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
+          "line": 8,
+          "kind": "raw.sql",
+          "snippet": "-- - Never trust org_id from JWT claims in RLS."
+        }
+      ]
+    },
+    {
       "name": "their",
       "kinds": [
         "raw.sql"
@@ -2608,66 +2740,6 @@
           "line": 208,
           "kind": "raw.sql",
           "snippet": "-- select * from public.dashboard_kpis(_org_id := '<org-uuid>', _month_start := '2025-02-01T00:00:00+03');"
-        }
-      ]
-    },
-    {
-      "name": "policy",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 1,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meetings.sql",
-          "line": 9,
-          "kind": "raw.sql",
-          "snippet": "-- - Add UPDATE policy (mirrors INSERT rule) to avoid edit failures."
-        }
-      ]
-    },
-    {
-      "name": "OF",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 1,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/battery_prescription_deliveries.sql",
-          "line": 161,
-          "kind": "raw.sql",
-          "snippet": "AFTER INSERT OR UPDATE OF patient_id, org_id"
-        }
-      ]
-    },
-    {
-      "name": "frontend",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 1,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patients_legacy_devices_import_rows.sql",
-          "line": 22,
-          "kind": "raw.sql",
-          "snippet": "-- Shape will match LegacyDeviceImportNormalizedPayload from frontend."
-        }
-      ]
-    },
-    {
-      "name": "your",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 1,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/trials/trial_devices.sql",
-          "line": 35,
-          "kind": "raw.sql",
-          "snippet": "-- Drop legacy policies (names from your file + possible older ones)"
         }
       ]
     },
