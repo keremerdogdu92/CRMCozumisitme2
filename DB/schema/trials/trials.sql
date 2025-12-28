@@ -1,17 +1,21 @@
 -- DB/schema/trials/trials.sql
--- Purpose: Supabase table definition for `public.trials`.
+-- Purpose: Supabase table definition for `public.trials` (lead pipeline).
 -- Integrations:
 -- - Multi-org isolation via public.current_user_org_id() (never trust JWT org_id claims).
+-- - Lead pipeline fields:
+--   - status: active | converted | lost
+--   - converted_patient_id: link to created/selected patient (trial is not deleted on conversion)
+--   - lost_at + lost_reason: follow-up analysis when a lead is lost
 -- - Soft delete via deleted_at/deleted_by/delete_reason + RPCs:
 --   - public.soft_delete_trials(p_id, p_reason)
 --   - public.restore_trials(p_id)
 -- - Soft delete deleted_by stamping via trigger:
 --   - public.trg_soft_delete_set_deleted_by() (core/soft_delete_helpers.sql)
 --
--- v3.2.0 (2025-12-28):
--- - SECURITY: Make soft_delete_trials idempotent (do not re-stamp already deleted rows).
--- - CONSISTENCY: Add soft delete trigger to stamp deleted_by via shared helper.
--- - KEEP: helper-based org policies; no authenticated hard delete.
+-- v4.0.0 (2025-12-28):
+-- - LEAD PIPELINE: Add status/lost/converted fields to treat trials as a lead pipeline.
+-- - CONVERSION: Trial is NOT deleted on conversion; it becomes status='converted' with converted_patient_id set.
+-- - SECURITY: Soft delete remains idempotent; no authenticated hard delete.
 
 CREATE TABLE IF NOT EXISTS public.trials (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -24,6 +28,12 @@ CREATE TABLE IF NOT EXISTS public.trials (
   note text NULL,
   created_at timestamp with time zone NULL DEFAULT now(),
 
+  -- Lead pipeline fields
+  status text NOT NULL DEFAULT 'active'::text,
+  lost_at timestamptz NULL,
+  lost_reason text NULL,
+  converted_patient_id uuid NULL,
+
   -- Soft delete columns
   deleted_at timestamp with time zone NULL,
   deleted_by uuid NULL,
@@ -35,12 +45,27 @@ CREATE TABLE IF NOT EXISTS public.trials (
     FOREIGN KEY (org_id) REFERENCES public.orgs (id) ON DELETE CASCADE,
 
   CONSTRAINT trials_deleted_by_fkey
-    FOREIGN KEY (deleted_by) REFERENCES auth.users (id) ON DELETE SET NULL
+    FOREIGN KEY (deleted_by) REFERENCES auth.users (id) ON DELETE SET NULL,
+
+  CONSTRAINT trials_converted_patient_id_fkey
+    FOREIGN KEY (converted_patient_id) REFERENCES public.patients (id) ON DELETE SET NULL,
+
+  CONSTRAINT trials_status_check CHECK (
+    status = ANY (ARRAY['active'::text, 'converted'::text, 'lost'::text])
+  )
 ) TABLESPACE pg_default;
+
+-- ============================================================
+-- INDEXES
+-- ============================================================
 
 -- Soft delete filtering performance
 CREATE INDEX IF NOT EXISTS trials_org_deleted_at_idx
   ON public.trials (org_id, deleted_at);
+
+-- Default list behavior tends to query org + status + deleted_at
+CREATE INDEX IF NOT EXISTS trials_org_status_deleted_at_idx
+  ON public.trials (org_id, status, deleted_at);
 
 -- ============================================================
 -- SOFT DELETE TRIGGER (shared helper)
@@ -64,6 +89,7 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  -- Idempotent: only soft delete if not already deleted.
   UPDATE public.trials
   SET deleted_at = now(),
       delete_reason = p_reason
@@ -83,6 +109,7 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  -- Idempotent: only restore if deleted.
   UPDATE public.trials
   SET deleted_at = NULL,
       deleted_by = NULL,
@@ -118,7 +145,7 @@ TO public
 USING (auth.role() = 'service_role'::text)
 WITH CHECK (auth.role() = 'service_role'::text);
 
--- SELECT: everyone in org can see both active + deleted; UI filters by deleted_at if needed.
+-- SELECT: everyone in org can see both active + deleted; UI filters by deleted_at + status.
 CREATE POLICY "trials_org_select"
 ON public.trials
 AS PERMISSIVE
@@ -140,7 +167,7 @@ WITH CHECK (
   OR (org_id = public.current_user_org_id())
 );
 
--- UPDATE: within org
+-- UPDATE: within org (includes lead pipeline updates + soft delete/restore via RPC updates)
 CREATE POLICY "trials_org_update"
 ON public.trials
 AS PERMISSIVE
