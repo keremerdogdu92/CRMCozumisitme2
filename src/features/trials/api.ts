@@ -12,6 +12,10 @@
 // - Keeps default fetch behavior as active-only (deleted_at IS NULL).
 // - Updates conversion RPC wrapper docs to reflect "no delete" behavior.
 // - Keeps soft delete filter typing permissive to avoid Postgrest generic coupling.
+//
+// IMPORTANT:
+// - Supabase select() strings do NOT support SQL comments (e.g. "-- ...").
+//   Keep all comments in TypeScript only.
 
 import { supabaseClient } from '../../utils/supabaseClient';
 import type {
@@ -74,6 +78,7 @@ export async function fetchTrials(
 ): Promise<TrialRow[]> {
   const mode = opts.mode ?? 'active';
 
+  // IMPORTANT: Do not put SQL comments inside select() string.
   let q = supabaseClient.from('trials').select(
     `
       id,
@@ -85,8 +90,6 @@ export async function fetchTrials(
       reference_id,
       note,
       deleted_at,
-
-      -- Lead pipeline
       status,
       lost_at,
       lost_reason,
@@ -121,6 +124,7 @@ export async function fetchTrialsByReferenceId(
 
   const mode = opts.mode ?? 'active';
 
+  // IMPORTANT: Do not put SQL comments inside select() string.
   let q = supabaseClient.from('trials').select(
     `
       id,
@@ -132,8 +136,6 @@ export async function fetchTrialsByReferenceId(
       reference_id,
       note,
       deleted_at,
-
-      -- Lead pipeline
       status,
       lost_at,
       lost_reason,
