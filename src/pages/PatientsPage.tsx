@@ -4,11 +4,12 @@
 // - React Query fetch via fetchPatients({ mode }) with soft delete visibility mode.
 // - Deep-link support: /patients?focusId=<patientId> forces effective mode='all' to avoid hiding the target row.
 // - Trial conversion flow can pass ?trialId=<uuid> and/or location.state.fromTrial.
+// - Table UI preferences: reads "showSoftDeleteFilter" toggle from the patients table prefs.
 //
-// Patch v2.3 (soft-delete filter hide/show via table prefs):
-// - Adds table UI preference flag: showSoftDeleteFilter (default true).
-// - SoftDeleteModeFilter is rendered only when that flag is enabled.
-// - Preference lives in useTablePreferences localStorage under table key "patients".
+// Patch v2.3:
+// - FIX: Avoid React hook invariant by moving useMemo blocks BEFORE early returns (isLoading/isError).
+// - ADD: SoftDeleteModeFilter visibility is controlled by table UI prefs (default visible).
+// - KEEP: focusId still forces effectiveSoftDeleteMode='all' and disables filters.
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -51,6 +52,11 @@ type PatientsPageLocationState =
     }
   | undefined;
 
+const EMPTY_COLUMNS: TableColumnDef<any>[] = [];
+
+// Must match PatientsTable's tableId so we read the same localStorage bucket.
+const PATIENTS_TABLE_PREFS_ID = 'patients-table';
+
 export default function PatientsPage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -58,6 +64,7 @@ export default function PatientsPage() {
 
   const { data: profile } = useCurrentProfile();
   const isAdmin = profile?.role === 'admin';
+  const userId = profile?.id ?? null;
 
   // Optional: if PatientsPage is opened from a Trial context, ?trialId=<uuid> can be passed.
   const linkedTrialId = searchParams.get('trialId');
@@ -74,25 +81,11 @@ export default function PatientsPage() {
   const [detailInitialTab, setDetailInitialTab] = useState<PatientDetailTabId>('info');
   const [detailInitialShowPlan, setDetailInitialShowPlan] = useState<boolean>(false);
 
-  // Soft delete filter (visible for everyone unless user hides it via table prefs)
+  // Soft delete filter (visible for everyone, but default active list)
   const [softDeleteMode, setSoftDeleteMode] = useState<SoftDeleteMode>('active');
 
   // If focusId is present, force mode='all' to avoid hiding the target row.
   const effectiveSoftDeleteMode: SoftDeleteMode = focusPatientId ? 'all' : softDeleteMode;
-
-  /**
-   * Table UI preferences
-   * IMPORTANT:
-   * We use a stable tableId ("patients") for per-table view preferences.
-   * Column definitions are irrelevant here; we pass an empty list safely.
-   */
-  const tablePrefs = useTablePreferences<PatientRow>(
-    'patients',
-    [] as TableColumnDef<PatientRow>[],
-    null,
-  );
-
-  const showSoftDeleteFilter = tablePrefs.isUiFlagEnabled('showSoftDeleteFilter', true);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: [...PATIENTS_QUERY_KEY, { mode: effectiveSoftDeleteMode }],
@@ -123,26 +116,27 @@ export default function PatientsPage() {
     },
   });
 
-  if (isLoading) {
-    return (
-      <div className="p-4 text-sm text-slate-500 sm:p-8">
-        Hastalar yükleniyor...
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="p-4 text-sm text-red-600 sm:p-8">
-        Hasta verileri alınırken bir hata oluştu. Lütfen Supabase bağlantısını ve RLS ayarlarını kontrol edin.
-      </div>
-    );
-  }
-
+  // -----------------------------
+  // IMPORTANT: Hooks must be called consistently.
+  // Compute derived values (useMemo) BEFORE early returns.
+  // -----------------------------
   const patients = data ?? [];
 
+  // Read UI toggle from the same preference bucket used by PatientsTable.
+  // This hook is safe because useTablePreferences now preserves unknown column keys,
+  // so passing empty columns will not wipe column preferences.
+  const { isUiFlagEnabled } = useTablePreferences(
+    PATIENTS_TABLE_PREFS_ID,
+    EMPTY_COLUMNS,
+    userId,
+  );
+
+  const showSoftDeleteFilter = isUiFlagEnabled('showSoftDeleteFilter', true);
+
   const focusPatient: PatientRow | null =
-    focusPatientId && patients.length > 0 ? patients.find((p) => p.id === focusPatientId) ?? null : null;
+    focusPatientId && patients.length > 0
+      ? patients.find((p) => p.id === focusPatientId) ?? null
+      : null;
 
   const filteredPatients = useMemo(() => {
     if (focusPatient) return [focusPatient];
@@ -162,6 +156,25 @@ export default function PatientsPage() {
       return matchesSearch && matchesSgk;
     });
   }, [focusPatient, patients, search, sgkFilter]);
+
+  // -----------------------------
+  // Early returns AFTER hooks
+  // -----------------------------
+  if (isLoading) {
+    return (
+      <div className="p-4 text-sm text-slate-500 sm:p-8">
+        Hastalar yükleniyor...
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-4 text-sm text-red-600 sm:p-8">
+        Hasta verileri alınırken bir hata oluştu. Lütfen Supabase bağlantısını ve RLS ayarlarını kontrol edin.
+      </div>
+    );
+  }
 
   const mutationError = (createMutation.error as Error | null | undefined)?.message ?? '';
 
@@ -215,7 +228,7 @@ export default function PatientsPage() {
             </select>
           </div>
 
-          {/* Soft delete mode: visible for everyone unless hidden via table prefs */}
+          {/* Soft delete mode: visible for everyone, but can be hidden via table "Sütunlar" preferences */}
           {showSoftDeleteFilter && (
             <SoftDeleteModeFilter
               value={softDeleteMode}
