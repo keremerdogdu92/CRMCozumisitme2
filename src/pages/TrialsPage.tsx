@@ -1,15 +1,15 @@
 // src/pages/TrialsPage.tsx
 // Summary: Trials (deneme) lead pipeline page: list, inline create form and detail drawer orchestration.
 // Integrations:
-// - React Query fetch via fetchTrials({ mode }) with soft delete filter.
-// - Lead pipeline filter is client-side on the fetched dataset (status filter).
-// - Admin-only soft delete mode filter (active/deleted/all).
+// - React Query fetch via fetchTrials({ mode }) with soft delete visibility mode.
+// - Lead pipeline status filter is client-side on the fetched dataset (status filter).
+// - Soft delete mode filter is visible to all roles (admin + staff) because RLS allows org-scoped reads.
+// - Deep-link support: /trials?focusId=<trialId> forces effective mode='all' to avoid hiding the target row.
 //
-// Patch v2.4 (lead pipeline filter):
-// - ADD: statusFilter state (active/converted/lost/all).
-// - Default behavior: statusFilter='active' AND softDeleteMode='active'.
-// - If focusId is present, show only the focused row and force effective mode='all'.
-// - Keeps admin-only SoftDeleteModeFilter.
+// Patch v2.5 (soft delete filter visibility + unified filter bar):
+// - CHANGE: SoftDeleteModeFilter is no longer admin-only; staff can also view deleted/all.
+// - KEEP: focusId forces effectiveSoftDeleteMode='all'.
+// - UI: Filters row now uses the same "toolbar container" format as PatientsPage.
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -66,20 +66,17 @@ export default function TrialsPage() {
   // Lead pipeline filter (client-side)
   const [statusFilter, setStatusFilter] = useState<TrialStatusFilter>('active');
 
-  // Meetings üzerinden derin link desteği: /trials?focusId=<trialId>
+  // Deep link support: /trials?focusId=<trialId>
   const focusId = searchParams.get('focusId');
 
-  // If we deep-link to a specific row, don't accidentally hide it.
+  // If we deep-link to a specific row, do not accidentally hide it by soft-delete mode.
   const effectiveSoftDeleteMode: SoftDeleteMode = focusId ? 'all' : softDeleteMode;
 
+  // Kept for potential future role-based UI tweaks; not used for soft-delete gating anymore.
   const isAdmin = profile?.role === 'admin';
 
   const queryKey = useMemo(
-    () =>
-      [
-        'trials',
-        { softDeleteMode: effectiveSoftDeleteMode },
-      ] as const,
+    () => ['trials', { softDeleteMode: effectiveSoftDeleteMode }] as const,
     [effectiveSoftDeleteMode],
   );
 
@@ -104,12 +101,12 @@ export default function TrialsPage() {
       return t.id === focusId;
     }
 
-    // 1) status filter
+    // 1) Status filter
     if (statusFilter !== 'all' && t.status !== statusFilter) {
       return false;
     }
 
-    // 2) search filter
+    // 2) Search filter
     const term = search.trim().toLowerCase();
     if (!term) return true;
 
@@ -123,16 +120,13 @@ export default function TrialsPage() {
     (createMutation.error as Error | null | undefined)?.message ?? '';
 
   if (isLoading) {
-    return (
-      <div className="p-8 text-sm text-slate-500">Denemeler yükleniyor...</div>
-    );
+    return <div className="p-8 text-sm text-slate-500">Denemeler yükleniyor...</div>;
   }
 
   if (isError) {
     return (
       <div className="p-8 text-sm text-red-600">
-        Deneme verileri alınırken bir hata oluştu. Lütfen Supabase bağlantısını ve
-        RLS ayarlarını kontrol edin.
+        Deneme verileri alınırken bir hata oluştu. Lütfen Supabase bağlantısını ve RLS ayarlarını kontrol edin.
       </div>
     );
   }
@@ -171,38 +165,41 @@ export default function TrialsPage() {
         </div>
       </div>
 
-      {/* Filters row (mobile-first): status filter always visible */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] text-slate-500 sm:text-xs">Durum:</span>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as TrialStatusFilter)}
-            disabled={!!focusId}
-            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-60"
-          >
-            {TRIAL_STATUS_FILTER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+      {/* Filters row (unified toolbar container like PatientsPage) */}
+      <div className="space-y-3 rounded-lg border border-slate-100 bg-slate-50/70 p-3 shadow-sm sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:space-y-0 sm:bg-slate-50">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-500 sm:text-xs">Durum:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as TrialStatusFilter)}
+              disabled={!!focusId}
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-60"
+            >
+              {TRIAL_STATUS_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
 
-          {focusId && (
-            <span className="text-[11px] text-slate-400">
-              (focusId aktifken filtreler kilitlidir)
-            </span>
+            {focusId && (
+              <span className="text-[11px] text-slate-400">
+                (focusId aktifken filtreler kilitlidir)
+              </span>
+            )}
+          </div>
+
+          {/* Soft delete mode: visible for everyone (admin + staff) */}
+          {!focusId ? (
+            <SoftDeleteModeFilter value={softDeleteMode} onChange={setSoftDeleteMode} />
+          ) : (
+            <SoftDeleteModeFilter value={softDeleteMode} onChange={setSoftDeleteMode} className="opacity-60 pointer-events-none" />
           )}
         </div>
 
-        {/* Admin-only: soft delete mode */}
-        {isAdmin ? (
-          <SoftDeleteModeFilter
-            value={softDeleteMode}
-            onChange={(v) => setSoftDeleteMode(v)}
-            className={focusId ? 'opacity-60 pointer-events-none' : ''}
-          />
-        ) : null}
+        {/* Reserved for future right-side toolbar actions if needed */}
+        <div className="hidden sm:block" />
       </div>
 
       {/* New trial form card */}
@@ -221,8 +218,7 @@ export default function TrialsPage() {
           isSubmitting={createMutation.isPending}
           errorMessage={
             createMutation.isError
-              ? 'Kayıt sırasında bir hata oluştu. ' +
-                (mutationError ? `Detay: ${mutationError}` : '')
+              ? 'Kayıt sırasında bir hata oluştu. ' + (mutationError ? `Detay: ${mutationError}` : '')
               : undefined
           }
         />
@@ -237,11 +233,7 @@ export default function TrialsPage() {
       />
 
       {/* Detail drawer */}
-      <TrialDetailDrawer
-        trial={detailTrial}
-        open={!!detailTrial}
-        onClose={() => setDetailTrial(null)}
-      />
+      <TrialDetailDrawer trial={detailTrial} open={!!detailTrial} onClose={() => setDetailTrial(null)} />
     </div>
   );
 }
