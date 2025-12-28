@@ -1,9 +1,16 @@
 // src/features/trials/types.ts
-// Summary: Shared TypeScript types for trial (deneme) entities used in UI and API.
+// Summary: Shared TypeScript types for trial (deneme) lead pipeline entities used in UI and API.
+// Integrations:
+// - Mirrors public.trials lead pipeline fields (status/lost/converted) + soft delete deleted_at.
 //
-// v1.1:
-// - Adds optional soft-delete field `deleted_at` to support admin visibility filters
-//   (active / deleted / all) without polluting default lists.
+// v2.0 (lead pipeline):
+// - Adds pipeline fields:
+//   - status: 'active' | 'converted' | 'lost'
+//   - lost_at / lost_reason
+//   - converted_patient_id
+// - Keeps optional deleted_at for backward compatible UI rollouts.
+
+export type TrialStatus = 'active' | 'converted' | 'lost';
 
 export type TrialRow = {
   id: string;
@@ -14,6 +21,12 @@ export type TrialRow = {
   created_at: string;
   reference_id: string | null;
   note: string | null;
+
+  // Lead pipeline
+  status: TrialStatus;
+  lost_at: string | null;
+  lost_reason: string | null;
+  converted_patient_id: string | null;
 
   /**
    * Soft delete timestamp (timestamptz).
