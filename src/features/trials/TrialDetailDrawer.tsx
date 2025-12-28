@@ -1,19 +1,22 @@
 // src/features/trials/TrialDetailDrawer.tsx
-// Read-only detail drawer for a trial, with tabs and printable offer sheet.
+// Summary: Read-only detail drawer for a trial lead pipeline row, with tabs and printable offer sheet.
+// Integrations:
+// - Fetches trial_devices_with_catalog_public for printable offer and device list.
+// - Fetches reference lite for display.
+// - Fetches meetings by trial for timeline visibility.
+// - Uses org settings in print.
 //
-// Patch v2.0 (trial → patient device selection):
-// - "Hastaya dönüştür" butonu artık direkt navigate etmiyor; önce seçim modali açılıyor.
-// - Modalda kullanıcı, denemedeki cihaz satırlarından hangilerini hasta formuna
-//   taşımak istediğini işaretleyebiliyor.
-// - side === 'both' / 'bilateral' olan satırlar, hasta formunda iki ayrı satıra
-//   bölünüyor: sağ (right) + sol (left).
-// - Aynı deneme altında birden fazla çift/tek teklif senaryosu destekleniyor.
+// Patch v2.1 (lead pipeline safety):
+// - Shows trial status badge in Summary.
+// - Disables "Hastaya dönüştür" when status != 'active' OR trial is soft-deleted.
+// - Provides clear helper text for converted/lost/deleted states.
+// - Keeps the existing "device selection modal" behavior for conversion.
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { SideDrawer } from '../../components/layout/SideDrawer';
-import type { TrialRow, TrialDeviceRow } from './types';
+import type { TrialRow, TrialDeviceRow, TrialStatus } from './types';
 import {
   fetchTrialDevicesByTrialId,
   TRIAL_DEVICES_BY_TRIAL_QUERY_KEY,
@@ -62,6 +65,22 @@ function formatDate(value: string | null): string {
   }
 }
 
+function getStatusLabel(status: TrialStatus): string {
+  if (status === 'converted') return 'Dönüştü';
+  if (status === 'lost') return 'Kaybedildi';
+  return 'Aktif';
+}
+
+function getStatusBadgeClass(status: TrialStatus): string {
+  if (status === 'converted') {
+    return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+  }
+  if (status === 'lost') {
+    return 'bg-rose-50 text-rose-700 border border-rose-200';
+  }
+  return 'bg-slate-50 text-slate-700 border border-slate-200';
+}
+
 /**
  * Trial cihaz satırında marka/model dolu mu kontrolü.
  * Boş satırlar hasta formuna taşınmaz.
@@ -84,11 +103,7 @@ function normalizeTrialSide(raw: string | null): string {
   return '';
 }
 
-export function TrialDetailDrawer({
-  trial,
-  open,
-  onClose,
-}: TrialDetailDrawerProps) {
+export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TrialTabId>('summary');
   const [includeDetailsForPrint, setIncludeDetailsForPrint] =
@@ -101,7 +116,6 @@ export function TrialDetailDrawer({
   // Org ayarları (logo, firma adı, iletişim bilgileri, watermark)
   const { data: orgSettings } = useOrgSettings();
 
-  // Stabil key için trialId'yi yukarıda hesaplıyoruz
   const trialId = trial?.id ?? null;
 
   const {
@@ -114,7 +128,6 @@ export function TrialDetailDrawer({
     enabled: !!trialId && open,
   });
 
-  // Referans adını çekmek için hafif sorgu
   const referenceId = trial?.reference_id ?? null;
 
   const {
@@ -127,7 +140,6 @@ export function TrialDetailDrawer({
     enabled: !!referenceId && open,
   });
 
-  // Bu deneme hastasına bağlı görüşmeler
   const {
     data: meetings = [],
     isLoading: isMeetingsLoading,
@@ -161,6 +173,9 @@ export function TrialDetailDrawer({
     { id: 'meetings', label: 'Görüşmeler' },
   ];
 
+  const isSoftDeleted = !!trial.deleted_at;
+  const isConvertible = !isSoftDeleted && trial.status === 'active';
+
   const handlePrintOffer = () => {
     if (typedDevices.length === 0) return;
 
@@ -174,9 +189,11 @@ export function TrialDetailDrawer({
    * Varsayılan olarak marka/model dolu tüm satırları seçili yap.
    */
   const handleOpenConvertModal = () => {
+    if (!isConvertible) {
+      return;
+    }
+
     if (!trial || typedDevices.length === 0) {
-      // Cihaz satırı olmasa da hasta oluşturmak isteyebilirsin;
-      // bu durumda direkt navigate etmek yerine, seçimsiz modal da açılabilir.
       setSelectedDeviceIds([]);
       setConvertModalOpen(true);
       return;
@@ -206,10 +223,8 @@ export function TrialDetailDrawer({
       selectable.every((id) => selectedDeviceIds.includes(id));
 
     if (allSelected) {
-      // Hepsini kaldır
       setSelectedDeviceIds([]);
     } else {
-      // Hepsini seç
       setSelectedDeviceIds(selectable);
     }
   };
@@ -223,6 +238,7 @@ export function TrialDetailDrawer({
    */
   const handleConfirmConvertToPatient = () => {
     if (!trial) return;
+    if (!isConvertible) return;
 
     const fromTrial = {
       trialId: trial.id,
@@ -246,41 +262,18 @@ export function TrialDetailDrawer({
               const model = d.model?.trim() ?? '';
               const side = normalizeTrialSide(d.side);
 
-              // Çift kulak (both / bilateral) → iki satır
               if (side === 'both') {
                 return [
-                  {
-                    side: 'right',
-                    brand,
-                    model,
-                  },
-                  {
-                    side: 'left',
-                    brand,
-                    model,
-                  },
+                  { side: 'right', brand, model },
+                  { side: 'left', brand, model },
                 ];
               }
 
-              // Sağ / sol → tek satır
               if (side === 'right' || side === 'left') {
-                return [
-                  {
-                    side,
-                    brand,
-                    model,
-                  },
-                ];
+                return [{ side, brand, model }];
               }
 
-              // Diğer / boş → kulak boş bırakılır (hasta formunda manuel seçilebilir)
-              return [
-                {
-                  side: '',
-                  brand,
-                  model,
-                },
-              ];
+              return [{ side: '', brand, model }];
             })
         : [];
 
@@ -298,9 +291,21 @@ export function TrialDetailDrawer({
     setConvertModalOpen(false);
   };
 
+  const statusHelpText = (() => {
+    if (isSoftDeleted) {
+      return 'Bu deneme kaydı silinmiş (soft delete). Dönüştürme işlemi kapalıdır.';
+    }
+    if (trial.status === 'converted') {
+      return 'Bu deneme kaydı daha önce hastaya dönüştürülmüş. Dönüştürme işlemi kapalıdır.';
+    }
+    if (trial.status === 'lost') {
+      return 'Bu deneme kaydı kaybedildi olarak işaretlenmiş. Dönüştürme işlemi kapalıdır.';
+    }
+    return null;
+  })();
+
   const content = (
     <div className="flex h-full flex-col">
-      {/* Tab bar (sadece sekmeler) */}
       <div className="border-b border-slate-200 px-3 pt-2">
         <div className="flex flex-wrap gap-1">
           {tabs.map((tab) => {
@@ -324,14 +329,61 @@ export function TrialDetailDrawer({
         </div>
       </div>
 
-      {/* Tab contents */}
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm">
         {activeTab === 'summary' && (
           <section className="space-y-3">
-            <h4 className="text-xs font-semibold uppercase text-slate-500">
-              Özet
-            </h4>
+            <h4 className="text-xs font-semibold uppercase text-slate-500">Özet</h4>
+
             <div className="space-y-1 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-500">Durum</span>
+                <span
+                  className={
+                    'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ' +
+                    getStatusBadgeClass(trial.status)
+                  }
+                >
+                  {getStatusLabel(trial.status)}
+                </span>
+              </div>
+
+              {trial.status === 'lost' && (
+                <>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-xs text-slate-500">Kaybedildi</span>
+                    <span className="text-xs text-slate-900">
+                      {trial.lost_at ? formatDate(trial.lost_at) : '-'}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-slate-500">Kaybetme nedeni</span>
+                    <span className="whitespace-pre-line text-xs text-slate-900">
+                      {trial.lost_reason && trial.lost_reason.trim()
+                        ? trial.lost_reason
+                        : '-'}
+                    </span>
+                  </div>
+                </>
+              )}
+
+              {trial.status === 'converted' && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-xs text-slate-500">Hasta ID</span>
+                  <span className="text-xs text-slate-900">
+                    {trial.converted_patient_id ?? '-'}
+                  </span>
+                </div>
+              )}
+
+              {isSoftDeleted && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-xs text-slate-500">Silinme</span>
+                  <span className="text-xs text-slate-900">
+                    {trial.deleted_at ? formatDate(trial.deleted_at) : '-'}
+                  </span>
+                </div>
+              )}
+
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Ad Soyad</span>
                 <span className="text-xs font-medium text-slate-900">
@@ -340,9 +392,7 @@ export function TrialDetailDrawer({
               </div>
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Telefon</span>
-                <span className="text-xs text-slate-900">
-                  {trial.phone ?? '-'}
-                </span>
+                <span className="text-xs text-slate-900">{trial.phone ?? '-'}</span>
               </div>
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Kayıt Tarihi</span>
@@ -382,8 +432,11 @@ export function TrialDetailDrawer({
               </div>
             </div>
 
-            {/* Özet sekmesi altındaki aksiyonlar */}
             <div className="mt-1 flex flex-col gap-2 rounded-md border border-slate-100 bg-white px-3 py-2">
+              {statusHelpText && (
+                <p className="text-[11px] text-slate-500">{statusHelpText}</p>
+              )}
+
               <div className="flex items-center justify-between gap-2">
                 <label className="flex items-center gap-1 text-[11px] text-slate-600">
                   <input
@@ -408,7 +461,13 @@ export function TrialDetailDrawer({
                   <button
                     type="button"
                     onClick={handleOpenConvertModal}
-                    className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-800 shadow-sm hover:bg-emerald-100"
+                    disabled={!isConvertible}
+                    className={
+                      'inline-flex items-center rounded-md px-3 py-1.5 text-[11px] font-medium shadow-sm ' +
+                      (isConvertible
+                        ? 'border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                        : 'border border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed')
+                    }
                   >
                     Hastaya dönüştür
                   </button>
@@ -434,71 +493,64 @@ export function TrialDetailDrawer({
               </p>
             )}
 
-            {!isDevicesLoading &&
-              !isDevicesError &&
-              typedDevices.length === 0 && (
-                <p className="text-xs text-slate-500">
-                  Bu deneme için kayıtlı cihaz satırı bulunmuyor.
-                </p>
-              )}
+            {!isDevicesLoading && !isDevicesError && typedDevices.length === 0 && (
+              <p className="text-xs text-slate-500">
+                Bu deneme için kayıtlı cihaz satırı bulunmuyor.
+              </p>
+            )}
 
-            {!isDevicesLoading &&
-              !isDevicesError &&
-              typedDevices.length > 0 && (
-                <div className="space-y-2">
-                  <table className="min-w-full border border-slate-200 text-[11px]">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
-                          #
-                        </th>
-                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
-                          Marka
-                        </th>
-                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
-                          Model
-                        </th>
-                        <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
-                          Kulak
-                        </th>
-                        <th className="border-b border-slate-200 px-2 py-1 text-right font-medium text-slate-600">
-                          Liste Fiyatı
-                        </th>
-                        <th className="border-b border-slate-200 px-2 py-1 text-right font-medium text-slate-600">
-                          Teklif (Satır)
-                        </th>
+            {!isDevicesLoading && !isDevicesError && typedDevices.length > 0 && (
+              <div className="space-y-2">
+                <table className="min-w-full border border-slate-200 text-[11px]">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                        #
+                      </th>
+                      <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                        Marka
+                      </th>
+                      <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                        Model
+                      </th>
+                      <th className="border-b border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                        Kulak
+                      </th>
+                      <th className="border-b border-slate-200 px-2 py-1 text-right font-medium text-slate-600">
+                        Liste Fiyatı
+                      </th>
+                      <th className="border-b border-slate-200 px-2 py-1 text-right font-medium text-slate-600">
+                        Teklif (Satır)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {typedDevices.map((d, index) => (
+                      <tr key={d.id}>
+                        <td className="border-b border-slate-100 px-2 py-1">
+                          {index + 1}
+                        </td>
+                        <td className="border-b border-slate-100 px-2 py-1">
+                          {d.brand ?? '-'}
+                        </td>
+                        <td className="border-b border-slate-100 px-2 py-1">
+                          {d.model ?? '-'}
+                        </td>
+                        <td className="border-b border-slate-100 px-2 py-1">
+                          {d.side ?? '-'}
+                        </td>
+                        <td className="border-b border-slate-100 px-2 py-1 text-right">
+                          {formatPrice(d.list_price ?? null)}
+                        </td>
+                        <td className="border-b border-slate-100 px-2 py-1 text-right">
+                          {formatPrice(d.quote_price)}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {typedDevices.map((d, index) => (
-                        <tr key={d.id}>
-                          <td className="border-b border-slate-100 px-2 py-1">
-                            {index + 1}
-                          </td>
-                          <td className="border-b border-slate-100 px-2 py-1">
-                            {d.brand ?? '-'}
-                          </td>
-                          <td className="border-b border-slate-100 px-2 py-1">
-                            {d.model ?? '-'}
-                          </td>
-                          <td className="border-b border-slate-100 px-2 py-1">
-                            {d.side ?? '-'}
-                          </td>
-                          <td className="border-b border-slate-100 px-2 py-1 text-right">
-                            {formatPrice(d.list_price ?? null)}
-                          </td>
-                          <td className="border-b border-slate-100 px-2 py-1 text-right">
-                            {formatPrice(d.quote_price)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {/* Toplam teklif satırı bilinçli olarak kaldırıldı; hasta genelde
-                      bu satırlardan yalnızca birini seçeceği için kafa karışıklığı
-                      yaratmaması adına gösterilmiyor. */}
-                </div>
-              )}
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         )}
 
@@ -509,9 +561,7 @@ export function TrialDetailDrawer({
             </h4>
 
             {isMeetingsLoading && (
-              <p className="text-xs text-slate-500">
-                Görüşmeler yükleniyor...
-              </p>
+              <p className="text-xs text-slate-500">Görüşmeler yükleniyor...</p>
             )}
 
             {isMeetingsError && (
@@ -521,86 +571,61 @@ export function TrialDetailDrawer({
               </p>
             )}
 
-            {!isMeetingsLoading &&
-              !isMeetingsError &&
-              typedMeetings.length === 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs text-slate-500">
-                    Bu deneme hastası için kayıtlı görüşme bulunmuyor.
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    Yeni görüşme eklemek için üst menüden{' '}
-                    <span className="font-semibold">Görüşmeler</span> ekranına
-                    gidip, görüşme tipi olarak{' '}
-                    <span className="font-semibold">Deneme hastası</span>{' '}
-                    seçerek ilgili kişiyi seçebilirsiniz.
-                  </p>
-                </div>
-              )}
+            {!isMeetingsLoading && !isMeetingsError && typedMeetings.length === 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-slate-500">
+                  Bu deneme hastası için kayıtlı görüşme bulunmuyor.
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  Yeni görüşme eklemek için üst menüden{' '}
+                  <span className="font-semibold">Görüşmeler</span> ekranına gidip,
+                  görüşme tipi olarak{' '}
+                  <span className="font-semibold">Deneme hastası</span> seçerek ilgili
+                  kişiyi seçebilirsiniz.
+                </p>
+              </div>
+            )}
 
-            {!isMeetingsLoading &&
-              !isMeetingsError &&
-              typedMeetings.length > 0 && (
-                <div className="space-y-2">
-                  <table className="min-w-full border border-slate-200 text-[11px]">
-                    <thead className="bg-slate-50 text-slate-600">
-                      <tr>
-                        <th className="px-2 py-1 text-left font-medium">
-                          Tarih
-                        </th>
-                        <th className="px-2 py-1 text-left font-medium">
-                          Başlık
-                        </th>
-                        <th className="px-2 py-1 text-left font-medium">
-                          Sonraki Tarih
-                        </th>
-                        <th className="px-2 py-1 text-left font-medium">
-                          Memnuniyet
-                        </th>
-                        <th className="px-2 py-1 text-left font-medium">
-                          Not
-                        </th>
+            {!isMeetingsLoading && !isMeetingsError && typedMeetings.length > 0 && (
+              <div className="space-y-2">
+                <table className="min-w-full border border-slate-200 text-[11px]">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="px-2 py-1 text-left font-medium">Tarih</th>
+                      <th className="px-2 py-1 text-left font-medium">Başlık</th>
+                      <th className="px-2 py-1 text-left font-medium">Sonraki Tarih</th>
+                      <th className="px-2 py-1 text-left font-medium">Memnuniyet</th>
+                      <th className="px-2 py-1 text-left font-medium">Not</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {typedMeetings.map((m) => (
+                      <tr key={m.id} className="border-t border-slate-100 align-top">
+                        <td className="px-2 py-1 text-slate-800">{formatDate(m.at)}</td>
+                        <td className="px-2 py-1 text-slate-800">{m.subject ?? '-'}</td>
+                        <td className="px-2 py-1 text-slate-800">{formatDate(m.next_at)}</td>
+                        <td className="px-2 py-1 text-slate-800">
+                          {m.satisfaction_10 ?? '-'}
+                        </td>
+                        <td className="px-2 py-1 text-slate-600">
+                          {m.note ? m.note.slice(0, 160) : '-'}
+                          {m.note && m.note.length > 160 ? '…' : ''}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {typedMeetings.map((m) => (
-                        <tr
-                          key={m.id}
-                          className="border-t border-slate-100 align-top"
-                        >
-                          <td className="px-2 py-1 text-slate-800">
-                            {formatDate(m.at)}
-                          </td>
-                          <td className="px-2 py-1 text-slate-800">
-                            {m.subject ?? '-'}
-                          </td>
-                          <td className="px-2 py-1 text-slate-800">
-                            {formatDate(m.next_at)}
-                          </td>
-                          <td className="px-2 py-1 text-slate-800">
-                            {m.satisfaction_10 ?? '-'}
-                          </td>
-                          <td className="px-2 py-1 text-slate-600">
-                            {m.note ? m.note.slice(0, 160) : '-'}
-                            {m.note && m.note.length > 160 ? '…' : ''}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <p className="text-[11px] text-slate-400">
-                    Yeni görüşme eklemek için{' '}
-                    <span className="font-semibold">Görüşmeler</span> ana
-                    ekranını kullanın. Bu sekme sadece ilgili deneme
-                    görüşmelerini görüntüler.
-                  </p>
-                </div>
-              )}
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-[11px] text-slate-400">
+                  Yeni görüşme eklemek için <span className="font-semibold">Görüşmeler</span>{' '}
+                  ana ekranını kullanın. Bu sekme sadece ilgili deneme görüşmelerini
+                  görüntüler.
+                </p>
+              </div>
+            )}
           </section>
         )}
       </div>
 
-      {/* "Hastaya dönüştür" seçim modali */}
       {convertModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-lg rounded-lg bg-white p-4 shadow-lg">
@@ -608,14 +633,13 @@ export function TrialDetailDrawer({
               Hastaya dönüştür: Cihaz seçimi
             </h3>
             <p className="mb-3 text-[11px] text-slate-600">
-              Bu denemede teklif ettiğiniz cihaz satırlarından hangilerini yeni
-              hasta kaydına taşımak istiyorsunuz? Seçtiğiniz satırlar hasta
-              formunda cihaz satırı olarak önceden doldurulur.
+              Bu denemede teklif ettiğiniz cihaz satırlarından hangilerini yeni hasta kaydına
+              taşımak istiyorsunuz? Seçtiğiniz satırlar hasta formunda cihaz satırı olarak
+              önceden doldurulur.
             </p>
             <p className="mb-3 text-[11px] text-slate-500">
-              Not: Kulak alanı <span className="font-semibold">Çift</span>{' '}
-              (both/bilateral) olan satırlar, hasta formunda otomatik olarak iki
-              satıra bölünür: sağ ve sol.
+              Not: Kulak alanı <span className="font-semibold">Çift</span> (both/bilateral)
+              olan satırlar, hasta formunda otomatik olarak iki satıra bölünür: sağ ve sol.
             </p>
 
             <div className="mb-2 flex items-center justify-between">
@@ -634,8 +658,8 @@ export function TrialDetailDrawer({
             <div className="max-h-60 overflow-y-auto rounded-md border border-slate-200">
               {typedDevices.length === 0 ? (
                 <p className="px-3 py-2 text-[11px] text-slate-500">
-                  Bu deneme için kayıtlı cihaz satırı bulunmuyor. Yine de hasta
-                  kaydı açabilirsiniz; cihazlar hasta ekranında seçilir.
+                  Bu deneme için kayıtlı cihaz satırı bulunmuyor. Yine de hasta kaydı
+                  açabilirsiniz; cihazlar hasta ekranında seçilir.
                 </p>
               ) : (
                 <table className="min-w-full text-[11px]">
@@ -645,9 +669,7 @@ export function TrialDetailDrawer({
                       <th className="px-2 py-1 text-left font-medium">Marka</th>
                       <th className="px-2 py-1 text-left font-medium">Model</th>
                       <th className="px-2 py-1 text-left font-medium">Kulak</th>
-                      <th className="px-2 py-1 text-right font-medium">
-                        Teklif
-                      </th>
+                      <th className="px-2 py-1 text-right font-medium">Teklif</th>
                     </tr>
                   </thead>
                   <tbody>
