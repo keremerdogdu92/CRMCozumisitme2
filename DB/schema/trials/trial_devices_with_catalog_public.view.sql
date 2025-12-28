@@ -5,7 +5,7 @@
 -- Security:
 --   - security_invoker = on → RLS from underlying tables is enforced.
 
-CREATE VIEW public.trial_devices_with_catalog_public
+CREATE OR REPLACE VIEW public.trial_devices_with_catalog_public
 WITH (security_invoker = on) AS
 SELECT
   td.id,
