@@ -1,6 +1,8 @@
 // src/components/table/SoftDeleteModeFilter.tsx
-// Summary: Reusable admin filter UI to control soft-deleted row visibility in tables.
-// Usage: show only for admins; bind value+onChange at page-level.
+// Summary: Reusable soft-delete visibility filter UI for table pages.
+// Usage:
+// - Bind value + onChange at page-level.
+// - Visibility can be controlled by table preferences (e.g., show/hide toggle in Columns menu).
 
 import type { SoftDeleteMode } from '../../utils/softDelete/softDeleteTypes';
 import { SOFT_DELETE_MODE_OPTIONS } from '../../utils/softDelete/softDeleteTypes';
