@@ -1,17 +1,20 @@
 // src/features/patients/api/api.patients.delete.ts
-// Soft delete helper for patients (sets deleted_at / deleted_by / delete_reason).
+// Summary: Soft delete + restore helpers for patients.
+// Integrations:
+// - Calls DB RPCs defined in DB/schema/patients/patients.sql:
+//   - public.soft_delete_patients(p_id uuid, p_reason text)
+//   - public.restore_patients(p_id uuid)
+// - deleted_by stamping is handled by DB trigger public.trg_soft_delete_set_deleted_by().
+// - Org scoping is enforced server-side via public.current_user_org_id() inside the RPCs.
+//
+// IMPORTANT:
+// - Do not UPDATE deleted_* columns directly from UI. Keep behavior canonical via RPCs.
 
 import { supabaseClient } from '../../../utils/supabaseClient';
 
 /**
- * Soft delete a patient:
- * - Sets deleted_at = now()
- * - Sets deleted_by = current user id (if available)
- * - Optionally records a short delete_reason
- *
- * RLS ensures:
- * - Only same-org authenticated users can update this row.
- * - Hard DELETE is reserved for service_role (cron/purge).
+ * Soft delete a patient via RPC.
+ * Idempotent: if already deleted, RPC updates 0 rows and returns successfully.
  */
 export async function softDeletePatient(params: {
   id: string;
@@ -19,37 +22,41 @@ export async function softDeletePatient(params: {
 }): Promise<void> {
   const { id, reason } = params;
 
-  const { data: userData, error: userError } =
-    await supabaseClient.auth.getUser();
-
-  if (userError) {
-    console.error(
-      'Failed to get current user for soft delete (STEP_DELETE_USER):',
-      userError,
-    );
+  if (!id) {
+    throw new Error('PATIENT_SOFT_DELETE_INVALID_ID: id is required.');
   }
 
-  const deletedBy = userData?.user?.id ?? null;
+  const trimmedReason =
+    reason && reason.trim().length > 0 ? reason.trim() : null;
 
-  const payload: Record<string, any> = {
-    deleted_at: new Date().toISOString(),
-    delete_reason: reason && reason.trim().length > 0 ? reason.trim() : null,
-  };
-
-  if (deletedBy) {
-    payload.deleted_by = deletedBy;
-  }
-
-  const { error } = await supabaseClient
-    .from('patients')
-    .update(payload)
-    .eq('id', id);
+  const { error } = await supabaseClient.rpc('soft_delete_patients', {
+    p_id: id,
+    p_reason: trimmedReason,
+  });
 
   if (error) {
-    console.error(
-      'Failed to soft delete patient (STEP_SOFT_DELETE):',
-      error,
-    );
-    throw new Error('STEP_SOFT_DELETE: ' + error.message);
+    console.error('Failed to soft delete patient (RPC soft_delete_patients):', error);
+    throw new Error('PATIENT_SOFT_DELETE_RPC_FAILED: ' + error.message);
+  }
+}
+
+/**
+ * Restore (un-delete) a patient via RPC.
+ * Idempotent: if not deleted, RPC updates 0 rows and returns successfully.
+ */
+export async function restorePatient(params: { id: string }): Promise<void> {
+  const { id } = params;
+
+  if (!id) {
+    throw new Error('PATIENT_RESTORE_INVALID_ID: id is required.');
+  }
+
+  const { error } = await supabaseClient.rpc('restore_patients', {
+    p_id: id,
+  });
+
+  if (error) {
+    console.error('Failed to restore patient (RPC restore_patients):', error);
+    throw new Error('PATIENT_RESTORE_RPC_FAILED: ' + error.message);
   }
 }
