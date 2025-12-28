@@ -1,10 +1,9 @@
 // src/features/patients/api/api.core.ts
 // Summary: Core patient API helpers: query keys, listing, search and shared utilities.
 // Integrations:
-// - Reads from patient_list_with_device (active-only) and patient_list_with_device_all (includes deleted rows).
+// - Uses patient_list_with_device (active-only) and patient_list_with_device_all (includes deleted rows).
 // - Soft delete visibility is controlled via SoftDeleteMode.
-// - IMPORTANT: PostgREST errors if you select columns that do not exist in a view.
-//   Therefore, deleted_* columns are requested ONLY when querying the *_all view.
+// - IMPORTANT: Do not select deleted_* columns from the non-all view; PostgREST will error.
 
 import { supabaseClient } from '../../../utils/supabaseClient';
 import type { PatientRow } from '../types';
@@ -71,8 +70,8 @@ export async function fetchPatientsByReferenceId(
 /**
  * Full patient list with device + reference info.
  * Backed by:
- * - patient_list_with_device (default, active-only)
- * - patient_list_with_device_all (includes deleted rows)
+ * - patient_list_with_device (default, NOT deleted)
+ * - patient_list_with_device_all (admin/all, includes deleted rows)
  */
 export async function fetchPatients(params?: {
   mode?: SoftDeleteMode;
@@ -80,13 +79,11 @@ export async function fetchPatients(params?: {
   const mode: SoftDeleteMode = params?.mode ?? 'active';
 
   const includeDeleted = needsIncludeDeleted(mode);
+
   const source = includeDeleted
     ? 'patient_list_with_device_all'
     : 'patient_list_with_device';
 
-  // NOTE:
-  // Keep select lists explicit to avoid accidental schema drift.
-  // Do NOT request deleted_* columns from the non-all view; PostgREST will error.
   const baseColumns: string[] = [
     'id',
     'full_name',
@@ -128,11 +125,9 @@ export async function fetchPatients(params?: {
     ? ['deleted_at', 'deleted_by', 'delete_reason']
     : [];
 
-  const selectList = [...baseColumns, ...deletedColumns].join(', ');
-
   const { data, error } = await supabaseClient
     .from(source)
-    .select(selectList)
+    .select([...baseColumns, ...deletedColumns].join(', '))
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -140,7 +135,7 @@ export async function fetchPatients(params?: {
     throw error;
   }
 
-  const mapped = (data ?? []).map((row: any) => {
+  const mapped: PatientRow[] = (data ?? []).map((row: any) => {
     const patient: PatientRow = {
       id: row.id as string,
       full_name: row.full_name as string,
@@ -148,8 +143,20 @@ export async function fetchPatients(params?: {
       created_at: row.created_at as string,
       last_visit_at: (row.last_visit_at as string | null) ?? null,
 
-      // SGK + satisfaction
+      deleted_at: includeDeleted ? ((row.deleted_at as string | null) ?? null) : null,
+      deleted_by: includeDeleted ? ((row.deleted_by as string | null) ?? null) : null,
+      delete_reason: includeDeleted ? ((row.delete_reason as string | null) ?? null) : null,
+
       sgk_flag: (row.sgk_flag as boolean | null) ?? null,
+      sgk_prescription_received:
+        (row.sgk_prescription_received as boolean | null | undefined) ?? null,
+      sgk_recorded_to_system:
+        (row.sgk_recorded_to_system as boolean | null | undefined) ?? null,
+      sgk_recorded_to_system_at:
+        (row.sgk_recorded_to_system_at as string | null | undefined) ?? null,
+
+      is_battery_patient: (row.is_battery_patient as boolean | null) ?? null,
+
       sgk_prescription_no:
         (row.sgk_prescription_no as string | null | undefined) ?? null,
       sgk_docs_received:
@@ -158,50 +165,7 @@ export async function fetchPatients(params?: {
         (row.sgk_processed as boolean | null | undefined) ?? null,
       satisfaction_10:
         row.satisfaction_10 != null ? Number(row.satisfaction_10) : null,
-      sgk_prescription_received:
-        (row.sgk_prescription_received as boolean | null | undefined) ?? null,
-      sgk_recorded_to_system:
-        (row.sgk_recorded_to_system as boolean | null | undefined) ?? null,
-      sgk_recorded_to_system_at:
-        (row.sgk_recorded_to_system_at as string | null | undefined) ?? null,
 
-      // Identity / address / relative
-      national_id: (row.national_id as string | null | undefined) ?? null,
-      address: (row.address as string | null | undefined) ?? null,
-      kin_phone: (row.kin_phone as string | null | undefined) ?? null,
-
-      // Reference
-      reference_id: (row.reference_id as string | null) ?? null,
-      reference_name:
-        (row.reference_name as string | null | undefined) ?? null,
-      reference_phone:
-        (row.reference_phone as string | null | undefined) ?? null,
-
-      // Archive + payment
-      archive_code: (row.archive_code as string | null | undefined) ?? null,
-      payment_method: (row.payment_method as any) ?? null,
-      sale_total_amount:
-        (row.sale_total_amount as number | null | undefined) ?? null,
-      card_fee_rate:
-        (row.card_fee_rate as number | null | undefined) ?? null,
-      card_fee_amount:
-        (row.card_fee_amount as number | null | undefined) ?? null,
-
-      // Device summary
-      device_brand: (row.device_brand as string | null | undefined) ?? null,
-      device_model: (row.device_model as string | null | undefined) ?? null,
-      device_total_price:
-        (row.device_total_price as number | null | undefined) ?? null,
-      device_ear_side_summary:
-        (row.device_ear_side_summary as string | null | undefined) ?? null,
-
-      // Invoice status
-      invoice_issued:
-        (row.invoice_issued as boolean | null | undefined) ?? null,
-      invoice_issued_at:
-        (row.invoice_issued_at as string | null | undefined) ?? null,
-
-      // SGK profile-based reimbursement metadata
       sgk_profile: (row.sgk_profile as string | null | undefined) ?? null,
       sgk_expected_reimbursement:
         row.sgk_expected_reimbursement != null
@@ -213,21 +177,38 @@ export async function fetchPatients(params?: {
           | null
           | undefined) ?? null,
 
-      is_battery_patient: (row.is_battery_patient as boolean | null) ?? null,
-    };
+      national_id: (row.national_id as string | null | undefined) ?? null,
+      address: (row.address as string | null | undefined) ?? null,
+      kin_phone: (row.kin_phone as string | null | undefined) ?? null,
 
-    // Keep deleted fields available for UI without forcing PatientRow to include them today.
-    // This avoids a large refactor but keeps the data accessible.
-    if (includeDeleted) {
-      (patient as any).deleted_at = (row.deleted_at as string | null) ?? null;
-      (patient as any).deleted_by = (row.deleted_by as string | null) ?? null;
-      (patient as any).delete_reason =
-        (row.delete_reason as string | null) ?? null;
-    } else {
-      (patient as any).deleted_at = null;
-      (patient as any).deleted_by = null;
-      (patient as any).delete_reason = null;
-    }
+      reference_id: (row.reference_id as string | null) ?? null,
+      reference_name:
+        (row.reference_name as string | null | undefined) ?? null,
+      reference_phone:
+        (row.reference_phone as string | null | undefined) ?? null,
+
+      archive_code: (row.archive_code as string | null | undefined) ?? null,
+
+      payment_method: (row.payment_method as any) ?? null,
+      sale_total_amount:
+        (row.sale_total_amount as number | null | undefined) ?? null,
+      card_fee_rate:
+        (row.card_fee_rate as number | null | undefined) ?? null,
+      card_fee_amount:
+        (row.card_fee_amount as number | null | undefined) ?? null,
+
+      device_brand: (row.device_brand as string | null | undefined) ?? null,
+      device_model: (row.device_model as string | null | undefined) ?? null,
+      device_total_price:
+        (row.device_total_price as number | null | undefined) ?? null,
+      device_ear_side_summary:
+        (row.device_ear_side_summary as string | null | undefined) ?? null,
+
+      invoice_issued:
+        (row.invoice_issued as boolean | null | undefined) ?? null,
+      invoice_issued_at:
+        (row.invoice_issued_at as string | null | undefined) ?? null,
+    };
 
     return patient;
   });
@@ -237,7 +218,7 @@ export async function fetchPatients(params?: {
   }
 
   if (isDeletedOnly(mode)) {
-    return mapped.filter((p) => (p as any).deleted_at != null);
+    return mapped.filter((p) => p.deleted_at != null);
   }
 
   return mapped;
