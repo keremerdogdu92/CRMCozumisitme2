@@ -2,16 +2,19 @@
 -- Purpose: Supabase table definition for `public.inventory_items`.
 -- Integrations:
 -- - Multi-org isolation via public.current_user_org_id().
--- - Soft delete via deleted_at + RPCs:
---   - public.soft_delete_inventory_items(p_id)
+-- - Soft delete via deleted_at + deleted_by + delete_reason + RPCs:
+--   - public.soft_delete_inventory_items(p_id, p_reason)
 --   - public.restore_inventory_items(p_id)
+-- - Soft delete deleted_by stamping via trigger:
+--   - public.trg_soft_delete_set_deleted_by() (core/soft_delete_helpers.sql)
 -- - Hard delete is disabled for authenticated users (no DELETE policy, no DELETE grant).
 --
--- v3.1.0 (2025-12-28):
--- - ALIGN WITH DB: add (org_id, deleted_at) index (inventory_items_org_deleted_at_idx).
--- - ALIGN WITH DECISION: hard delete disabled (no DELETE policy, no DELETE grant).
--- - ALIGN WITH DB: include soft delete + restore RPCs for UI usage.
--- - KEEP: helper-based org policies and existing indexes.
+-- v3.2.0 (2025-12-29):
+-- - ADD: deleted_by + delete_reason columns (optional delete reason).
+-- - ADD: trigger to stamp deleted_by on soft delete.
+-- - UPDATE: soft delete RPC is idempotent and accepts optional reason.
+-- - UPDATE: restore RPC clears deleted_at/deleted_by/delete_reason (idempotent).
+-- - KEEP: org-scoped policies and indexes; no authenticated hard delete.
 
 CREATE TABLE IF NOT EXISTS public.inventory_items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -30,8 +33,10 @@ CREATE TABLE IF NOT EXISTS public.inventory_items (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
 
-  -- Soft delete column (DB currently uses deleted_at only for this table)
+  -- Soft delete columns
   deleted_at timestamp with time zone NULL,
+  deleted_by uuid NULL,
+  delete_reason text NULL,
 
   device_price numeric(12, 2) NULL,
 
@@ -39,6 +44,9 @@ CREATE TABLE IF NOT EXISTS public.inventory_items (
 
   CONSTRAINT inventory_items_org_id_fkey FOREIGN KEY (org_id)
     REFERENCES public.orgs (id) ON DELETE CASCADE,
+
+  CONSTRAINT inventory_items_deleted_by_fkey
+    FOREIGN KEY (deleted_by) REFERENCES auth.users (id) ON DELETE SET NULL,
 
   CONSTRAINT inventory_items_ear_side_check CHECK (
     ear_side IS NULL
@@ -54,7 +62,10 @@ CREATE TABLE IF NOT EXISTS public.inventory_items (
   )
 ) TABLESPACE pg_default;
 
--- Existing indexes
+-- ============================================================
+-- INDEXES
+-- ============================================================
+
 CREATE INDEX IF NOT EXISTS inventory_items_org_status_idx
 ON public.inventory_items USING btree (org_id, status)
 TABLESPACE pg_default;
@@ -68,30 +79,44 @@ ON public.inventory_items USING btree (org_id, model)
 TABLESPACE pg_default
 WHERE deleted_at IS NULL;
 
--- Soft delete filtering performance (added by batch in DB)
+-- Soft delete filtering performance
 CREATE INDEX IF NOT EXISTS inventory_items_org_deleted_at_idx
 ON public.inventory_items (org_id, deleted_at);
+
+-- ============================================================
+-- SOFT DELETE TRIGGER (shared helper)
+-- ============================================================
+
+DROP TRIGGER IF EXISTS trg_inventory_items_soft_delete_stamp ON public.inventory_items;
+
+CREATE TRIGGER trg_inventory_items_soft_delete_stamp
+BEFORE UPDATE OF deleted_at, deleted_by ON public.inventory_items
+FOR EACH ROW
+EXECUTE FUNCTION public.trg_soft_delete_set_deleted_by();
 
 -- ============================================================
 -- SOFT DELETE RPCs (UI must call RPC; hard delete is disabled)
 -- ============================================================
 
-CREATE OR REPLACE FUNCTION public.soft_delete_inventory_items(p_id uuid)
+CREATE OR REPLACE FUNCTION public.soft_delete_inventory_items(p_id uuid, p_reason text DEFAULT NULL::text)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  -- Idempotent: only soft delete if not already deleted.
   UPDATE public.inventory_items
-  SET deleted_at = now()
+  SET deleted_at = now(),
+      delete_reason = p_reason
   WHERE id = p_id
-    AND org_id = public.current_user_org_id();
+    AND org_id = public.current_user_org_id()
+    AND deleted_at IS NULL;
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.soft_delete_inventory_items(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.soft_delete_inventory_items(uuid) TO authenticated;
+REVOKE ALL ON FUNCTION public.soft_delete_inventory_items(uuid, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.soft_delete_inventory_items(uuid, text) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.restore_inventory_items(p_id uuid)
 RETURNS void
@@ -100,10 +125,14 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  -- Idempotent: only restore if deleted.
   UPDATE public.inventory_items
-  SET deleted_at = NULL
+  SET deleted_at = NULL,
+      deleted_by = NULL,
+      delete_reason = NULL
   WHERE id = p_id
-    AND org_id = public.current_user_org_id();
+    AND org_id = public.current_user_org_id()
+    AND deleted_at IS NOT NULL;
 END;
 $function$;
 
@@ -132,7 +161,7 @@ TO public
 USING (auth.role() = 'service_role'::text)
 WITH CHECK (auth.role() = 'service_role'::text);
 
--- Org-scoped SELECT (includes deleted rows; UI filters by deleted_at if needed)
+-- Org-scoped SELECT (includes deleted rows; UI can filter by deleted_at)
 CREATE POLICY "inventory_items_select_by_org"
 ON public.inventory_items
 AS PERMISSIVE
