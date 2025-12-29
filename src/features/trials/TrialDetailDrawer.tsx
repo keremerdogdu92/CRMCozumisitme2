@@ -5,21 +5,25 @@
 // - Fetches reference lite for display.
 // - Fetches meetings by trial for timeline visibility.
 // - Uses org settings in print.
+// - Supports soft delete / restore actions via shared SoftDeleteRowActionButton + ./api RPC wrappers.
+//   * Invalidates TRIALS_QUERY_KEY and closes drawer to avoid stale local trial prop.
 //
-// Patch v2.1 (lead pipeline safety):
-// - Shows trial status badge in Summary.
-// - Disables "Hastaya dönüştür" when status != 'active' OR trial is soft-deleted.
-// - Provides clear helper text for converted/lost/deleted states.
-// - Keeps the existing "device selection modal" behavior for conversion.
+// Patch v2.2 (detail soft delete actions):
+// - ADD: "Sil / Geri getir" action in Summary tab (below status help text area).
+// - ADD: Mutations for soft delete / restore (confirm + optional prompt for reason).
+// - Invalidate trials query on success; close drawer after success to refresh parent selection.
 
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { SideDrawer } from '../../components/layout/SideDrawer';
 import type { TrialRow, TrialDeviceRow, TrialStatus } from './types';
 import {
   fetchTrialDevicesByTrialId,
   TRIAL_DEVICES_BY_TRIAL_QUERY_KEY,
+  TRIALS_QUERY_KEY,
+  softDeleteTrial,
+  restoreTrial,
 } from './api';
 import { openTrialOfferPrint } from './printTrialOffer';
 import {
@@ -32,6 +36,7 @@ import {
   fetchMeetingsByTrialId,
 } from '../meetings/api';
 import { useOrgSettings } from '../settings/useOrgSettings';
+import { SoftDeleteRowActionButton } from '../../components/softDelete/SoftDeleteRowActionButton';
 
 type TrialDetailDrawerProps = {
   trial: TrialRow | null;
@@ -105,6 +110,8 @@ function normalizeTrialSide(raw: string | null): string {
 
 export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
   const [activeTab, setActiveTab] = useState<TrialTabId>('summary');
   const [includeDetailsForPrint, setIncludeDetailsForPrint] =
     useState<boolean>(true);
@@ -112,6 +119,11 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
   // "Hastaya dönüştür" seçim modali state'i
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
+
+  // Soft delete busy indicator (drawer scope)
+  const [pendingAction, setPendingAction] = useState<'soft_delete' | 'restore' | null>(
+    null,
+  );
 
   // Org ayarları (logo, firma adı, iletişim bilgileri, watermark)
   const { data: orgSettings } = useOrgSettings();
@@ -151,12 +163,45 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
     enabled: !!trialId && open,
   });
 
+  const softDeleteMutation = useMutation<void, Error, { id: string; reason: string | null }>({
+    mutationFn: async ({ id, reason }) => {
+      setPendingAction('soft_delete');
+      try {
+        await softDeleteTrial(id, reason);
+      } finally {
+        setPendingAction(null);
+      }
+    },
+    onSuccess: () => {
+      // Invalidate list so parent refetches fresh row (deleted_at, etc.)
+      queryClient.invalidateQueries({ queryKey: TRIALS_QUERY_KEY });
+      // Close drawer to avoid stale "trial" prop being displayed after mutation.
+      onClose();
+    },
+  });
+
+  const restoreMutation = useMutation<void, Error, { id: string }>({
+    mutationFn: async ({ id }) => {
+      setPendingAction('restore');
+      try {
+        await restoreTrial(id);
+      } finally {
+        setPendingAction(null);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TRIALS_QUERY_KEY });
+      onClose();
+    },
+  });
+
   useEffect(() => {
     if (open) {
       setActiveTab('summary');
       setIncludeDetailsForPrint(true);
       setConvertModalOpen(false);
       setSelectedDeviceIds([]);
+      setPendingAction(null);
     }
   }, [open, trialId]);
 
@@ -176,12 +221,34 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
   const isSoftDeleted = !!trial.deleted_at;
   const isConvertible = !isSoftDeleted && trial.status === 'active';
 
+  const isBusy = pendingAction != null || softDeleteMutation.isPending || restoreMutation.isPending;
+
   const handlePrintOffer = () => {
     if (typedDevices.length === 0) return;
 
     openTrialOfferPrint(trial, typedDevices, orgSettings ?? null, {
       includeDeviceDetails: includeDetailsForPrint,
     });
+  };
+
+  const handleSoftDeleteClick = () => {
+    if (!trial?.id) return;
+
+    const ok = window.confirm('Bu deneme kaydını silmek (soft delete) istiyor musunuz?');
+    if (!ok) return;
+
+    const reasonRaw = window.prompt('Silme nedeni (opsiyonel):', '');
+    const reason = (reasonRaw ?? '').trim();
+    softDeleteMutation.mutate({ id: trial.id, reason: reason.length ? reason : null });
+  };
+
+  const handleRestoreClick = () => {
+    if (!trial?.id) return;
+
+    const ok = window.confirm('Bu deneme kaydını geri getirmek istiyor musunuz?');
+    if (!ok) return;
+
+    restoreMutation.mutate({ id: trial.id });
   };
 
   /**
@@ -436,6 +503,17 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
               {statusHelpText && (
                 <p className="text-[11px] text-slate-500">{statusHelpText}</p>
               )}
+
+              {/* Soft delete / restore action (placed in Summary, not in header) */}
+              <div className="flex items-center justify-end">
+                <SoftDeleteRowActionButton
+                  isDeleted={isSoftDeleted}
+                  isBusy={isBusy}
+                  size="xs"
+                  onSoftDelete={handleSoftDeleteClick}
+                  onRestore={handleRestoreClick}
+                />
+              </div>
 
               <div className="flex items-center justify-between gap-2">
                 <label className="flex items-center gap-1 text-[11px] text-slate-600">
