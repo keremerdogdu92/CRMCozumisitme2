@@ -6,12 +6,14 @@
 // - Conversion RPC wrapper calls public.link_trial_to_patient_and_delete() which
 //   now marks the trial as status='converted' and sets converted_patient_id
 //   WITHOUT deleting the trial row.
+// - Soft delete / restore RPC wrappers:
+//   - public.soft_delete_trials(p_id, p_reason)
+//   - public.restore_trials(p_id)
 //
-// Patch v3.0 (lead pipeline alignment):
-// - Adds lead pipeline fields to select payload: status, lost_at, lost_reason, converted_patient_id.
-// - Keeps default fetch behavior as active-only (deleted_at IS NULL).
-// - Updates conversion RPC wrapper docs to reflect "no delete" behavior.
-// - Keeps soft delete filter typing permissive to avoid Postgrest generic coupling.
+// Patch v3.1 (soft delete RPC wrappers):
+// - ADD: softDeleteTrial(trialId, reason) helper calling soft_delete_trials.
+// - ADD: restoreTrial(trialId) helper calling restore_trials.
+// - Keeps existing fetch behavior and other APIs unchanged.
 //
 // IMPORTANT:
 // - Supabase select() strings do NOT support SQL comments (e.g. "-- ...").
@@ -71,6 +73,52 @@ function applySoftDeleteModeFilter(query: any, mode: SoftDeleteMode) {
     return query.not('deleted_at', 'is', null);
   }
   return query; // all
+}
+
+/**
+ * Soft delete a trial row via RPC.
+ * - This is the only supported delete path for authenticated users (no hard delete).
+ * - p_reason is optional; backend stores it in delete_reason.
+ */
+export async function softDeleteTrial(
+  trialId: string,
+  reason?: string | null,
+): Promise<void> {
+  if (!trialId) {
+    throw new Error('TRIAL_SOFT_DELETE_INVALID_ID: trialId is required');
+  }
+
+  const { error } = await supabaseClient.rpc('soft_delete_trials', {
+    p_id: trialId,
+    p_reason: reason ?? null,
+  });
+
+  if (error) {
+    console.error('Supabase soft_delete_trials RPC error:', error);
+    throw new Error(
+      `TRIAL_SOFT_DELETE_RPC_FAILED: ${error.message ?? 'Unknown Supabase RPC error'}`,
+    );
+  }
+}
+
+/**
+ * Restore a previously soft-deleted trial row via RPC.
+ */
+export async function restoreTrial(trialId: string): Promise<void> {
+  if (!trialId) {
+    throw new Error('TRIAL_RESTORE_INVALID_ID: trialId is required');
+  }
+
+  const { error } = await supabaseClient.rpc('restore_trials', {
+    p_id: trialId,
+  });
+
+  if (error) {
+    console.error('Supabase restore_trials RPC error:', error);
+    throw new Error(
+      `TRIAL_RESTORE_RPC_FAILED: ${error.message ?? 'Unknown Supabase RPC error'}`,
+    );
+  }
 }
 
 export async function fetchTrials(
