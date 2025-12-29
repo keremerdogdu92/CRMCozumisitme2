@@ -5,12 +5,13 @@
 // - Supabase RPCs via api.ts:
 //   - softDeleteReference(id, reason?)
 //   - restoreReference(id)
-// - Table preferences: useTablePreferences (column visibility + sorting).
+// - Table preferences: useTablePreferences (column visibility + sorting + UI toggles).
 // - Shared UI: SoftDeleteRowActionButton for consistent delete/restore across modules.
 //
-// Patch v2.5.1 (2025-12-29):
-// - CHANGE: Replace inline delete/restore buttons with SoftDeleteRowActionButton (shared component).
-// - KEEP: Confirmation guard and optional delete reason prompt.
+// Patch v2.6.0 (2025-12-29):
+// - CHANGE: Align tableId to "references" to share the same preference bucket with ReferencesPage.
+// - ADD: Columns dropdown UI toggle "Silinenler filtresi" (persists under state.ui.showSoftDeleteFilter).
+// - KEEP: SoftDeleteRowActionButton for delete/restore actions.
 // - KEEP: Cache invalidation for all references queries after mutation.
 
 import { useMemo } from 'react';
@@ -25,6 +26,9 @@ import { exportToCsvFile, exportToXlsxFile } from '../../utils/csvUtils';
 import { ResponsiveTableShell } from '../../components/layout/ResponsiveTableShell';
 import { restoreReference, softDeleteReference } from './api';
 import { SoftDeleteRowActionButton } from '../../components/softDelete/SoftDeleteRowActionButton';
+
+export const REFERENCES_TABLE_ID = 'references';
+export const REFERENCES_UI_FLAG_SHOW_SOFT_DELETE_FILTER = 'showSoftDeleteFilter';
 
 type ReferencesTableProps = {
   items: ReferenceRow[];
@@ -164,7 +168,7 @@ function getReminderSortValue(r: ReferenceRow): number {
   return next.getTime();
 }
 
-const REFERENCE_COLUMNS: TableColumnDef<
+export const REFERENCE_COLUMNS: TableColumnDef<
   ReferenceRow & { _colId?: ReferenceTableColumnId }
 >[] = [
   {
@@ -288,11 +292,10 @@ export function ReferencesTable({
     toggleColumn,
     setSort,
     isColumnVisible,
-  } = useTablePreferences<ReferenceRow>(
-    'references-table',
-    REFERENCE_COLUMNS,
-    userId,
-  );
+    // UI toggles
+    isUiFlagEnabled,
+    toggleUiFlag,
+  } = useTablePreferences<ReferenceRow>(REFERENCES_TABLE_ID, REFERENCE_COLUMNS, userId);
 
   const sortedItems: ReferenceRow[] = useMemo(() => {
     if (!prefsState.sortBy) return items;
@@ -439,13 +442,14 @@ export function ReferencesTable({
 
   const isMutating = softDeleteMutation.isPending || restoreMutation.isPending;
 
+  const showSoftDeleteFilter = isUiFlagEnabled(REFERENCES_UI_FLAG_SHOW_SOFT_DELETE_FILTER, true);
+
   return (
     <div className="space-y-3">
       {/* Top bar: count + column control + export */}
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <p className="text-[11px] text-slate-500">
-          Toplam{' '}
-          <span className="font-semibold">{sortedItems.length}</span> referans
+          Toplam <span className="font-semibold">{sortedItems.length}</span> referans
           kaydı var.
         </p>
         <div className="flex items-center justify-end gap-2">
@@ -453,6 +457,14 @@ export function ReferencesTable({
             columns={REFERENCE_COLUMNS}
             isColumnVisible={isColumnVisible}
             toggleColumn={toggleColumn}
+            uiToggles={[
+              {
+                id: REFERENCES_UI_FLAG_SHOW_SOFT_DELETE_FILTER,
+                label: 'Silinenler filtresi',
+                checked: showSoftDeleteFilter,
+                onToggle: () => toggleUiFlag(REFERENCES_UI_FLAG_SHOW_SOFT_DELETE_FILTER),
+              },
+            ]}
           />
           <TableExportButtons
             onExportCsv={() => handleExport('csv')}
