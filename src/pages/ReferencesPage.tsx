@@ -1,9 +1,15 @@
 // src/pages/ReferencesPage.tsx
 // Summary: References page: list, inline create form and detail drawer orchestration.
-// v2.3.0:
-// - ADD: SoftDeleteMode filter (active/deleted/all) for admin list.
-// - KEEP: focusId query param support (/references?focusId=<uuid>).
-// - FIX: React Query key now includes mode to avoid cache collisions.
+// Integrations:
+// - React Query: fetch references list with SoftDeleteMode support (active/deleted/all).
+// - Table preferences: uses the same bucket as ReferencesTable to read UI toggle visibility.
+// - Deep link: focusId query param (/references?focusId=<uuid>) forces mode "all".
+//
+// Patch v2.6.0 (2025-12-29):
+// - CHANGE: SoftDeleteMode filter visibility is controlled by table preferences UI toggle:
+//   state.ui.showSoftDeleteFilter (toggled from Columns dropdown inside ReferencesTable).
+// - CHANGE: Align preferences tableId with ReferencesTable ("references") to share the same bucket.
+// - KEEP: focusId forces effectiveDeleteMode = 'all' to ensure deleted rows are visible.
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -16,12 +22,15 @@ import {
   createReference,
   REFERENCES_QUERY_KEY,
 } from '../features/references/api';
-import type {
-  NewReferenceForm,
-  ReferenceRow,
-  SoftDeleteMode,
-} from '../features/references/types';
+import type { NewReferenceForm, ReferenceRow, SoftDeleteMode } from '../features/references/types';
 import { useCurrentProfile } from '../features/auth/useCurrentProfile';
+import { SoftDeleteModeFilter } from '../components/table/SoftDeleteModeFilter';
+import { useTablePreferences } from '../components/table/useTablePreferences';
+import {
+  REFERENCE_COLUMNS,
+  REFERENCES_TABLE_ID,
+  REFERENCES_UI_FLAG_SHOW_SOFT_DELETE_FILTER,
+} from '../features/references/ReferencesTable';
 
 const initialFormState: NewReferenceForm = {
   fullName: '',
@@ -37,12 +46,6 @@ const initialFormState: NewReferenceForm = {
   isActive: true,
 };
 
-const SOFT_DELETE_MODE_OPTIONS: { value: SoftDeleteMode; label: string }[] = [
-  { value: 'active', label: 'Aktif' },
-  { value: 'deleted', label: 'Silinmiş' },
-  { value: 'all', label: 'Hepsi' },
-];
-
 export default function ReferencesPage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -56,8 +59,21 @@ export default function ReferencesPage() {
   const [deleteMode, setDeleteMode] = useState<SoftDeleteMode>('active');
 
   const { data: profile, isLoading: profileLoading } = useCurrentProfile();
+  const userId = profile?.id ?? null;
 
-  // Meetings üzerinden derin link desteği: /references?focusId=<referenceId>
+  // Shared prefs bucket with ReferencesTable, so Columns dropdown UI toggles affect this page.
+  const { isUiFlagEnabled } = useTablePreferences<ReferenceRow>(
+    REFERENCES_TABLE_ID,
+    REFERENCE_COLUMNS,
+    userId,
+  );
+
+  const showSoftDeleteFilter = isUiFlagEnabled(
+    REFERENCES_UI_FLAG_SHOW_SOFT_DELETE_FILTER,
+    true,
+  );
+
+  // Meetings deep-link support: /references?focusId=<referenceId>
   const focusId = searchParams.get('focusId');
 
   const effectiveDeleteMode: SoftDeleteMode = focusId ? 'all' : deleteMode;
@@ -139,19 +155,13 @@ export default function ReferencesPage() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          {/* Soft delete filter (admin-only list) */}
-          {!focusId && (
-            <select
-              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:w-40"
+          {/* Soft delete mode filter (visibility controlled via table prefs UI toggle) */}
+          {!focusId && showSoftDeleteFilter && (
+            <SoftDeleteModeFilter
               value={deleteMode}
-              onChange={(e) => setDeleteMode(e.target.value as SoftDeleteMode)}
-            >
-              {SOFT_DELETE_MODE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              onChange={setDeleteMode}
+              className="w-full sm:w-auto"
+            />
           )}
 
           <input
