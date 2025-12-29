@@ -6,11 +6,10 @@
 // - Soft-delete actions: receives onSoftDelete/onRestore callbacks from the page.
 // - Mobile-first layout: cards below md, table above md.
 //
-// Patch v2.3 (soft delete + actions):
-// - ADD: actions column (default visible) with Soft Delete / Restore buttons.
-// - ADD: deleted row hinting (badge + subtle background).
-// - KEEP: export respects visible columns (actions excluded).
-// - KEEP: existing filters (status/type/search) work on the already-fetched dataset.
+// Patch v2.4:
+// - CHANGE: "actions" column is toggleable via Columns menu (already supported by useTablePreferences).
+// - CHANGE: If actions column is hidden, row action buttons are not rendered.
+// - CHANGE: Export always excludes actions column.
 
 import { useMemo } from 'react';
 import type {
@@ -38,18 +37,10 @@ type Props = {
   onStatusFilterChange: (value: InventoryStatus | 'all') => void;
   onTypeFilterChange: (value: InventoryItemType | 'all') => void;
 
-  /**
-   * Soft delete actions are page-driven to keep this component presentational.
-   * - onSoftDelete may prompt for reason at page-level or inline (caller decides).
-   */
   canManageSoftDelete: boolean;
   onSoftDelete: (item: InventoryItemRow) => void;
   onRestore: (item: InventoryItemRow) => void;
 
-  /**
-   * Busy state flags to prevent double-submit clicks.
-   * Keep them coarse-grained (page-level) for simplicity.
-   */
   isMutating?: boolean;
 };
 
@@ -173,6 +164,7 @@ const INVENTORY_COLUMNS: TableColumnDef<
     label: 'İşlemler',
     sortable: false,
     isDefaultVisible: true,
+    // Intentionally no exportAccessor.
   },
 ];
 
@@ -235,6 +227,8 @@ export function InventoryTable({
     INVENTORY_COLUMNS,
     userId,
   );
+
+  const actionsVisible = isColumnVisible('actions');
 
   const filtered = useMemo(() => {
     return items.filter((item) => {
@@ -311,7 +305,6 @@ export function InventoryTable({
   }, [filtered, prefsState.sortBy, prefsState.sortDir]);
 
   const handleExport = (type: 'csv' | 'xlsx') => {
-    // Export excludes non-data columns.
     const exportableColumns = visibleColumns.filter((c) => c.id !== 'actions');
     if (exportableColumns.length === 0) return;
 
@@ -360,24 +353,14 @@ export function InventoryTable({
     const baseFileName = 'inventory_export';
 
     if (type === 'csv') {
-      exportToCsvFile({
-        fileName: baseFileName,
-        headers,
-        rows,
-      });
+      exportToCsvFile({ fileName: baseFileName, headers, rows });
     } else {
-      exportToXlsxFile({
-        fileName: baseFileName,
-        headers,
-        rows,
-      });
+      exportToXlsxFile({ fileName: baseFileName, headers, rows });
     }
   };
 
   const renderRowActions = (item: InventoryItemRow) => {
-    if (!canManageSoftDelete) {
-      return <span className="text-slate-400">-</span>;
-    }
+    if (!canManageSoftDelete) return <span className="text-slate-400">-</span>;
 
     const isDeleted = !!item.deleted_at;
 
@@ -420,7 +403,6 @@ export function InventoryTable({
   if (sorted.length === 0) {
     return (
       <div className="space-y-3">
-        {/* Filters row with export controls */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="text-slate-500">Durum:</span>
@@ -483,7 +465,6 @@ export function InventoryTable({
 
   return (
     <div className="space-y-3">
-      {/* Filters row with export controls */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-slate-500">Durum:</span>
@@ -667,7 +648,8 @@ export function InventoryTable({
                 )}
               </div>
 
-              {canManageSoftDelete && (
+              {/* Only render actions if the column is visible */}
+              {actionsVisible && canManageSoftDelete && (
                 <div className="mt-3 flex justify-end">
                   {renderRowActions(item)}
                 </div>
@@ -677,7 +659,7 @@ export function InventoryTable({
         })}
       </div>
 
-      {/* Desktop / tablet: classic table (md ve üzeri) */}
+      {/* Desktop/tablet */}
       <ResponsiveTableShell className="hidden md:block">
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="min-w-full text-xs md:text-sm">
@@ -693,7 +675,7 @@ export function InventoryTable({
                     col.id === 'device_price' ||
                     col.id === 'actions'
                   ) {
-                    alignClass = col.id === 'actions' ? 'text-right' : 'text-right';
+                    alignClass = 'text-right';
                   }
 
                   return (
