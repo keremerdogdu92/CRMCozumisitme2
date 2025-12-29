@@ -1,10 +1,19 @@
 // src/features/patients/api.ts
-// Barrel module for Patients feature API:
-// - Re-exports query keys, fetch/search helpers and mutations.
-// - Provides a typed createPatientFromForm wrapper used by PatientsPage
-//   so React Query knows variables/result types (NewPatientForm -> PatientRow).
+// Summary: Patients feature API barrel module.
+// Integrations:
+// - Re-exports query keys, fetch/search helpers and mutations from ./api/*
+// - Provides createPatientFromForm wrapper for typed React Query usage.
+// - Provides soft delete + restore helpers via Supabase RPC:
+//    * public.soft_delete_patients(p_id, p_reason)
+//    * public.restore_patients(p_id)
+//
+// Security notes:
+// - UI must NOT directly UPDATE deleted_at/deleted_by; it must call RPCs.
+// - RPCs are org-scoped server-side via public.current_user_org_id().
+// - deleted_by stamping is handled by DB trigger (trg_soft_delete_set_deleted_by).
 
 import type { NewPatientForm, PatientRow } from './types';
+import { supabaseClient } from '../../utils/supabaseClient';
 
 // Core query + search helpers
 import {
@@ -16,7 +25,7 @@ import {
 } from './api/api.core';
 import type { PatientForReference } from './api/api.core';
 
-// Low-level create + options type (new file)
+// Low-level create + options type
 import {
   createPatient as createPatientCore,
   type CreatePatientOptions,
@@ -49,16 +58,52 @@ import {
  * React Query infers:
  *   - variables: NewPatientForm
  *   - result:    PatientRow
- *
- * Options:
- *   - linkedTrialId?: when provided, backend RPC will link the trial
- *     to the newly created patient and delete the trial.
  */
 export async function createPatientFromForm(
   input: NewPatientForm,
   options?: CreatePatientOptions,
 ): Promise<PatientRow> {
   return createPatientCore(input, options);
+}
+
+/**
+ * Soft delete a patient via DB RPC.
+ *
+ * IMPORTANT:
+ * - Do NOT perform direct UPDATE on patients.deleted_at from client.
+ * - Use RPC so org scoping and audit triggers remain consistent.
+ */
+export async function softDeletePatient(
+  patientId: string,
+  reason?: string | null,
+): Promise<void> {
+  const { error } = await supabaseClient.rpc('soft_delete_patients', {
+    p_id: patientId,
+    p_reason: reason ?? null,
+  });
+
+  if (error) {
+    console.error('RPC soft_delete_patients failed', error);
+    throw new Error(
+      'Hasta silinirken bir hata oluştu. Lütfen tekrar deneyin.',
+    );
+  }
+}
+
+/**
+ * Restore a soft-deleted patient via DB RPC.
+ */
+export async function restorePatient(patientId: string): Promise<void> {
+  const { error } = await supabaseClient.rpc('restore_patients', {
+    p_id: patientId,
+  });
+
+  if (error) {
+    console.error('RPC restore_patients failed', error);
+    throw new Error(
+      'Hasta geri alınırken bir hata oluştu. Lütfen tekrar deneyin.',
+    );
+  }
 }
 
 // Re-exported symbols used across the app.
