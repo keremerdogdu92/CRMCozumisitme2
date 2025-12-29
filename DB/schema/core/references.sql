@@ -7,12 +7,10 @@
 --   - public.restore_references(p_id)
 -- - Hard delete is disabled for authenticated users (no DELETE policy, no DELETE grant).
 --
--- v3.2.0 (2025-12-28):
--- - CHANGE: staff visibility restored — all authenticated users in org can SELECT (including deleted rows).
--- - CHANGE: staff can INSERT/UPDATE (and soft delete/restore via RPC).
--- - ALIGN WITH DB: include org+deleted_at index used by global soft-delete filters.
--- - REMOVE: dependency on trg_soft_delete_set_deleted_by() trigger to avoid missing-function failures.
--- - KEEP: service_role bypass.
+-- v3.2.1 (2025-12-29):
+-- - SOFT DELETE: Make soft_delete_references idempotent (no-op if already deleted).
+-- - RESTORE: Make restore_references idempotent (no-op if not deleted).
+-- - KEEP: table, indexes, RLS and grants unchanged.
 
 CREATE TABLE IF NOT EXISTS public.references (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -83,12 +81,14 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  -- Idempotent: only soft delete if not already deleted.
   UPDATE public.references
   SET deleted_at = now(),
       deleted_by = auth.uid(),
       delete_reason = p_reason
   WHERE id = p_id
-    AND org_id = public.current_user_org_id();
+    AND org_id = public.current_user_org_id()
+    AND deleted_at IS NULL;
 END;
 $function$;
 
@@ -102,12 +102,14 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  -- Idempotent: only restore if currently deleted.
   UPDATE public.references
   SET deleted_at = NULL,
       deleted_by = NULL,
       delete_reason = NULL
   WHERE id = p_id
-    AND org_id = public.current_user_org_id();
+    AND org_id = public.current_user_org_id()
+    AND deleted_at IS NOT NULL;
 END;
 $function$;
 
