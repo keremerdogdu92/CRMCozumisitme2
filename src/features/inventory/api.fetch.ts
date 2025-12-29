@@ -1,12 +1,12 @@
 // src/features/inventory/api.fetch.ts
 // Summary: Supabase fetch helpers and React Query hook for listing inventory items.
 // Integrations:
-// - Supports UI-driven soft-delete visibility via SoftDeleteMode.
+// - Supports UI-driven soft-delete visibility via SoftDeleteMode (active/deleted/all).
 // - Resolves sold_patient_name from patients table (if sold_patient_id is set).
 //
-// Patch v2.1 (soft-delete mode):
-// - ADD: FetchInventoryOptions.mode (active/deleted/all).
-// - Default: active-only (deleted_at IS NULL) to match normal staff experience.
+// Patch v2.2:
+// - ADD: Select deleted_by + delete_reason.
+// - KEEP: Default mode is 'active'.
 
 import { useQuery } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
@@ -19,12 +19,6 @@ import { INVENTORY_QUERY_KEY } from './api.keys';
 import type { SoftDeleteMode } from '../../utils/softDelete/softDeleteTypes';
 
 type FetchInventoryOptions = {
-  /**
-   * Soft-delete visibility mode:
-   * - active: only not-deleted rows (default)
-   * - deleted: only deleted rows
-   * - all: deleted + not-deleted rows
-   */
   mode?: SoftDeleteMode;
 };
 
@@ -67,7 +61,9 @@ export async function fetchInventoryItems(
       sold_at,
       created_at,
       updated_at,
-      deleted_at
+      deleted_at,
+      deleted_by,
+      delete_reason
     `,
     )
     .order('created_at', { ascending: false });
@@ -106,6 +102,9 @@ export async function fetchInventoryItems(
       created_at: row.created_at as string,
       updated_at: row.updated_at as string,
       deleted_at: (row.deleted_at as string | null) ?? null,
+
+      deleted_by: (row.deleted_by as string | null) ?? null,
+      delete_reason: (row.delete_reason as string | null) ?? null,
 
       sold_patient_name: null,
     }),
