@@ -1,9 +1,15 @@
 // src/features/references/api.ts
 // Summary: Supabase-backed API helpers and React Query keys for references data.
-// v2.2.0:
-// - ADD: SoftDeleteMode-aware list query (active/deleted/all) for admin screen.
-// - ADD: Staff-safe filters in autocomplete helpers (active + not deleted).
-// - ADD: deleted_at mapping.
+// Integrations:
+// - Supabase table: public.references
+// - Supabase RPCs:
+//   - public.soft_delete_references(p_id, p_reason)
+//   - public.restore_references(p_id)
+// v2.3.0:
+// - ADD: softDeleteReference + restoreReference helpers (RPC-based, no hard delete).
+// - KEEP: SoftDeleteMode-aware list query (active/deleted/all) for admin screen.
+// - KEEP: Search helpers filter out deleted/inactive references for staff-safe pickers.
+// - KEEP: deleted_at mapping.
 
 import { supabaseClient } from '../../utils/supabaseClient';
 import type {
@@ -86,6 +92,51 @@ export async function fetchReferences(
       deleted_at: row.deleted_at ?? null,
     })) ?? []
   );
+}
+
+/**
+ * Soft delete a reference via RPC.
+ * Security model:
+ * - UI must not hard delete.
+ * - RPC is org-scoped on DB side via current_user_org_id().
+ */
+export async function softDeleteReference(
+  id: string,
+  reason?: string | null,
+): Promise<void> {
+  const referenceId = (id ?? '').trim();
+  if (!referenceId) {
+    throw new Error('REF_SOFT_DELETE: Missing reference id');
+  }
+
+  const { error } = await supabaseClient.rpc('soft_delete_references', {
+    p_id: referenceId,
+    p_reason: reason ?? null,
+  });
+
+  if (error) {
+    console.error('Supabase soft_delete_references RPC error:', error);
+    throw new Error('REF_SOFT_DELETE: ' + error.message);
+  }
+}
+
+/**
+ * Restore a soft-deleted reference via RPC.
+ */
+export async function restoreReference(id: string): Promise<void> {
+  const referenceId = (id ?? '').trim();
+  if (!referenceId) {
+    throw new Error('REF_RESTORE: Missing reference id');
+  }
+
+  const { error } = await supabaseClient.rpc('restore_references', {
+    p_id: referenceId,
+  });
+
+  if (error) {
+    console.error('Supabase restore_references RPC error:', error);
+    throw new Error('REF_RESTORE: ' + error.message);
+  }
 }
 
 /**
