@@ -6,12 +6,12 @@
 // - Soft delete / restore mutations: inventory RPC wrappers.
 // NOTE: CSV imports are managed only from Settings page.
 //
-// Patch v2.2 (inventory soft delete UI):
-// - ADD: SoftDeleteModeFilter on page (admin-only).
-// - ADD: Row-level Soft Delete / Restore actions via InventoryTable props.
-// - Default mode remains 'active'.
+// Patch v2.3:
+// - CHANGE: SoftDeleteModeFilter is visible to all users (not admin-only).
+// - KEEP: Row-level Soft Delete / Restore actions are still available via table actions column.
+//         Access control remains on DB policies/RPCs.
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   useInventoryItems,
   useCreateInventoryItemMutation,
@@ -28,21 +28,12 @@ import { InventoryNewItemFormCard } from '../features/inventory/InventoryNewItem
 import { InventoryTable } from '../features/inventory/InventoryTable';
 import { SoftDeleteModeFilter } from '../components/table/SoftDeleteModeFilter';
 import type { SoftDeleteMode } from '../utils/softDelete/softDeleteTypes';
-import { useCurrentProfile } from '../features/auth/useCurrentProfile';
 
 export default function InventoryPage() {
-  const { data: profile } = useCurrentProfile();
-
-  // Defensive admin detection to avoid coupling to a single profile shape.
-  const isAdmin = useMemo(() => {
-    const p: any = profile as any;
-    return p?.is_admin === true || p?.role === 'admin';
-  }, [profile]);
-
   const [softDeleteMode, setSoftDeleteMode] = useState<SoftDeleteMode>('active');
 
   const { data, isLoading, isError, error } = useInventoryItems({
-    mode: isAdmin ? softDeleteMode : 'active',
+    mode: softDeleteMode,
   });
 
   const createMutation = useCreateInventoryItemMutation();
@@ -58,7 +49,10 @@ export default function InventoryPage() {
   );
   const [search, setSearch] = useState('');
 
-  const isMutating = createMutation.isPending || softDeleteMutation.isPending || restoreMutation.isPending;
+  const isMutating =
+    createMutation.isPending ||
+    softDeleteMutation.isPending ||
+    restoreMutation.isPending;
 
   if (isLoading) {
     return (
@@ -87,13 +81,15 @@ export default function InventoryPage() {
     (createMutation.error as Error | null | undefined)?.message ?? '';
 
   const handleSoftDelete = (item: InventoryItemRow) => {
-    // Optional delete reason: use a simple prompt to keep UI minimal.
-    // You can replace this with a modal later for a better UX.
+    // Optional delete reason: keep UI minimal with prompt for now.
+    // Caller can replace with a proper modal later.
     const reason = window.prompt('Silme nedeni (opsiyonel):', '');
-    // If user presses "Cancel", abort to avoid accidental deletes.
-    if (reason === null) return;
+    if (reason === null) return; // Cancel => abort
 
-    softDeleteMutation.mutate({ itemId: item.id, reason: reason.trim() || null });
+    softDeleteMutation.mutate({
+      itemId: item.id,
+      reason: reason.trim() || null,
+    });
   };
 
   const handleRestore = (item: InventoryItemRow) => {
@@ -112,12 +108,7 @@ export default function InventoryPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {isAdmin && (
-            <SoftDeleteModeFilter
-              value={softDeleteMode}
-              onChange={setSoftDeleteMode}
-            />
-          )}
+          <SoftDeleteModeFilter value={softDeleteMode} onChange={setSoftDeleteMode} />
 
           <button
             type="button"
@@ -147,7 +138,7 @@ export default function InventoryPage() {
         onSearchChange={setSearch}
         onStatusFilterChange={setStatusFilter}
         onTypeFilterChange={setTypeFilter}
-        canManageSoftDelete={isAdmin}
+        canManageSoftDelete={true}
         onSoftDelete={handleSoftDelete}
         onRestore={handleRestore}
         isMutating={isMutating}
