@@ -6,11 +6,12 @@
 //   - softDeleteReference(id, reason?)
 //   - restoreReference(id)
 // - Table preferences: useTablePreferences (column visibility + sorting).
+// - Shared UI: SoftDeleteRowActionButton for consistent delete/restore across modules.
 //
-// Patch v2.5.0 (2025-12-29):
-// - ADD: Soft delete + restore action buttons (RPC-based; no hard delete).
-// - ADD: Confirmation guard and optional delete reason prompt.
-// - ADD: Cache invalidation for all references queries after mutation.
+// Patch v2.5.1 (2025-12-29):
+// - CHANGE: Replace inline delete/restore buttons with SoftDeleteRowActionButton (shared component).
+// - KEEP: Confirmation guard and optional delete reason prompt.
+// - KEEP: Cache invalidation for all references queries after mutation.
 
 import { useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -23,6 +24,7 @@ import { TableExportButtons } from '../../components/table/TableExportButtons';
 import { exportToCsvFile, exportToXlsxFile } from '../../utils/csvUtils';
 import { ResponsiveTableShell } from '../../components/layout/ResponsiveTableShell';
 import { restoreReference, softDeleteReference } from './api';
+import { SoftDeleteRowActionButton } from '../../components/softDelete/SoftDeleteRowActionButton';
 
 type ReferencesTableProps = {
   items: ReferenceRow[];
@@ -237,7 +239,11 @@ const REFERENCE_COLUMNS: TableColumnDef<
   },
 ];
 
-export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTableProps) {
+export function ReferencesTable({
+  items,
+  onSelectRow,
+  focusedId,
+}: ReferencesTableProps) {
   const { data: profile } = useCurrentProfile();
   const userId = profile?.id ?? null;
 
@@ -253,7 +259,8 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
     },
     onError: (err) => {
       const msg =
-        (err as Error | null | undefined)?.message ?? 'Silme sırasında hata oluştu.';
+        (err as Error | null | undefined)?.message ??
+        'Silme sırasında hata oluştu.';
       console.error('Reference soft delete failed:', err);
       window.alert(msg);
     },
@@ -268,7 +275,8 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
     },
     onError: (err) => {
       const msg =
-        (err as Error | null | undefined)?.message ?? 'Geri alma sırasında hata oluştu.';
+        (err as Error | null | undefined)?.message ??
+        'Geri alma sırasında hata oluştu.';
       console.error('Reference restore failed:', err);
       window.alert(msg);
     },
@@ -280,7 +288,11 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
     toggleColumn,
     setSort,
     isColumnVisible,
-  } = useTablePreferences<ReferenceRow>('references-table', REFERENCE_COLUMNS, userId);
+  } = useTablePreferences<ReferenceRow>(
+    'references-table',
+    REFERENCE_COLUMNS,
+    userId,
+  );
 
   const sortedItems: ReferenceRow[] = useMemo(() => {
     if (!prefsState.sortBy) return items;
@@ -376,7 +388,11 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
     if (type === 'csv') {
       exportToCsvFile({ fileName: baseFileName, headers, rows: rowsForExport });
     } else {
-      exportToXlsxFile({ fileName: baseFileName, headers, rows: rowsForExport });
+      exportToXlsxFile({
+        fileName: baseFileName,
+        headers,
+        rows: rowsForExport,
+      });
     }
   };
 
@@ -428,7 +444,9 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
       {/* Top bar: count + column control + export */}
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <p className="text-[11px] text-slate-500">
-          Toplam <span className="font-semibold">{sortedItems.length}</span> referans kaydı var.
+          Toplam{' '}
+          <span className="font-semibold">{sortedItems.length}</span> referans
+          kaydı var.
         </p>
         <div className="flex items-center justify-end gap-2">
           <TableColumnsControl
@@ -459,7 +477,9 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
               key={r.id}
               className={
                 'rounded-lg border px-3 py-3 shadow-sm ' +
-                (isFocused ? 'border-primary-300 bg-primary-50/70' : 'border-slate-200 bg-white')
+                (isFocused
+                  ? 'border-primary-300 bg-primary-50/70'
+                  : 'border-slate-200 bg-white')
               }
             >
               <div className="flex items-start justify-between gap-2">
@@ -469,6 +489,7 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
                   </p>
                   <p className="mt-0.5 text-[11px] text-slate-500">
                     Kayıt: {formatDate(r.created_at)}
+                    {isDeleted ? ' · (Silinmiş)' : ''}
                   </p>
                 </div>
                 <span className="inline-flex shrink-0 items-center rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700">
@@ -478,13 +499,17 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
 
               <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-700">
                 <div>
-                  <span className="block text-[10px] uppercase text-slate-400">Telefon</span>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Telefon
+                  </span>
                   <span className="font-medium">
                     {r.phone && r.phone.trim().length > 0 ? r.phone : '-'}
                   </span>
                 </div>
                 <div>
-                  <span className="block text-[10px] uppercase text-slate-400">Durum</span>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Durum
+                  </span>
                   <span
                     className={
                       r.is_active
@@ -496,31 +521,49 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
                   </span>
                 </div>
                 <div>
-                  <span className="block text-[10px] uppercase text-slate-400">Komisyon</span>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Komisyon
+                  </span>
                   <span className="font-medium">{renderCommission(r)}</span>
                 </div>
                 <div>
-                  <span className="block text-[10px] uppercase text-slate-400">Takip</span>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Takip
+                  </span>
                   <span className={reminder.className}>{reminder.label}</span>
                 </div>
                 <div>
-                  <span className="block text-[10px] uppercase text-slate-400">Son Görüşme</span>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Son Görüşme
+                  </span>
                   <span className="font-medium">{formatDate(r.last_meet_at)}</span>
                 </div>
                 <div>
-                  <span className="block text-[10px] uppercase text-slate-400">Sonraki Görüşme</span>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Sonraki Görüşme
+                  </span>
                   <span className="font-medium">{formatDate(r.next_meet_at)}</span>
                 </div>
               </div>
 
               {noteText && (
                 <div className="mt-2">
-                  <span className="block text-[10px] uppercase text-slate-400">Not</span>
+                  <span className="block text-[10px] uppercase text-slate-400">
+                    Not
+                  </span>
                   <span className="text-[11px] text-slate-600">{noteText}</span>
                 </div>
               )}
 
               <div className="mt-3 flex flex-wrap justify-end gap-2">
+                <SoftDeleteRowActionButton
+                  isDeleted={isDeleted}
+                  isBusy={isMutating}
+                  size="xs"
+                  onSoftDelete={() => handleSoftDeleteClick(r)}
+                  onRestore={() => handleRestoreClick(r)}
+                />
+
                 <button
                   type="button"
                   onClick={() => onSelectRow(r)}
@@ -528,26 +571,6 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
                 >
                   Detay
                 </button>
-
-                {!isDeleted ? (
-                  <button
-                    type="button"
-                    onClick={() => handleSoftDeleteClick(r)}
-                    disabled={isMutating}
-                    className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-3 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
-                  >
-                    Sil
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleRestoreClick(r)}
-                    disabled={isMutating}
-                    className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
-                  >
-                    Geri Al
-                  </button>
-                )}
               </div>
             </div>
           );
@@ -587,7 +610,9 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
                   </th>
                 );
               })}
-              <th className="px-4 py-2 text-right font-medium text-slate-600">İşlemler</th>
+              <th className="px-4 py-2 text-right font-medium text-slate-600">
+                İşlemler
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -608,7 +633,10 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
                     switch (col.id as ReferenceTableColumnId) {
                       case 'created_at':
                         return (
-                          <td key={col.id} className="whitespace-nowrap px-4 py-2 text-slate-700">
+                          <td
+                            key={col.id}
+                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                          >
                             {formatDate(r.created_at)}
                           </td>
                         );
@@ -626,7 +654,10 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
                         );
                       case 'phone':
                         return (
-                          <td key={col.id} className="whitespace-nowrap px-4 py-2 text-slate-700">
+                          <td
+                            key={col.id}
+                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                          >
                             {r.phone ?? '-'}
                           </td>
                         );
@@ -641,33 +672,49 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
                         );
                       case 'last_meet_at':
                         return (
-                          <td key={col.id} className="whitespace-nowrap px-4 py-2 text-slate-700">
+                          <td
+                            key={col.id}
+                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                          >
                             {formatDate(r.last_meet_at)}
                           </td>
                         );
                       case 'next_meet_at':
                         return (
-                          <td key={col.id} className="whitespace-nowrap px-4 py-2 text-slate-700">
+                          <td
+                            key={col.id}
+                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                          >
                             {formatDate(r.next_meet_at)}
                           </td>
                         );
                       case 'reminder':
                         return (
                           <td key={col.id} className="whitespace-nowrap px-4 py-2">
-                            <span className={reminder.className}>{reminder.label}</span>
+                            <span className={reminder.className}>
+                              {reminder.label}
+                            </span>
                           </td>
                         );
                       case 'status':
                         return (
-                          <td key={col.id} className="whitespace-nowrap px-4 py-2 text-slate-700">
+                          <td
+                            key={col.id}
+                            className="whitespace-nowrap px-4 py-2 text-slate-700"
+                          >
                             {renderStatus(r)}
                           </td>
                         );
                       case 'note': {
                         const text =
-                          r.note && r.note.length > 120 ? `${r.note.slice(0, 120)}…` : r.note ?? '-';
+                          r.note && r.note.length > 120
+                            ? `${r.note.slice(0, 120)}…`
+                            : r.note ?? '-';
                         return (
-                          <td key={col.id} className="max-w-xs truncate px-4 py-2 text-slate-500">
+                          <td
+                            key={col.id}
+                            className="max-w-xs truncate px-4 py-2 text-slate-500"
+                          >
                             {text}
                           </td>
                         );
@@ -679,6 +726,14 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
 
                   <td className="whitespace-nowrap px-4 py-2 text-right">
                     <div className="inline-flex items-center gap-2">
+                      <SoftDeleteRowActionButton
+                        isDeleted={isDeleted}
+                        isBusy={isMutating}
+                        size="sm"
+                        onSoftDelete={() => handleSoftDeleteClick(r)}
+                        onRestore={() => handleRestoreClick(r)}
+                      />
+
                       <button
                         type="button"
                         onClick={() => onSelectRow(r)}
@@ -686,26 +741,6 @@ export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTab
                       >
                         Detay
                       </button>
-
-                      {!isDeleted ? (
-                        <button
-                          type="button"
-                          onClick={() => handleSoftDeleteClick(r)}
-                          disabled={isMutating}
-                          className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
-                        >
-                          Sil
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleRestoreClick(r)}
-                          disabled={isMutating}
-                          className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
-                        >
-                          Geri Al
-                        </button>
-                      )}
                     </div>
                   </td>
                 </tr>
