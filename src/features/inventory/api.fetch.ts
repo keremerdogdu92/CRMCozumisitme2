@@ -1,5 +1,12 @@
 // src/features/inventory/api.fetch.ts
-// Supabase fetch helpers and React Query hook for listing inventory items.
+// Summary: Supabase fetch helpers and React Query hook for listing inventory items.
+// Integrations:
+// - Supports UI-driven soft-delete visibility via SoftDeleteMode.
+// - Resolves sold_patient_name from patients table (if sold_patient_id is set).
+//
+// Patch v2.1 (soft-delete mode):
+// - ADD: FetchInventoryOptions.mode (active/deleted/all).
+// - Default: active-only (deleted_at IS NULL) to match normal staff experience.
 
 import { useQuery } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
@@ -9,13 +16,38 @@ import type {
   InventoryItemType,
 } from './types';
 import { INVENTORY_QUERY_KEY } from './api.keys';
+import type { SoftDeleteMode } from '../../utils/softDelete/softDeleteTypes';
+
+type FetchInventoryOptions = {
+  /**
+   * Soft-delete visibility mode:
+   * - active: only not-deleted rows (default)
+   * - deleted: only deleted rows
+   * - all: deleted + not-deleted rows
+   */
+  mode?: SoftDeleteMode;
+};
+
+function applySoftDeleteModeFilter(query: any, mode: SoftDeleteMode) {
+  if (mode === 'active') {
+    return query.is('deleted_at', null);
+  }
+  if (mode === 'deleted') {
+    return query.not('deleted_at', 'is', null);
+  }
+  return query; // all
+}
 
 /**
  * Fetch inventory items for current org.
  * Also resolves sold_patient_name from patients table (if sold_patient_id is set).
  */
-export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
-  const { data, error } = await supabaseClient
+export async function fetchInventoryItems(
+  opts: FetchInventoryOptions = {},
+): Promise<InventoryItemRow[]> {
+  const mode = opts.mode ?? 'active';
+
+  let q = supabaseClient
     .from('inventory_items')
     .select(
       `
@@ -36,9 +68,13 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
       created_at,
       updated_at,
       deleted_at
-    `
+    `,
     )
     .order('created_at', { ascending: false });
+
+  q = applySoftDeleteModeFilter(q, mode);
+
+  const { data, error } = await q;
 
   if (error) {
     console.error('Supabase inventory fetch error:', error);
@@ -60,8 +96,7 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
       purchase_price:
         row.purchase_price == null ? null : Number(row.purchase_price),
 
-      list_price:
-        row.list_price == null ? null : Number(row.list_price),
+      list_price: row.list_price == null ? null : Number(row.list_price),
 
       device_price:
         row.device_price == null ? null : Number(row.device_price),
@@ -73,7 +108,7 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
       deleted_at: (row.deleted_at as string | null) ?? null,
 
       sold_patient_name: null,
-    })
+    }),
   );
 
   // Resolve patient names for sold items
@@ -81,8 +116,8 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
     new Set(
       baseRows
         .map((r) => r.sold_patient_id)
-        .filter((id): id is string => !!id)
-    )
+        .filter((id): id is string => !!id),
+    ),
   );
 
   if (soldIds.length > 0) {
@@ -114,9 +149,11 @@ export async function fetchInventoryItems(): Promise<InventoryItemRow[]> {
 /**
  * React Query hook to list inventory items.
  */
-export function useInventoryItems() {
+export function useInventoryItems(opts: FetchInventoryOptions = {}) {
+  const mode = opts.mode ?? 'active';
+
   return useQuery({
-    queryKey: INVENTORY_QUERY_KEY,
-    queryFn: fetchInventoryItems,
+    queryKey: [...INVENTORY_QUERY_KEY, { mode }] as const,
+    queryFn: () => fetchInventoryItems({ mode }),
   });
 }
