@@ -15,10 +15,7 @@ import {
   PATIENTS_BY_REFERENCE_QUERY_KEY,
   fetchPatientsByReferenceId,
 } from '../patients/api';
-import {
-  ReferenceTabs,
-  type ReferenceTabId,
-} from './components/ReferenceTabs';
+import { ReferenceTabs, type ReferenceTabId } from './components/ReferenceTabs';
 import { ReferenceSummarySection } from './components/ReferenceSummarySection';
 import { ReferencePatientsSection } from './components/ReferencePatientsSection';
 import { ReferenceGiftsSection } from './components/ReferenceGiftsSection';
@@ -42,8 +39,6 @@ export function ReferenceDetailDrawer({
     }
   }, [open, reference?.id]);
 
-  // Hook'lar her zaman aynı sırada çalışsın diye referenceId'yi
-  // null-safe şekilde hesaplıyoruz ve enabled flag'i ile kontrol ediyoruz.
   const referenceId = reference?.id ?? '';
 
   const {
@@ -66,7 +61,6 @@ export function ReferenceDetailDrawer({
     enabled: !!referenceId && open && activeTab === 'patients',
   });
 
-  // Hook'lardan SONRA erken dönüş yapıyoruz; bu React hook kurallarına uygun.
   if (!reference) {
     return null;
   }
@@ -85,18 +79,10 @@ export function ReferenceDetailDrawer({
       subtitle="İlişki geçmişi, hastalar ve hediye/komisyon bilgileri"
     >
       <div className="flex h-full flex-col">
-        {/* Tab bar */}
-        <ReferenceTabs
-          tabs={tabs}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-        />
+        <ReferenceTabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
-        {/* Tab contents */}
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm">
-          {activeTab === 'summary' && (
-            <ReferenceSummarySection reference={reference} />
-          )}
+          {activeTab === 'summary' && <ReferenceSummarySection reference={reference} />}
 
           {activeTab === 'patients' && (
             <ReferencePatientsSection
@@ -109,9 +95,7 @@ export function ReferenceDetailDrawer({
             />
           )}
 
-          {activeTab === 'gifts' && (
-            <ReferenceGiftsSection referenceId={referenceId} />
-          )}
+          {activeTab === 'gifts' && <ReferenceGiftsSection referenceId={referenceId} />}
         </div>
       </div>
     </SideDrawer>
