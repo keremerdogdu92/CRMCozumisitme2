@@ -1,20 +1,16 @@
 // src/features/inventory/InventoryTable.tsx
-// Table view for inventory items with filters, column visibility toggles,
-// sorting and export to CSV / XLSX (Excel).
+// Summary: Inventory list view with mobile cards + desktop table, including filters,
+// per-user table preferences (visible columns + sorting), and export (CSV/XLSX).
+// Integrations:
+// - useTablePreferences(userId): visible columns and sorting persistence.
+// - Soft-delete actions: receives onSoftDelete/onRestore callbacks from the page.
+// - Mobile-first layout: cards below md, table above md.
 //
-// Export behavior:
-// - Uses currently visible columns
-// - Exports filtered + sorted rows
-// - Money fields are exported as raw numbers (no currency symbol)
-//
-// Patch v2.1:
-// - Existing: export buttons + column visibility + sorting + filters.
-//
-// Patch v2.2 (responsive polish):
-// - ADD: Mobile card view (md altı) → daha okunabilir stok listesi.
-// - Desktop/tablet için table görünümü ResponsiveTableShell içine alındı.
-// - Filter satırı mobile-first hale getirildi (daha iyi wrap ve spacing).
-// - Masaüstü davranışı ve export mantığı değişmedi.
+// Patch v2.3 (soft delete + actions):
+// - ADD: actions column (default visible) with Soft Delete / Restore buttons.
+// - ADD: deleted row hinting (badge + subtle background).
+// - KEEP: export respects visible columns (actions excluded).
+// - KEEP: existing filters (status/type/search) work on the already-fetched dataset.
 
 import { useMemo } from 'react';
 import type {
@@ -41,6 +37,20 @@ type Props = {
   onSearchChange: (value: string) => void;
   onStatusFilterChange: (value: InventoryStatus | 'all') => void;
   onTypeFilterChange: (value: InventoryItemType | 'all') => void;
+
+  /**
+   * Soft delete actions are page-driven to keep this component presentational.
+   * - onSoftDelete may prompt for reason at page-level or inline (caller decides).
+   */
+  canManageSoftDelete: boolean;
+  onSoftDelete: (item: InventoryItemRow) => void;
+  onRestore: (item: InventoryItemRow) => void;
+
+  /**
+   * Busy state flags to prevent double-submit clicks.
+   * Keep them coarse-grained (page-level) for simplicity.
+   */
+  isMutating?: boolean;
 };
 
 type InventoryTableColumnId =
@@ -55,7 +65,8 @@ type InventoryTableColumnId =
   | 'serial_no'
   | 'purchase_price'
   | 'device_price'
-  | 'status';
+  | 'status'
+  | 'actions';
 
 const INVENTORY_COLUMNS: TableColumnDef<
   InventoryItemRow & { _colId?: InventoryTableColumnId }
@@ -157,6 +168,12 @@ const INVENTORY_COLUMNS: TableColumnDef<
       i.status === 'in_stock' ? 0 : i.status === 'sold' ? 1 : 2,
     exportAccessor: (i) => i.status,
   },
+  {
+    id: 'actions',
+    label: 'İşlemler',
+    sortable: false,
+    isDefaultVisible: true,
+  },
 ];
 
 function formatMoney(value: number | null): string {
@@ -178,6 +195,18 @@ function formatDate(value: string | null): string {
   }
 }
 
+function getStatusLabel(status: InventoryStatus): string {
+  if (status === 'sold') return 'Satıldı';
+  if (status === 'repair') return 'Tamirde';
+  return 'Stokta';
+}
+
+function getStatusBadgeClass(status: InventoryStatus): string {
+  if (status === 'in_stock') return 'bg-emerald-50 text-emerald-700';
+  if (status === 'sold') return 'bg-sky-50 text-sky-700';
+  return 'bg-amber-50 text-amber-700';
+}
+
 export function InventoryTable({
   items,
   statusFilter,
@@ -186,6 +215,10 @@ export function InventoryTable({
   onSearchChange,
   onStatusFilterChange,
   onTypeFilterChange,
+  canManageSoftDelete,
+  onSoftDelete,
+  onRestore,
+  isMutating,
 }: Props) {
   const term = search.trim().toLowerCase();
   const { data: profile } = useCurrentProfile();
@@ -278,14 +311,16 @@ export function InventoryTable({
   }, [filtered, prefsState.sortBy, prefsState.sortDir]);
 
   const handleExport = (type: 'csv' | 'xlsx') => {
-    if (visibleColumns.length === 0) return;
+    // Export excludes non-data columns.
+    const exportableColumns = visibleColumns.filter((c) => c.id !== 'actions');
+    if (exportableColumns.length === 0) return;
 
-    const headers = visibleColumns.map(
+    const headers = exportableColumns.map(
       (col) => col.exportLabel ?? col.label,
     );
 
     const rows = sorted.map((item) =>
-      visibleColumns.map((col) => {
+      exportableColumns.map((col) => {
         const id = col.id as InventoryTableColumnId;
         const customExport =
           col.exportAccessor?.(item as any as InventoryItemRow);
@@ -337,6 +372,40 @@ export function InventoryTable({
         rows,
       });
     }
+  };
+
+  const renderRowActions = (item: InventoryItemRow) => {
+    if (!canManageSoftDelete) {
+      return <span className="text-slate-400">-</span>;
+    }
+
+    const isDeleted = !!item.deleted_at;
+
+    if (isDeleted) {
+      return (
+        <button
+          type="button"
+          disabled={!!isMutating}
+          onClick={() => onRestore(item)}
+          className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+          title="Silinen kaydı geri al"
+        >
+          Geri Al
+        </button>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        disabled={!!isMutating}
+        onClick={() => onSoftDelete(item)}
+        className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+        title="Kaydı soft delete ile sil"
+      >
+        Sil
+      </button>
+    );
   };
 
   if (items.length === 0) {
@@ -471,6 +540,7 @@ export function InventoryTable({
       <div className="space-y-3 md:hidden">
         {sorted.map((item) => {
           const isSold = item.status === 'sold';
+          const isDeleted = !!item.deleted_at;
 
           let earLabel = '-';
           if (item.ear_side) {
@@ -487,7 +557,12 @@ export function InventoryTable({
           return (
             <div
               key={item.id}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm"
+              className={
+                'rounded-lg border px-3 py-3 shadow-sm ' +
+                (isDeleted
+                  ? 'border-rose-200 bg-rose-50/40'
+                  : 'border-slate-200 bg-white')
+              }
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -500,24 +575,28 @@ export function InventoryTable({
                     {isSold && item.sold_at
                       ? ` · Satış: ${formatDate(item.sold_at)}`
                       : ''}
+                    {isDeleted && item.deleted_at
+                      ? ` · Silindi: ${formatDate(item.deleted_at)}`
+                      : ''}
                   </p>
                 </div>
-                <span
-                  className={
-                    'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ' +
-                    (item.status === 'in_stock'
-                      ? 'bg-emerald-50 text-emerald-700'
-                      : item.status === 'sold'
-                      ? 'bg-sky-50 text-sky-700'
-                      : 'bg-amber-50 text-amber-700')
-                  }
-                >
-                  {item.status === 'in_stock'
-                    ? 'Stokta'
-                    : item.status === 'sold'
-                    ? 'Satıldı'
-                    : 'Tamirde'}
-                </span>
+
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span
+                    className={
+                      'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ' +
+                      getStatusBadgeClass(item.status)
+                    }
+                  >
+                    {getStatusLabel(item.status)}
+                  </span>
+
+                  {isDeleted && (
+                    <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+                      Silindi
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="mt-2 grid grid-cols-1 gap-2 text-[11px] text-slate-700 sm:grid-cols-2">
@@ -573,6 +652,7 @@ export function InventoryTable({
                     {formatMoney(item.device_price)}
                   </span>
                 </div>
+
                 {isSold && (
                   <div className="sm:col-span-2">
                     <span className="block text-[10px] uppercase text-slate-400">
@@ -586,6 +666,12 @@ export function InventoryTable({
                   </div>
                 )}
               </div>
+
+              {canManageSoftDelete && (
+                <div className="mt-3 flex justify-end">
+                  {renderRowActions(item)}
+                </div>
+              )}
             </div>
           );
         })}
@@ -593,185 +679,212 @@ export function InventoryTable({
 
       {/* Desktop / tablet: classic table (md ve üzeri) */}
       <ResponsiveTableShell className="hidden md:block">
-        <table className="min-w-full text-xs md:text-sm">
-          <thead className="bg-slate-50">
-            <tr>
-              {visibleColumns.map((col) => {
-                const isSorted = prefsState.sortBy === col.id;
-                const showSortIcon = col.sortable;
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+          <table className="min-w-full text-xs md:text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                {visibleColumns.map((col) => {
+                  const isSorted = prefsState.sortBy === col.id;
+                  const showSortIcon = col.sortable;
 
-                let alignClass = 'text-left';
-                if (
-                  col.id === 'purchase_price' ||
-                  col.id === 'device_price'
-                ) {
-                  alignClass = 'text-right';
+                  let alignClass = 'text-left';
+                  if (
+                    col.id === 'purchase_price' ||
+                    col.id === 'device_price' ||
+                    col.id === 'actions'
+                  ) {
+                    alignClass = col.id === 'actions' ? 'text-right' : 'text-right';
+                  }
+
+                  return (
+                    <th
+                      key={col.id}
+                      className={`px-3 py-2 text-[11px] font-medium text-slate-600 md:px-4 md:py-2.5 md:text-xs ${alignClass} ${
+                        col.sortable ? 'cursor-pointer select-none' : ''
+                      }`}
+                      onClick={() => col.sortable && setSort(col.id)}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {col.label}
+                        {showSortIcon && isSorted && (
+                          <span className="text-[10px]">
+                            {prefsState.sortDir === 'asc' ? '▲' : '▼'}
+                          </span>
+                        )}
+                      </span>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((item) => {
+                const isSold = item.status === 'sold';
+                const isDeleted = !!item.deleted_at;
+
+                let earLabel = '-';
+                if (item.ear_side) {
+                  earLabel =
+                    item.ear_side === 'right'
+                      ? 'Sağ'
+                      : item.ear_side === 'left'
+                      ? 'Sol'
+                      : item.ear_side === 'bilateral'
+                      ? 'Çift'
+                      : 'Yok';
                 }
 
                 return (
-                  <th
-                    key={col.id}
-                    className={`px-3 py-2 text-[11px] font-medium text-slate-600 md:px-4 md:py-2.5 md:text-xs ${alignClass} ${
-                      col.sortable ? 'cursor-pointer select-none' : ''
-                    }`}
-                    onClick={() => col.sortable && setSort(col.id)}
+                  <tr
+                    key={item.id}
+                    className={
+                      'border-t border-slate-100 ' +
+                      (isDeleted ? 'bg-rose-50/40' : 'hover:bg-slate-50')
+                    }
                   >
-                    <span className="inline-flex items-center gap-1">
-                      {col.label}
-                      {showSortIcon && isSorted && (
-                        <span className="text-[10px]">
-                          {prefsState.sortDir === 'asc' ? '▲' : '▼'}
-                        </span>
-                      )}
-                    </span>
-                  </th>
+                    {visibleColumns.map((col) => {
+                      switch (col.id as InventoryTableColumnId) {
+                        case 'created_at':
+                          return (
+                            <td
+                              key={col.id}
+                              className="whitespace-nowrap px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                            >
+                              {formatDate(item.created_at)}
+                              {isDeleted && (
+                                <span className="ml-2 inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+                                  Silindi
+                                </span>
+                              )}
+                            </td>
+                          );
+                        case 'sold_at':
+                          return (
+                            <td
+                              key={col.id}
+                              className="whitespace-nowrap px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                            >
+                              {isSold ? formatDate(item.sold_at) : '-'}
+                            </td>
+                          );
+                        case 'sold_patient_name':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                            >
+                              {isSold ? item.sold_patient_name ?? '-' : '-'}
+                            </td>
+                          );
+                        case 'brand':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-slate-800 md:px-4 md:py-2.5"
+                            >
+                              {item.brand}
+                            </td>
+                          );
+                        case 'model':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-slate-800 md:px-4 md:py-2.5"
+                            >
+                              {item.model}
+                            </td>
+                          );
+                        case 'item_type':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                            >
+                              {item.item_type === 'hearing_aid'
+                                ? 'İşitme cihazı'
+                                : 'Şarj cihazı / aksesuar'}
+                            </td>
+                          );
+                        case 'ear_side':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                            >
+                              {earLabel}
+                            </td>
+                          );
+                        case 'barcode':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                            >
+                              {item.barcode ?? '-'}
+                            </td>
+                          );
+                        case 'serial_no':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                            >
+                              {item.serial_no ?? '-'}
+                            </td>
+                          );
+                        case 'purchase_price':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-right text-slate-700 md:px-4 md:py-2.5"
+                            >
+                              {formatMoney(item.purchase_price)}
+                            </td>
+                          );
+                        case 'device_price':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-right text-slate-700 md:px-4 md:py-2.5"
+                            >
+                              {formatMoney(item.device_price)}
+                            </td>
+                          );
+                        case 'status':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
+                            >
+                              <span
+                                className={
+                                  'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ' +
+                                  getStatusBadgeClass(item.status)
+                                }
+                              >
+                                {getStatusLabel(item.status)}
+                              </span>
+                            </td>
+                          );
+                        case 'actions':
+                          return (
+                            <td
+                              key={col.id}
+                              className="whitespace-nowrap px-3 py-2 text-right md:px-4 md:py-2.5"
+                            >
+                              {renderRowActions(item)}
+                            </td>
+                          );
+                        default:
+                          return null;
+                      }
+                    })}
+                  </tr>
                 );
               })}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((item) => {
-              const isSold = item.status === 'sold';
-
-              let earLabel = '-';
-              if (item.ear_side) {
-                earLabel =
-                  item.ear_side === 'right'
-                    ? 'Sağ'
-                    : item.ear_side === 'left'
-                    ? 'Sol'
-                    : item.ear_side === 'bilateral'
-                    ? 'Çift'
-                    : 'Yok';
-              }
-
-              return (
-                <tr key={item.id} className="border-t border-slate-100">
-                  {visibleColumns.map((col) => {
-                    switch (col.id as InventoryTableColumnId) {
-                      case 'created_at':
-                        return (
-                          <td
-                            key={col.id}
-                            className="whitespace-nowrap px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
-                          >
-                            {formatDate(item.created_at)}
-                          </td>
-                        );
-                      case 'sold_at':
-                        return (
-                          <td
-                            key={col.id}
-                            className="whitespace-nowrap px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
-                          >
-                            {isSold ? formatDate(item.sold_at) : '-'}
-                          </td>
-                        );
-                      case 'sold_patient_name':
-                        return (
-                          <td
-                            key={col.id}
-                            className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
-                          >
-                            {isSold ? item.sold_patient_name ?? '-' : '-'}
-                          </td>
-                        );
-                      case 'brand':
-                        return (
-                          <td
-                            key={col.id}
-                            className="px-3 py-2 text-slate-800 md:px-4 md:py-2.5"
-                          >
-                            {item.brand}
-                          </td>
-                        );
-                      case 'model':
-                        return (
-                          <td
-                            key={col.id}
-                            className="px-3 py-2 text-slate-800 md:px-4 md:py-2.5"
-                          >
-                            {item.model}
-                          </td>
-                        );
-                      case 'item_type':
-                        return (
-                          <td
-                            key={col.id}
-                            className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
-                          >
-                            {item.item_type === 'hearing_aid'
-                              ? 'İşitme cihazı'
-                              : 'Şarj cihazı / aksesuar'}
-                          </td>
-                        );
-                      case 'ear_side':
-                        return (
-                          <td
-                            key={col.id}
-                            className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
-                          >
-                            {earLabel}
-                          </td>
-                        );
-                      case 'barcode':
-                        return (
-                          <td
-                            key={col.id}
-                            className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
-                          >
-                            {item.barcode ?? '-'}
-                          </td>
-                        );
-                      case 'serial_no':
-                        return (
-                          <td
-                            key={col.id}
-                            className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
-                          >
-                            {item.serial_no ?? '-'}
-                          </td>
-                        );
-                      case 'purchase_price':
-                        return (
-                          <td
-                            key={col.id}
-                            className="px-3 py-2 text-right text-slate-700 md:px-4 md:py-2.5"
-                          >
-                            {formatMoney(item.purchase_price)}
-                          </td>
-                        );
-                      case 'device_price':
-                        return (
-                          <td
-                            key={col.id}
-                            className="px-3 py-2 text-right text-slate-700 md:px-4 md:py-2.5"
-                          >
-                            {formatMoney(item.device_price)}
-                          </td>
-                        );
-                      case 'status':
-                        return (
-                          <td
-                            key={col.id}
-                            className="px-3 py-2 text-slate-700 md:px-4 md:py-2.5"
-                          >
-                            {item.status === 'in_stock'
-                              ? 'Stokta'
-                              : item.status === 'sold'
-                              ? 'Satıldı'
-                              : 'Tamirde'}
-                          </td>
-                        );
-                      default:
-                        return null;
-                    }
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </ResponsiveTableShell>
 
       <p className="text-[11px] text-slate-500">
