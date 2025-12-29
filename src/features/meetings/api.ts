@@ -1,12 +1,15 @@
 // src/features/meetings/api.ts
 // Summary: Supabase-backed API helpers and React Query hooks for Meetings.
+// Integrations:
+// - Supabase tables: meetings, meeting_accessories, meeting_payments
+// - Supabase RPCs: soft_delete_meetings(p_id, p_reason), restore_meetings(p_id)
+// - React Query: list hooks + create + soft delete + restore mutations
 //
-// Patch v2.6:
-// - createMeeting() now returns the created meetingId (string) instead of void.
-//   This enables "save meeting first, then save survey" UX without hacks.
-// - useCreateMeetingMutation() is updated accordingly; callers can await mutateAsync()
-//   and receive meetingId.
-// - Query invalidation behavior is kept the same.
+// Security notes:
+// - Hard delete is intentionally not used.
+// - Soft delete operations are executed via SECURITY DEFINER RPCs.
+// - Non-admin users never fetch reference-type meetings (client-side restriction),
+//   while DB RLS also enforces type gating.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
@@ -29,9 +32,8 @@ export const MEETINGS_BY_TRIAL_QUERY_KEY = (trialId: string) =>
 export const MEETINGS_BY_PATIENT_QUERY_KEY = (patientId: string) =>
   ['meetings', 'patient', patientId] as const;
 
-export const MEETING_ACCESSORIES_BY_MEETING_QUERY_KEY = (
-  meetingId: string,
-) => ['meeting-accessories', meetingId] as const;
+export const MEETING_ACCESSORIES_BY_MEETING_QUERY_KEY = (meetingId: string) =>
+  ['meeting-accessories', meetingId] as const;
 
 export async function fetchMeetings(
   opts?: { includeReference: boolean },
@@ -51,7 +53,8 @@ export async function fetchMeetings(
       at,
       next_at,
       satisfaction_10,
-      created_at
+      created_at,
+      deleted_at
     `,
     );
 
@@ -76,9 +79,7 @@ export async function fetchMeetings(
  * Fetch meetings for a specific trial (deneme hastası).
  * Filters by meeting_type = 'trial' and subject_id = trialId.
  */
-export async function fetchMeetingsByTrialId(
-  trialId: string,
-): Promise<MeetingRow[]> {
+export async function fetchMeetingsByTrialId(trialId: string): Promise<MeetingRow[]> {
   const { data, error } = await supabaseClient
     .from('meetings')
     .select(
@@ -92,7 +93,8 @@ export async function fetchMeetingsByTrialId(
       at,
       next_at,
       satisfaction_10,
-      created_at
+      created_at,
+      deleted_at
     `,
     )
     .eq('meeting_type', 'trial')
@@ -100,10 +102,7 @@ export async function fetchMeetingsByTrialId(
     .order('at', { ascending: false });
 
   if (error) {
-    console.error(
-      'Supabase trial meetings fetch error (fetchMeetingsByTrialId):',
-      error,
-    );
+    console.error('Supabase trial meetings fetch error (fetchMeetingsByTrialId):', error);
     throw error;
   }
 
@@ -114,9 +113,7 @@ export async function fetchMeetingsByTrialId(
  * Fetch meetings for a specific patient (hasta).
  * Filters by meeting_type = 'patient' and subject_id = patientId.
  */
-export async function fetchMeetingsByPatientId(
-  patientId: string,
-): Promise<MeetingRow[]> {
+export async function fetchMeetingsByPatientId(patientId: string): Promise<MeetingRow[]> {
   const { data, error } = await supabaseClient
     .from('meetings')
     .select(
@@ -130,7 +127,8 @@ export async function fetchMeetingsByPatientId(
       at,
       next_at,
       satisfaction_10,
-      created_at
+      created_at,
+      deleted_at
     `,
     )
     .eq('meeting_type', 'patient')
@@ -138,10 +136,7 @@ export async function fetchMeetingsByPatientId(
     .order('at', { ascending: false });
 
   if (error) {
-    console.error(
-      'Supabase patient meetings fetch error (fetchMeetingsByPatientId):',
-      error,
-    );
+    console.error('Supabase patient meetings fetch error (fetchMeetingsByPatientId):', error);
     throw error;
   }
 
@@ -154,20 +149,15 @@ export async function fetchMeetingsByPatientId(
  */
 function parseAmountString(raw: string): number | null {
   const trimmed = raw.trim();
-  if (!trimmed) {
-    return null;
-  }
+  if (!trimmed) return null;
 
   const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
   const value = Number(normalized);
 
   if (!Number.isFinite(value) || value <= 0) {
-    throw new Error(
-      'MEET_STEP_PAYMENT_AMOUNT_INVALID: Geçerli bir ödeme tutarı girilmedi.',
-    );
+    throw new Error('MEET_STEP_PAYMENT_AMOUNT_INVALID: Geçerli bir ödeme tutarı girilmedi.');
   }
 
-  // Round to 2 decimals
   return Number(value.toFixed(2));
 }
 
@@ -176,9 +166,7 @@ function parseMoneyAllowZero(raw: string): number {
   if (!trimmed) return 0;
   const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
   const value = Number(normalized);
-  if (!Number.isFinite(value) || value < 0) {
-    return 0;
-  }
+  if (!Number.isFinite(value) || value < 0) return 0;
   return Number(value.toFixed(2));
 }
 
@@ -224,10 +212,7 @@ export async function insertMeetingAccessoriesForMeeting(
     .select('*');
 
   if (error) {
-    console.error(
-      'insertMeetingAccessoriesForMeeting insert error:',
-      error,
-    );
+    console.error('insertMeetingAccessoriesForMeeting insert error:', error);
     throw error;
   }
 
@@ -257,10 +242,7 @@ export async function fetchMeetingAccessoriesByMeetingId(
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error(
-      'fetchMeetingAccessoriesByMeetingId query error:',
-      error,
-    );
+    console.error('fetchMeetingAccessoriesByMeetingId query error:', error);
     throw error;
   }
 
@@ -272,8 +254,7 @@ export async function fetchMeetingAccessoriesByMeetingId(
  */
 export async function createMeeting(input: NewMeetingForm): Promise<string> {
   // 1) Aktif kullanıcıyı al
-  const { data: userData, error: userError } =
-    await supabaseClient.auth.getUser();
+  const { data: userData, error: userError } = await supabaseClient.auth.getUser();
   if (userError) {
     console.error('Failed to get current user (MEET_STEP_USER):', userError);
     throw new Error('MEET_STEP_USER: ' + userError.message);
@@ -291,10 +272,7 @@ export async function createMeeting(input: NewMeetingForm): Promise<string> {
     .single();
 
   if (profileError) {
-    console.error(
-      'Failed to load profile for org_id (MEET_STEP_PROFILE):',
-      profileError,
-    );
+    console.error('Failed to load profile for org_id (MEET_STEP_PROFILE):', profileError);
     throw new Error('MEET_STEP_PROFILE: ' + profileError.message);
   }
 
@@ -307,10 +285,7 @@ export async function createMeeting(input: NewMeetingForm): Promise<string> {
   const satisfaction =
     input.satisfaction10.trim() === ''
       ? null
-      : Math.min(
-          10,
-          Math.max(1, Number.parseInt(input.satisfaction10, 10) || 0),
-        );
+      : Math.min(10, Math.max(1, Number.parseInt(input.satisfaction10, 10) || 0));
 
   const atIso = input.at ? new Date(input.at).toISOString() : null;
   const nextAtIso = input.next_at ? new Date(input.next_at).toISOString() : null;
@@ -320,9 +295,7 @@ export async function createMeeting(input: NewMeetingForm): Promise<string> {
     try {
       return parseAmountString(input.paymentAmount);
     } catch (err) {
-      if (err instanceof Error) {
-        throw err;
-      }
+      if (err instanceof Error) throw err;
       throw new Error('MEET_STEP_PAYMENT_AMOUNT_INVALID');
     }
   })();
@@ -338,7 +311,7 @@ export async function createMeeting(input: NewMeetingForm): Promise<string> {
     !!input.subjectId &&
     (input.accessories ?? []).length > 0;
 
-  // 4) Meeting insert – meeting_type ve subject_x alanlarını da gönder
+  // 4) Meeting insert
   const { data: insertedMeetings, error: insertError } = await supabaseClient
     .from('meetings')
     .insert({
@@ -346,7 +319,6 @@ export async function createMeeting(input: NewMeetingForm): Promise<string> {
       meeting_type: input.meetingType as MeetingType,
       subject_id: input.subjectId,
       subject_name: input.subjectName.trim() || null,
-
       subject: input.subject.trim() || null,
       note: input.note.trim() || null,
       at: atIso,
@@ -364,36 +336,24 @@ export async function createMeeting(input: NewMeetingForm): Promise<string> {
 
   const meetingId = insertedMeetings?.[0]?.id as string | undefined;
   if (!meetingId) {
-    console.error(
-      'Meeting insert did not return an id (MEET_STEP_INSERT_NO_ID)',
-      insertedMeetings,
-    );
-    throw new Error(
-      'MEET_STEP_INSERT_NO_ID: Meeting insert did not return an id',
-    );
+    console.error('Meeting insert did not return an id (MEET_STEP_INSERT_NO_ID)', insertedMeetings);
+    throw new Error('MEET_STEP_INSERT_NO_ID: Meeting insert did not return an id');
   }
 
-  // 5) Eğer hasta tipi meeting ve ödeme varsa, meeting_payments tablosuna da kayıt aç
+  // 5) Eğer ödeme varsa meeting_payments insert
   if (shouldInsertPayment && paymentAmountNumber && input.subjectId) {
-    const { error: paymentError } = await supabaseClient
-      .from('meeting_payments')
-      .insert({
-        org_id: profile.org_id,
-        meeting_id: meetingId,
-        patient_id: input.subjectId,
-        amount: paymentAmountNumber,
-        method: 'Senet',
-        note: input.paymentNote.trim() || null,
-      });
+    const { error: paymentError } = await supabaseClient.from('meeting_payments').insert({
+      org_id: profile.org_id,
+      meeting_id: meetingId,
+      patient_id: input.subjectId,
+      amount: paymentAmountNumber,
+      method: 'Senet',
+      note: input.paymentNote.trim() || null,
+    });
 
     if (paymentError) {
-      console.error(
-        'Failed to insert meeting payment (MEET_STEP_PAYMENT_INSERT):',
-        paymentError,
-      );
-      throw new Error(
-        'MEET_STEP_PAYMENT_INSERT: ' + paymentError.message,
-      );
+      console.error('Failed to insert meeting payment (MEET_STEP_PAYMENT_INSERT):', paymentError);
+      throw new Error('MEET_STEP_PAYMENT_INSERT: ' + paymentError.message);
     }
   }
 
@@ -406,20 +366,48 @@ export async function createMeeting(input: NewMeetingForm): Promise<string> {
         input.accessories,
       );
     } catch (accErr) {
-      console.error(
-        'Failed to insert meeting accessories (MEET_STEP_ACCESSORIES_INSERT):',
-        accErr,
-      );
+      console.error('Failed to insert meeting accessories (MEET_STEP_ACCESSORIES_INSERT):', accErr);
       if (accErr instanceof Error) {
-        throw new Error(
-          'MEET_STEP_ACCESSORIES_INSERT: ' + accErr.message,
-        );
+        throw new Error('MEET_STEP_ACCESSORIES_INSERT: ' + accErr.message);
       }
       throw accErr;
     }
   }
 
   return meetingId;
+}
+
+/**
+ * Soft delete a meeting via SECURITY DEFINER RPC.
+ * NOTE: Hard delete is intentionally disabled.
+ */
+export async function softDeleteMeeting(input: {
+  id: string;
+  reason: string | null;
+}): Promise<void> {
+  const { error } = await supabaseClient.rpc('soft_delete_meetings', {
+    p_id: input.id,
+    p_reason: input.reason,
+  });
+
+  if (error) {
+    console.error('Supabase meeting soft delete error (MEET_STEP_SOFT_DELETE):', error);
+    throw new Error('MEET_STEP_SOFT_DELETE: ' + error.message);
+  }
+}
+
+/**
+ * Restore a soft-deleted meeting via SECURITY DEFINER RPC.
+ */
+export async function restoreMeeting(input: { id: string }): Promise<void> {
+  const { error } = await supabaseClient.rpc('restore_meetings', {
+    p_id: input.id,
+  });
+
+  if (error) {
+    console.error('Supabase meeting restore error (MEET_STEP_RESTORE):', error);
+    throw new Error('MEET_STEP_RESTORE: ' + error.message);
+  }
 }
 
 /**
@@ -431,10 +419,7 @@ export function useMeetingsQuery() {
   const isAdmin = profile?.role === 'admin';
 
   return useQuery({
-    queryKey: [
-      ...MEETINGS_QUERY_KEY,
-      isAdmin ? 'with-reference' : 'no-reference',
-    ],
+    queryKey: [...MEETINGS_QUERY_KEY, isAdmin ? 'with-reference' : 'no-reference'],
     queryFn: () => fetchMeetings({ includeReference: !!isAdmin }),
     enabled: !profileLoading,
   });
@@ -447,6 +432,38 @@ export function useCreateMeetingMutation() {
     mutationFn: createMeeting,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MEETINGS_QUERY_KEY });
+    },
+  });
+}
+
+/**
+ * Invalidate all meetings-related queries (list + patient/trial detail lists).
+ * This prevents stale UI after soft delete / restore.
+ */
+function invalidateAllMeetingsQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({
+    predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'meetings',
+  });
+}
+
+export function useSoftDeleteMeetingMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, { id: string; reason: string | null }>({
+    mutationFn: softDeleteMeeting,
+    onSuccess: () => {
+      invalidateAllMeetingsQueries(queryClient);
+    },
+  });
+}
+
+export function useRestoreMeetingMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, { id: string }>({
+    mutationFn: restoreMeeting,
+    onSuccess: () => {
+      invalidateAllMeetingsQueries(queryClient);
     },
   });
 }
