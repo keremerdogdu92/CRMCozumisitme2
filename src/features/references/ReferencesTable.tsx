@@ -1,32 +1,28 @@
 // src/features/references/ReferencesTable.tsx
-// Tabular list view for references with group, phone, commission and follow-up info.
-// Supports column visibility toggles, client-side sorting and export (CSV / XLSX).
+// Summary: Tabular list view for references with responsive layout (mobile cards + desktop table).
+// Integrations:
+// - React Query: useQueryClient + useMutation for soft delete/restore.
+// - Supabase RPCs via api.ts:
+//   - softDeleteReference(id, reason?)
+//   - restoreReference(id)
+// - Table preferences: useTablePreferences (column visibility + sorting).
 //
-// Patch v2.1:
-// - Existing: sorting + column visibility, reminder calculations.
-// Patch v2.2:
-// - ADD: Table export buttons (CSV + XLSX) next to column visibility control.
-// - Export respects current visible columns and current sorted order.
-// - Uses shared csvUtils helpers (exportToCsvFile / exportToXlsxFile).
-// Patch v2.3:
-// - ADD: focusedId desteği. focusId ile gelen referans satırı listede highlight edilir.
-// Patch v2.4 (responsive polish):
-// - ADD: Mobile card view (md altı) → telefon ekranında okunabilirlik arttı.
-// - Desktop/tablet tablosu ResponsiveTableShell içine alındı.
-// - Üst bar mobile-first hale getirildi (wrap + dikey stack).
+// Patch v2.5.0 (2025-12-29):
+// - ADD: Soft delete + restore action buttons (RPC-based; no hard delete).
+// - ADD: Confirmation guard and optional delete reason prompt.
+// - ADD: Cache invalidation for all references queries after mutation.
 
 import { useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ReferenceRow } from './types';
 import { useCurrentProfile } from '../auth/useCurrentProfile';
 import { useTablePreferences } from '../../components/table/useTablePreferences';
 import { TableColumnsControl } from '../../components/table/TableColumnsControl';
 import type { TableColumnDef } from '../../components/table/tableTypes';
 import { TableExportButtons } from '../../components/table/TableExportButtons';
-import {
-  exportToCsvFile,
-  exportToXlsxFile,
-} from '../../utils/csvUtils';
+import { exportToCsvFile, exportToXlsxFile } from '../../utils/csvUtils';
 import { ResponsiveTableShell } from '../../components/layout/ResponsiveTableShell';
+import { restoreReference, softDeleteReference } from './api';
 
 type ReferencesTableProps = {
   items: ReferenceRow[];
@@ -88,7 +84,7 @@ function renderCommission(r: ReferenceRow): string {
 
 function getCommissionValue(r: ReferenceRow): number {
   if (r.commission_scheme === 'percent') {
-    return (r.commission_percent ?? 0) * 100; // yüzdelik değer
+    return (r.commission_percent ?? 0) * 100; // percentage value
   }
   if (r.commission_scheme === 'fixed') {
     return r.commission_fixed ?? 0;
@@ -121,13 +117,9 @@ function computeReminderStatus(
     return { label: '-', className: 'text-slate-400' };
   }
 
-  const next = new Date(
-    last.getTime() + r.contact_interval_days * MS_PER_DAY,
-  );
+  const next = new Date(last.getTime() + r.contact_interval_days * MS_PER_DAY);
   const today = new Date();
-  const diffDays = Math.floor(
-    (next.getTime() - today.getTime()) / MS_PER_DAY,
-  );
+  const diffDays = Math.floor((next.getTime() - today.getTime()) / MS_PER_DAY);
 
   if (diffDays < 0) {
     return {
@@ -150,10 +142,10 @@ function computeReminderStatus(
 }
 
 /**
- * Reminder için sıralama değeri:
- * - Plan yoksa +Infinity (en sona)
- * - last_meet_at yoksa da +Infinity
- * - Aksi halde "bir sonraki görüşme" tarihine göre timestamp
+ * Sort value for reminder:
+ * - If no plan: +Infinity (goes to the end)
+ * - If no last_meet_at: +Infinity
+ * - Otherwise: timestamp of computed next follow-up date
  */
 function getReminderSortValue(r: ReferenceRow): number {
   if (!r.contact_interval_days || r.contact_interval_days <= 0) {
@@ -166,9 +158,7 @@ function getReminderSortValue(r: ReferenceRow): number {
   if (Number.isNaN(last.getTime())) {
     return Number.POSITIVE_INFINITY;
   }
-  const next = new Date(
-    last.getTime() + r.contact_interval_days * MS_PER_DAY,
-  );
+  const next = new Date(last.getTime() + r.contact_interval_days * MS_PER_DAY);
   return next.getTime();
 }
 
@@ -247,13 +237,42 @@ const REFERENCE_COLUMNS: TableColumnDef<
   },
 ];
 
-export function ReferencesTable({
-  items,
-  onSelectRow,
-  focusedId,
-}: ReferencesTableProps) {
+export function ReferencesTable({ items, onSelectRow, focusedId }: ReferencesTableProps) {
   const { data: profile } = useCurrentProfile();
   const userId = profile?.id ?? null;
+
+  const queryClient = useQueryClient();
+
+  const softDeleteMutation = useMutation({
+    mutationFn: async (args: { id: string; reason: string | null }) => {
+      await softDeleteReference(args.id, args.reason);
+    },
+    onSuccess: async () => {
+      // Invalidate all references queries (active/deleted/all).
+      await queryClient.invalidateQueries({ queryKey: ['references'] });
+    },
+    onError: (err) => {
+      const msg =
+        (err as Error | null | undefined)?.message ?? 'Silme sırasında hata oluştu.';
+      console.error('Reference soft delete failed:', err);
+      window.alert(msg);
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await restoreReference(id);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['references'] });
+    },
+    onError: (err) => {
+      const msg =
+        (err as Error | null | undefined)?.message ?? 'Geri alma sırasında hata oluştu.';
+      console.error('Reference restore failed:', err);
+      window.alert(msg);
+    },
+  });
 
   const {
     state: prefsState,
@@ -261,24 +280,17 @@ export function ReferencesTable({
     toggleColumn,
     setSort,
     isColumnVisible,
-  } = useTablePreferences<ReferenceRow>(
-    'references-table',
-    REFERENCE_COLUMNS,
-    userId,
-  );
+  } = useTablePreferences<ReferenceRow>('references-table', REFERENCE_COLUMNS, userId);
 
   const sortedItems: ReferenceRow[] = useMemo(() => {
     if (!prefsState.sortBy) return items;
 
-    const col = REFERENCE_COLUMNS.find(
-      (c) => c.id === prefsState.sortBy,
-    );
+    const col = REFERENCE_COLUMNS.find((c) => c.id === prefsState.sortBy);
     if (!col || !col.sortable) return items;
 
     const accessor =
       col.accessor ??
-      ((row: ReferenceRow) =>
-        (row as any)[col.id as keyof ReferenceRow]);
+      ((row: ReferenceRow) => (row as any)[col.id as keyof ReferenceRow]);
 
     const result = [...items];
 
@@ -292,7 +304,6 @@ export function ReferencesTable({
       if (aNull) return 1;
       if (bNull) return -1;
 
-      // Tarih / sayı / string için basit karşılaştırma
       if (typeof va === 'number' && typeof vb === 'number') {
         if (va < vb) return prefsState.sortDir === 'asc' ? -1 : 1;
         if (va > vb) return prefsState.sortDir === 'asc' ? 1 : -1;
@@ -300,7 +311,6 @@ export function ReferencesTable({
       }
 
       if (typeof va === 'string' && typeof vb === 'string') {
-        // Tarih string’i olabilir; parse etmeyi deneriz
         const ta = Date.parse(va);
         const tb = Date.parse(vb);
         if (!Number.isNaN(ta) && !Number.isNaN(tb)) {
@@ -327,8 +337,7 @@ export function ReferencesTable({
   const handleExport = (type: 'csv' | 'xlsx') => {
     if (!sortedItems.length) return;
 
-    const exportableColumns = visibleColumns; // burada "İşlemler" toggle tablosunda yok, ekstra th.
-
+    const exportableColumns = visibleColumns;
     if (!exportableColumns.length) return;
 
     const headers = exportableColumns.map((col) => col.label);
@@ -365,18 +374,42 @@ export function ReferencesTable({
     const baseFileName = 'references_export';
 
     if (type === 'csv') {
-      exportToCsvFile({
-        fileName: baseFileName,
-        headers,
-        rows: rowsForExport,
-      });
+      exportToCsvFile({ fileName: baseFileName, headers, rows: rowsForExport });
     } else {
-      exportToXlsxFile({
-        fileName: baseFileName,
-        headers,
-        rows: rowsForExport,
-      });
+      exportToXlsxFile({ fileName: baseFileName, headers, rows: rowsForExport });
     }
+  };
+
+  const handleSoftDeleteClick = (r: ReferenceRow) => {
+    if (!r.id) return;
+
+    // Defensive guard: do not soft delete an already-deleted row.
+    if (r.deleted_at) return;
+
+    const ok = window.confirm(
+      `${r.full_name ?? 'Bu referans'} kaydını silmek istiyor musun?\n\nBu işlem kalıcı silme değildir (soft delete).`,
+    );
+    if (!ok) return;
+
+    // Optional reason (kept minimal to avoid introducing new UI components).
+    const reasonRaw = window.prompt('Silme nedeni (opsiyonel):', '') ?? '';
+    const reason = reasonRaw.trim().length > 0 ? reasonRaw.trim() : null;
+
+    softDeleteMutation.mutate({ id: r.id, reason });
+  };
+
+  const handleRestoreClick = (r: ReferenceRow) => {
+    if (!r.id) return;
+
+    // Defensive guard: only restore if currently deleted.
+    if (!r.deleted_at) return;
+
+    const ok = window.confirm(
+      `${r.full_name ?? 'Bu referans'} kaydını geri almak istiyor musun?`,
+    );
+    if (!ok) return;
+
+    restoreMutation.mutate(r.id);
   };
 
   if (items.length === 0) {
@@ -388,14 +421,14 @@ export function ReferencesTable({
     );
   }
 
+  const isMutating = softDeleteMutation.isPending || restoreMutation.isPending;
+
   return (
     <div className="space-y-3">
-      {/* Üst bar: kayıt sayısı + sütun kontrolü + export */}
+      {/* Top bar: count + column control + export */}
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <p className="text-[11px] text-slate-500">
-          Toplam{' '}
-          <span className="font-semibold">{sortedItems.length}</span>{' '}
-          referans kaydı var.
+          Toplam <span className="font-semibold">{sortedItems.length}</span> referans kaydı var.
         </p>
         <div className="flex items-center justify-end gap-2">
           <TableColumnsControl
@@ -410,25 +443,23 @@ export function ReferencesTable({
         </div>
       </div>
 
-      {/* Mobile: card list (md altı) */}
+      {/* Mobile card list (md and below) */}
       <div className="space-y-3 md:hidden">
         {sortedItems.map((r) => {
           const reminder = computeReminderStatus(r);
           const isFocused = focusedId && r.id === focusedId;
 
           const noteText =
-            r.note && r.note.length > 120
-              ? `${r.note.slice(0, 120)}…`
-              : r.note ?? '';
+            r.note && r.note.length > 120 ? `${r.note.slice(0, 120)}…` : r.note ?? '';
+
+          const isDeleted = !!r.deleted_at;
 
           return (
             <div
               key={r.id}
               className={
                 'rounded-lg border px-3 py-3 shadow-sm ' +
-                (isFocused
-                  ? 'border-primary-300 bg-primary-50/70'
-                  : 'border-slate-200 bg-white')
+                (isFocused ? 'border-primary-300 bg-primary-50/70' : 'border-slate-200 bg-white')
               }
             >
               <div className="flex items-start justify-between gap-2">
@@ -447,17 +478,13 @@ export function ReferencesTable({
 
               <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-700">
                 <div>
-                  <span className="block text-[10px] uppercase text-slate-400">
-                    Telefon
-                  </span>
+                  <span className="block text-[10px] uppercase text-slate-400">Telefon</span>
                   <span className="font-medium">
                     {r.phone && r.phone.trim().length > 0 ? r.phone : '-'}
                   </span>
                 </div>
                 <div>
-                  <span className="block text-[10px] uppercase text-slate-400">
-                    Durum
-                  </span>
+                  <span className="block text-[10px] uppercase text-slate-400">Durum</span>
                   <span
                     className={
                       r.is_active
@@ -469,47 +496,31 @@ export function ReferencesTable({
                   </span>
                 </div>
                 <div>
-                  <span className="block text-[10px] uppercase text-slate-400">
-                    Komisyon
-                  </span>
+                  <span className="block text-[10px] uppercase text-slate-400">Komisyon</span>
                   <span className="font-medium">{renderCommission(r)}</span>
                 </div>
                 <div>
-                  <span className="block text-[10px] uppercase text-slate-400">
-                    Takip
-                  </span>
+                  <span className="block text-[10px] uppercase text-slate-400">Takip</span>
                   <span className={reminder.className}>{reminder.label}</span>
                 </div>
                 <div>
-                  <span className="block text-[10px] uppercase text-slate-400">
-                    Son Görüşme
-                  </span>
-                  <span className="font-medium">
-                    {formatDate(r.last_meet_at)}
-                  </span>
+                  <span className="block text-[10px] uppercase text-slate-400">Son Görüşme</span>
+                  <span className="font-medium">{formatDate(r.last_meet_at)}</span>
                 </div>
                 <div>
-                  <span className="block text-[10px] uppercase text-slate-400">
-                    Sonraki Görüşme
-                  </span>
-                  <span className="font-medium">
-                    {formatDate(r.next_meet_at)}
-                  </span>
+                  <span className="block text-[10px] uppercase text-slate-400">Sonraki Görüşme</span>
+                  <span className="font-medium">{formatDate(r.next_meet_at)}</span>
                 </div>
               </div>
 
               {noteText && (
                 <div className="mt-2">
-                  <span className="block text-[10px] uppercase text-slate-400">
-                    Not
-                  </span>
-                  <span className="text-[11px] text-slate-600">
-                    {noteText}
-                  </span>
+                  <span className="block text-[10px] uppercase text-slate-400">Not</span>
+                  <span className="text-[11px] text-slate-600">{noteText}</span>
                 </div>
               )}
 
-              <div className="mt-3 flex justify-end">
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => onSelectRow(r)}
@@ -517,13 +528,33 @@ export function ReferencesTable({
                 >
                   Detay
                 </button>
+
+                {!isDeleted ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSoftDeleteClick(r)}
+                    disabled={isMutating}
+                    className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-3 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+                  >
+                    Sil
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleRestoreClick(r)}
+                    disabled={isMutating}
+                    className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                  >
+                    Geri Al
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Desktop / tablet: classic table (md ve üzeri) */}
+      {/* Desktop / tablet table (md and above) */}
       <ResponsiveTableShell className="hidden md:block">
         <table className="min-w-full text-xs md:text-sm">
           <thead className="bg-slate-50">
@@ -556,62 +587,46 @@ export function ReferencesTable({
                   </th>
                 );
               })}
-              {/* İşlemler sütunu sabit, toggle dışı */}
-              <th className="px-4 py-2 text-right font-medium text-slate-600">
-                İşlemler
-              </th>
+              <th className="px-4 py-2 text-right font-medium text-slate-600">İşlemler</th>
             </tr>
           </thead>
           <tbody>
             {sortedItems.map((r) => {
               const reminder = computeReminderStatus(r);
               const isFocused = focusedId && r.id === focusedId;
+              const isDeleted = !!r.deleted_at;
 
               return (
                 <tr
                   key={r.id}
                   className={
                     'border-t border-slate-100 ' +
-                    (isFocused
-                      ? 'bg-primary-50/70'
-                      : 'hover:bg-slate-50')
+                    (isFocused ? 'bg-primary-50/70' : 'hover:bg-slate-50')
                   }
                 >
                   {visibleColumns.map((col) => {
                     switch (col.id as ReferenceTableColumnId) {
                       case 'created_at':
                         return (
-                          <td
-                            key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-slate-700"
-                          >
+                          <td key={col.id} className="whitespace-nowrap px-4 py-2 text-slate-700">
                             {formatDate(r.created_at)}
                           </td>
                         );
                       case 'full_name':
                         return (
-                          <td
-                            key={col.id}
-                            className="px-4 py-2 text-slate-800"
-                          >
+                          <td key={col.id} className="px-4 py-2 text-slate-800">
                             {r.full_name ?? '-'}
                           </td>
                         );
                       case 'group':
                         return (
-                          <td
-                            key={col.id}
-                            className="px-4 py-2 text-slate-700"
-                          >
+                          <td key={col.id} className="px-4 py-2 text-slate-700">
                             {renderGroup(r.group)}
                           </td>
                         );
                       case 'phone':
                         return (
-                          <td
-                            key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-slate-700"
-                          >
+                          <td key={col.id} className="whitespace-nowrap px-4 py-2 text-slate-700">
                             {r.phone ?? '-'}
                           </td>
                         );
@@ -626,52 +641,33 @@ export function ReferencesTable({
                         );
                       case 'last_meet_at':
                         return (
-                          <td
-                            key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-slate-700"
-                          >
+                          <td key={col.id} className="whitespace-nowrap px-4 py-2 text-slate-700">
                             {formatDate(r.last_meet_at)}
                           </td>
                         );
                       case 'next_meet_at':
                         return (
-                          <td
-                            key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-slate-700"
-                          >
+                          <td key={col.id} className="whitespace-nowrap px-4 py-2 text-slate-700">
                             {formatDate(r.next_meet_at)}
                           </td>
                         );
                       case 'reminder':
                         return (
-                          <td
-                            key={col.id}
-                            className="whitespace-nowrap px-4 py-2"
-                          >
-                            <span className={reminder.className}>
-                              {reminder.label}
-                            </span>
+                          <td key={col.id} className="whitespace-nowrap px-4 py-2">
+                            <span className={reminder.className}>{reminder.label}</span>
                           </td>
                         );
                       case 'status':
                         return (
-                          <td
-                            key={col.id}
-                            className="whitespace-nowrap px-4 py-2 text-slate-700"
-                          >
+                          <td key={col.id} className="whitespace-nowrap px-4 py-2 text-slate-700">
                             {renderStatus(r)}
                           </td>
                         );
                       case 'note': {
                         const text =
-                          r.note && r.note.length > 120
-                            ? `${r.note.slice(0, 120)}…`
-                            : r.note ?? '-';
+                          r.note && r.note.length > 120 ? `${r.note.slice(0, 120)}…` : r.note ?? '-';
                         return (
-                          <td
-                            key={col.id}
-                            className="max-w-xs truncate px-4 py-2 text-slate-500"
-                          >
+                          <td key={col.id} className="max-w-xs truncate px-4 py-2 text-slate-500">
                             {text}
                           </td>
                         );
@@ -681,15 +677,36 @@ export function ReferencesTable({
                     }
                   })}
 
-                  {/* İşlemler */}
-                  <td className="px-4 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => onSelectRow(r)}
-                      className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      Detay
-                    </button>
+                  <td className="whitespace-nowrap px-4 py-2 text-right">
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onSelectRow(r)}
+                        className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        Detay
+                      </button>
+
+                      {!isDeleted ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSoftDeleteClick(r)}
+                          disabled={isMutating}
+                          className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+                        >
+                          Sil
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleRestoreClick(r)}
+                          disabled={isMutating}
+                          className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                        >
+                          Geri Al
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
