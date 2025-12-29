@@ -6,11 +6,12 @@
 // - Supports focusedId highlighting for deep-links.
 // - Supports soft delete / restore via RPC wrappers in ./api.ts (soft_delete_trials, restore_trials).
 //   * Invalidates TRIALS_QUERY_KEY on success.
+// - Uses shared SoftDeleteRowActionButton for consistent UI across list + detail.
 //
-// Patch v2.7 (soft delete actions):
-// - ADD: Row-level soft delete / restore buttons in "İşlemler" column (desktop + mobile cards).
-// - Uses confirm() + optional prompt() for delete reason (sent to RPC as p_reason).
-// - Export continues to exclude "İşlemler" column.
+// Patch v2.8 (shared soft delete button):
+// - ADD: Use SoftDeleteRowActionButton in desktop table + mobile cards.
+// - KEEP: confirm() + optional prompt() for delete reason (sent to RPC as p_reason).
+// - KEEP: Export continues to exclude "İşlemler" column.
 
 import { useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -23,6 +24,7 @@ import { TableExportButtons } from '../../components/table/TableExportButtons';
 import { exportToCsvFile, exportToXlsxFile } from '../../utils/csvUtils';
 import { ResponsiveTableShell } from '../../components/layout/ResponsiveTableShell';
 import { TRIALS_QUERY_KEY, softDeleteTrial, restoreTrial } from './api';
+import { SoftDeleteRowActionButton } from '../../components/softDelete/SoftDeleteRowActionButton';
 
 type TrialsTableProps = {
   items: TrialRow[];
@@ -453,27 +455,13 @@ export function TrialsTable({
               )}
 
               <div className="mt-3 flex items-center justify-end gap-2">
-                {isDeleted ? (
-                  <button
-                    type="button"
-                    disabled={isBusy}
-                    onClick={() => handleRestoreClick(t)}
-                    className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    title="Silinmiş kaydı geri getir"
-                  >
-                    Geri getir
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={isBusy}
-                    onClick={() => handleSoftDeleteClick(t)}
-                    className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-medium text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    title="Kayıt soft delete yapılır"
-                  >
-                    Sil
-                  </button>
-                )}
+                <SoftDeleteRowActionButton
+                  isDeleted={isDeleted}
+                  isBusy={isBusy}
+                  size="xs"
+                  onSoftDelete={() => handleSoftDeleteClick(t)}
+                  onRestore={() => handleRestoreClick(t)}
+                />
 
                 <button
                   type="button"
@@ -624,27 +612,13 @@ export function TrialsTable({
                               className="whitespace-nowrap px-4 py-2 text-right"
                             >
                               <div className="inline-flex items-center gap-2">
-                                {isDeleted ? (
-                                  <button
-                                    type="button"
-                                    disabled={isBusy}
-                                    onClick={() => handleRestoreClick(t)}
-                                    className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                    title="Silinmiş kaydı geri getir"
-                                  >
-                                    Geri getir
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    disabled={isBusy}
-                                    onClick={() => handleSoftDeleteClick(t)}
-                                    className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                    title="Kayıt soft delete yapılır"
-                                  >
-                                    Sil
-                                  </button>
-                                )}
+                                <SoftDeleteRowActionButton
+                                  isDeleted={isDeleted}
+                                  isBusy={isBusy}
+                                  size="sm"
+                                  onSoftDelete={() => handleSoftDeleteClick(t)}
+                                  onRestore={() => handleRestoreClick(t)}
+                                />
 
                                 <button
                                   type="button"
