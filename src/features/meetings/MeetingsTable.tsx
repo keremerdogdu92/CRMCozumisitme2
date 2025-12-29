@@ -1,43 +1,35 @@
 // src/features/meetings/MeetingsTable.tsx
-// Meetings list table with meeting_type + subject info, filters,
-// column visibility toggles, sorting and export (CSV / Excel).
+// Summary: Meetings list table with meeting_type + subject info, filters,
+// column visibility toggles, sorting, export, and soft-delete actions.
+// Integrations:
+// - useMeetingsQuery: loads meetings with deleted_at support.
+// - useSoftDeleteMeetingMutation / useRestoreMeetingMutation: calls Supabase RPCs.
+// - SoftDeleteModeFilter: admin-oriented visibility control for deleted rows.
+// - useTablePreferences + TableColumnsControl: column visibility and sorting.
+// - TableExportButtons + csvUtils: export filtered + sorted rows (excluding actions).
 //
-// Patch v2.3:
-// - ADD: "İşlemler" kolonu.
-// - ADD: Satır bazlı "Hastaya git / Denemeye git / Referansa git" navigasyon butonu.
-//   * meeting_type + subject_id'ye göre ilgili sayfaya ?focusId=<uuid> ile yönlendirir.
-// - Export'ta "İşlemler" kolonu hariç tutulur.
-//
-// Patch v2.2:
-// - ADD: Export buttons (CSV + XLSX) using visible columns + filtered + sorted rows.
-// - Uses shared csvUtils + TableExportButtons component.
-// - Keeps hook order stable (no new hooks added).
-//
-// Patch v2.1:
-// - FIX (critical): Prevents React error #310 by ensuring hooks are called in a stable order.
-//   * `useMemo` (sortedRows) is now executed on every render (even while loading/error).
-//   * Avoids returning early before all hooks are called.
-// - No behavior change intended for normal UI flow.
-//
-// Patch v2.4 (responsive polish):
-// - ADD: Mobile card view (md altı) → telefon ekranında okunabilirlik arttı.
-// - Desktop/tablet tablosu ResponsiveTableShell içine alındı.
-// - Filter bar mobile-first hale getirildi (wrap + dikey stack).
+// Security / Behavior notes:
+// - Hard delete is not used; all deletes are soft deletes via RPC.
+// - Default list mode is "active" (deleted rows hidden).
+// - Staff users never see reference-type meetings (client-side defense-in-depth).
 
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMeetingsQuery } from './api';
+import {
+  useMeetingsQuery,
+  useRestoreMeetingMutation,
+  useSoftDeleteMeetingMutation,
+} from './api';
 import type { MeetingRow, MeetingType } from './types';
 import { useCurrentProfile } from '../auth/useCurrentProfile';
 import { useTablePreferences } from '../../components/table/useTablePreferences';
 import { TableColumnsControl } from '../../components/table/TableColumnsControl';
 import type { TableColumnDef } from '../../components/table/tableTypes';
-import {
-  exportToCsvFile,
-  exportToXlsxFile,
-} from '../../utils/csvUtils';
+import { exportToCsvFile, exportToXlsxFile } from '../../utils/csvUtils';
 import { TableExportButtons } from '../../components/table/TableExportButtons';
 import { ResponsiveTableShell } from '../../components/layout/ResponsiveTableShell';
+import { SoftDeleteModeFilter } from '../../components/table/SoftDeleteModeFilter';
+import type { SoftDeleteMode } from '../../utils/softDelete/softDeleteTypes';
 
 function formatDate(value: string | null): string {
   if (!value) return '-';
@@ -162,6 +154,10 @@ const MEETING_COLUMNS: TableColumnDef<
   },
 ];
 
+function isDeleted(m: MeetingRow): boolean {
+  return !!m.deleted_at;
+}
+
 export function MeetingsTable() {
   const { data, isLoading, isError, error } = useMeetingsQuery();
   const { data: profile } = useCurrentProfile();
@@ -170,6 +166,10 @@ export function MeetingsTable() {
   const navigate = useNavigate();
 
   const [typeFilter, setTypeFilter] = useState<MeetingType | 'all'>('all');
+  const [softDeleteMode, setSoftDeleteMode] = useState<SoftDeleteMode>('active');
+
+  const softDeleteMutation = useSoftDeleteMeetingMutation();
+  const restoreMutation = useRestoreMeetingMutation();
 
   const {
     state: prefsState,
@@ -177,16 +177,12 @@ export function MeetingsTable() {
     toggleColumn,
     setSort,
     isColumnVisible,
-  } = useTablePreferences<MeetingRow>(
-    'meetings-table',
-    MEETING_COLUMNS,
-    userId,
-  );
+  } = useTablePreferences<MeetingRow>('meetings-table', MEETING_COLUMNS, userId);
 
   // NOTE: Even during loading/error, we compute with safe defaults so hooks remain stable.
   const safeData: MeetingRow[] = (data ?? []) as MeetingRow[];
 
-  // Eski kayıtlar için default değerler atayıp MeetingRow tipine normalize et
+  // Normalize older rows into a safe MeetingRow shape.
   const rows: MeetingRow[] = safeData.map((m) => {
     const meeting_type = (m.meeting_type ?? 'patient') as MeetingType;
     const subject_name = (m.subject_name ?? null) as string | null;
@@ -197,18 +193,27 @@ export function MeetingsTable() {
       meeting_type,
       subject_name,
       subject_id,
+      // deleted_at may be missing in older cached payloads; normalize to null.
+      deleted_at: (m.deleted_at ?? null) as string | null,
     };
   });
 
-  // Extra güvenlik: non-admin için referans görüşmelerini client-side da gizle
-  const visibleRows: MeetingRow[] = isAdmin
+  // Defense-in-depth: hide reference meetings from non-admin users.
+  const roleVisibleRows: MeetingRow[] = isAdmin
     ? rows
     : rows.filter((m) => m.meeting_type !== 'reference');
 
+  // Soft delete mode filtering (default: active only).
+  const softDeleteFilteredRows: MeetingRow[] = (() => {
+    if (softDeleteMode === 'all') return roleVisibleRows;
+    if (softDeleteMode === 'deleted') return roleVisibleRows.filter((m) => isDeleted(m));
+    return roleVisibleRows.filter((m) => !isDeleted(m));
+  })();
+
   const filteredRows: MeetingRow[] =
     typeFilter === 'all'
-      ? visibleRows
-      : visibleRows.filter((m) => m.meeting_type === typeFilter);
+      ? softDeleteFilteredRows
+      : softDeleteFilteredRows.filter((m) => m.meeting_type === typeFilter);
 
   const sortedRows: MeetingRow[] = useMemo(() => {
     if (!prefsState.sortBy) return filteredRows;
@@ -263,16 +268,11 @@ export function MeetingsTable() {
   const handleExport = (type: 'csv' | 'xlsx') => {
     if (sortedRows.length === 0) return;
 
-    // "İşlemler" kolonunu export'a dahil etmiyoruz
-    const exportableColumns = visibleColumns.filter(
-      (col) => col.id !== 'actions',
-    );
-
+    // Exclude the "actions" column from exports.
+    const exportableColumns = visibleColumns.filter((col) => col.id !== 'actions');
     if (exportableColumns.length === 0) return;
 
-    const headers = exportableColumns.map(
-      (col) => col.exportLabel ?? col.label,
-    );
+    const headers = exportableColumns.map((col) => col.exportLabel ?? col.label);
 
     const rowsForExport = sortedRows.map((m) =>
       exportableColumns.map((col) => {
@@ -306,19 +306,58 @@ export function MeetingsTable() {
     const baseFileName = 'meetings_export';
 
     if (type === 'csv') {
-      exportToCsvFile({
-        fileName: baseFileName,
-        headers,
-        rows: rowsForExport,
-      });
+      exportToCsvFile({ fileName: baseFileName, headers, rows: rowsForExport });
     } else {
-      exportToXlsxFile({
-        fileName: baseFileName,
-        headers,
-        rows: rowsForExport,
-      });
+      exportToXlsxFile({ fileName: baseFileName, headers, rows: rowsForExport });
     }
   };
+
+  function getSubjectNav(m: MeetingRow): { label: string; path: string } | null {
+    if (!m.subject_id) return null;
+
+    switch (m.meeting_type) {
+      case 'patient':
+        return {
+          label: 'Hastaya git',
+          path: `/patients?focusId=${encodeURIComponent(m.subject_id)}`,
+        };
+      case 'trial':
+        return {
+          label: 'Denemeye git',
+          path: `/trials?focusId=${encodeURIComponent(m.subject_id)}`,
+        };
+      case 'reference':
+        return {
+          label: 'Referansa git',
+          path: `/references?focusId=${encodeURIComponent(m.subject_id)}`,
+        };
+      default:
+        return null;
+    }
+  }
+
+  async function handleSoftDeleteMeeting(m: MeetingRow) {
+    // UI-level reason capture. Keep it simple; DB accepts NULL as well.
+    const reason = window.prompt('Silme nedeni (opsiyonel):', '') ?? '';
+    const trimmed = reason.trim();
+
+    try {
+      await softDeleteMutation.mutateAsync({
+        id: m.id,
+        reason: trimmed.length > 0 ? trimmed : null,
+      });
+    } catch {
+      // Errors are surfaced via mutation state; no extra noisy alerts here.
+    }
+  }
+
+  async function handleRestoreMeeting(m: MeetingRow) {
+    try {
+      await restoreMutation.mutateAsync({ id: m.id });
+    } catch {
+      // Errors are surfaced via mutation state; no extra noisy alerts here.
+    }
+  }
 
   // After all hooks are called, it is safe to early-return.
   if (isLoading) {
@@ -334,7 +373,7 @@ export function MeetingsTable() {
     );
   }
 
-  if (visibleRows.length === 0) {
+  if (roleVisibleRows.length === 0) {
     return (
       <p className="text-xs text-slate-500">
         Henüz kayıtlı görüşme yok. Yukarıdan yeni bir görüşme ekleyebilirsiniz.
@@ -342,14 +381,24 @@ export function MeetingsTable() {
     );
   }
 
+  const mutationErrorMessage =
+    (softDeleteMutation.error as Error | null)?.message ||
+    (restoreMutation.error as Error | null)?.message ||
+    null;
+
+  const anyPending =
+    softDeleteMutation.isPending || restoreMutation.isPending;
+
   return (
     <div className="space-y-3">
-      {/* Filter bar + sütun kontrolü + export butonları */}
+      {/* Filter bar + sütun kontrolü + export butonları + soft delete mode */}
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <p className="text-[11px] text-slate-500">
-          Toplam <span className="font-semibold">{visibleRows.length}</span>{' '}
+          Toplam{' '}
+          <span className="font-semibold">{roleVisibleRows.length}</span>{' '}
           görüşme kaydı var.
         </p>
+
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
           <div className="flex flex-wrap gap-1.5">
             <FilterButton
@@ -379,7 +428,9 @@ export function MeetingsTable() {
               />
             )}
           </div>
+
           <div className="flex items-center justify-end gap-2">
+            <SoftDeleteModeFilter value={softDeleteMode} onChange={setSoftDeleteMode} />
             <TableColumnsControl
               columns={MEETING_COLUMNS}
               isColumnVisible={isColumnVisible}
@@ -393,6 +444,12 @@ export function MeetingsTable() {
         </div>
       </div>
 
+      {mutationErrorMessage && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          İşlem hatası: {mutationErrorMessage}
+        </div>
+      )}
+
       {/* Mobile: card list (md altı) */}
       <div className="space-y-3 md:hidden">
         {sortedRows.map((m) => {
@@ -400,51 +457,39 @@ export function MeetingsTable() {
           const satisfactionDisplay =
             m.satisfaction_10 != null ? `${m.satisfaction_10} / 10` : '-';
 
-          let actionLabel = '';
-          let path = '';
-          if (m.subject_id) {
-            switch (m.meeting_type) {
-              case 'patient':
-                actionLabel = 'Hastaya git';
-                path = `/patients?focusId=${encodeURIComponent(m.subject_id)}`;
-                break;
-              case 'trial':
-                actionLabel = 'Denemeye git';
-                path = `/trials?focusId=${encodeURIComponent(m.subject_id)}`;
-                break;
-              case 'reference':
-                actionLabel = 'Referansa git';
-                path = `/references?focusId=${encodeURIComponent(
-                  m.subject_id,
-                )}`;
-                break;
-              default:
-                break;
-            }
-          }
+          const nav = getSubjectNav(m);
 
           const shortNote =
-            m.note && m.note.length > 120
-              ? `${m.note.slice(0, 120)}…`
-              : m.note ?? '';
+            m.note && m.note.length > 120 ? `${m.note.slice(0, 120)}…` : m.note ?? '';
+
+          const deleted = isDeleted(m);
 
           return (
             <div
               key={m.id}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm"
+              className={
+                'rounded-lg border px-3 py-3 shadow-sm ' +
+                (deleted
+                  ? 'border-slate-200 bg-slate-50'
+                  : 'border-slate-200 bg-white')
+              }
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900">
+                  <p
+                    className={
+                      'truncate text-sm font-semibold ' +
+                      (deleted ? 'text-slate-500 line-through' : 'text-slate-900')
+                    }
+                  >
                     {m.subject_name ?? 'İsimsiz'}
                   </p>
                   <p className="mt-0.5 text-[11px] text-slate-500">
                     Tarih: {formatDate(m.at)}
-                    {m.next_at
-                      ? ` · Sonraki: ${formatDate(m.next_at)}`
-                      : ''}
+                    {m.next_at ? ` · Sonraki: ${formatDate(m.next_at)}` : ''}
                   </p>
                 </div>
+
                 <span className="inline-flex shrink-0 items-center rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700">
                   {typeLabel}
                 </span>
@@ -459,6 +504,7 @@ export function MeetingsTable() {
                     <span className="font-medium">{m.subject}</span>
                   </div>
                 )}
+
                 <div className="flex gap-4">
                   <div>
                     <span className="block text-[10px] uppercase text-slate-400">
@@ -467,29 +513,48 @@ export function MeetingsTable() {
                     <span className="font-medium">{satisfactionDisplay}</span>
                   </div>
                 </div>
+
                 {shortNote && (
                   <div>
                     <span className="block text-[10px] uppercase text-slate-400">
                       Not
                     </span>
-                    <span className="font-normal text-slate-600">
-                      {shortNote}
-                    </span>
+                    <span className="font-normal text-slate-600">{shortNote}</span>
                   </div>
                 )}
               </div>
 
-              {actionLabel && path && (
-                <div className="mt-3 flex justify-end">
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
+                {nav && (
                   <button
                     type="button"
-                    onClick={() => navigate(path)}
+                    onClick={() => navigate(nav.path)}
                     className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
                   >
-                    {actionLabel}
+                    {nav.label}
                   </button>
-                </div>
-              )}
+                )}
+
+                {!deleted ? (
+                  <button
+                    type="button"
+                    disabled={anyPending}
+                    onClick={() => handleSoftDeleteMeeting(m)}
+                    className="inline-flex items-center rounded-md border border-red-200 bg-white px-3 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Sil
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={anyPending}
+                    onClick={() => handleRestoreMeeting(m)}
+                    className="inline-flex items-center rounded-md border border-emerald-200 bg-white px-3 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Geri Getir
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
@@ -532,124 +597,132 @@ export function MeetingsTable() {
               })}
             </tr>
           </thead>
+
           <tbody>
-            {sortedRows.map((m) => (
-              <tr key={m.id} className="border-t border-slate-100">
-                {visibleColumns.map((col) => {
-                  switch (col.id as MeetingTableColumnId) {
-                    case 'at':
-                      return (
-                        <td key={col.id} className="px-3 py-2 text-slate-800">
-                          {formatDate(m.at)}
-                        </td>
-                      );
-                    case 'meeting_type':
-                      return (
-                        <td key={col.id} className="px-3 py-2 text-slate-800">
-                          {formatMeetingType(m.meeting_type)}
-                        </td>
-                      );
-                    case 'subject_name':
-                      return (
-                        <td key={col.id} className="px-3 py-2 text-slate-800">
-                          {m.subject_name ?? '-'}
-                        </td>
-                      );
-                    case 'subject':
-                      return (
-                        <td key={col.id} className="px-3 py-2 text-slate-800">
-                          {m.subject ?? '-'}
-                        </td>
-                      );
-                    case 'next_at':
-                      return (
-                        <td key={col.id} className="px-3 py-2 text-slate-800">
-                          {formatDate(m.next_at)}
-                        </td>
-                      );
-                    case 'satisfaction_10':
-                      return (
-                        <td
-                          key={col.id}
-                          className="px-3 py-2 text-center text-slate-800"
-                        >
-                          {m.satisfaction_10 ?? '-'}
-                        </td>
-                      );
-                    case 'note': {
-                      const short =
-                        m.note && m.note.length > 120
-                          ? `${m.note.slice(0, 120)}…`
-                          : m.note ?? '-';
-                      return (
-                        <td key={col.id} className="px-3 py-2 text-slate-600">
-                          {short}
-                        </td>
-                      );
-                    }
-                    case 'actions': {
-                      if (!m.subject_id) {
+            {sortedRows.map((m) => {
+              const deleted = isDeleted(m);
+              const nav = getSubjectNav(m);
+
+              return (
+                <tr
+                  key={m.id}
+                  className={
+                    'border-t border-slate-100 ' +
+                    (deleted ? 'bg-slate-50' : 'bg-white')
+                  }
+                >
+                  {visibleColumns.map((col) => {
+                    switch (col.id as MeetingTableColumnId) {
+                      case 'at':
+                        return (
+                          <td key={col.id} className="px-3 py-2 text-slate-800">
+                            {formatDate(m.at)}
+                          </td>
+                        );
+                      case 'meeting_type':
+                        return (
+                          <td key={col.id} className="px-3 py-2 text-slate-800">
+                            {formatMeetingType(m.meeting_type)}
+                          </td>
+                        );
+                      case 'subject_name':
                         return (
                           <td
                             key={col.id}
-                            className="px-3 py-2 text-right text-slate-400"
+                            className={
+                              'px-3 py-2 ' +
+                              (deleted
+                                ? 'text-slate-500 line-through'
+                                : 'text-slate-800')
+                            }
                           >
-                            -
+                            {m.subject_name ?? '-'}
+                          </td>
+                        );
+                      case 'subject':
+                        return (
+                          <td
+                            key={col.id}
+                            className={
+                              'px-3 py-2 ' +
+                              (deleted ? 'text-slate-500' : 'text-slate-800')
+                            }
+                          >
+                            {m.subject ?? '-'}
+                          </td>
+                        );
+                      case 'next_at':
+                        return (
+                          <td key={col.id} className="px-3 py-2 text-slate-800">
+                            {formatDate(m.next_at)}
+                          </td>
+                        );
+                      case 'satisfaction_10':
+                        return (
+                          <td
+                            key={col.id}
+                            className="px-3 py-2 text-center text-slate-800"
+                          >
+                            {m.satisfaction_10 ?? '-'}
+                          </td>
+                        );
+                      case 'note': {
+                        const short =
+                          m.note && m.note.length > 120
+                            ? `${m.note.slice(0, 120)}…`
+                            : m.note ?? '-';
+                        return (
+                          <td key={col.id} className="px-3 py-2 text-slate-600">
+                            {short}
                           </td>
                         );
                       }
+                      case 'actions': {
+                        return (
+                          <td key={col.id} className="px-3 py-2 text-right">
+                            <div className="inline-flex flex-wrap justify-end gap-2">
+                              {nav ? (
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(nav.path)}
+                                  className="inline-flex items-center rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                                >
+                                  {nav.label}
+                                </button>
+                              ) : (
+                                <span className="text-slate-400">-</span>
+                              )}
 
-                      let label = '';
-                      let path = '';
-
-                      switch (m.meeting_type) {
-                        case 'patient':
-                          label = 'Hastaya git';
-                          path = `/patients?focusId=${encodeURIComponent(
-                            m.subject_id,
-                          )}`;
-                          break;
-                        case 'trial':
-                          label = 'Denemeye git';
-                          path = `/trials?focusId=${encodeURIComponent(
-                            m.subject_id,
-                          )}`;
-                          break;
-                        case 'reference':
-                          label = 'Referansa git';
-                          path = `/references?focusId=${encodeURIComponent(
-                            m.subject_id,
-                          )}`;
-                          break;
-                        default:
-                          return (
-                            <td
-                              key={col.id}
-                              className="px-3 py-2 text-right text-slate-400"
-                            >
-                              -
-                            </td>
-                          );
+                              {!deleted ? (
+                                <button
+                                  type="button"
+                                  disabled={anyPending}
+                                  onClick={() => handleSoftDeleteMeeting(m)}
+                                  className="inline-flex items-center rounded-md border border-red-200 bg-white px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  Sil
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={anyPending}
+                                  onClick={() => handleRestoreMeeting(m)}
+                                  className="inline-flex items-center rounded-md border border-emerald-200 bg-white px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  Geri Getir
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        );
                       }
-
-                      return (
-                        <td key={col.id} className="px-3 py-2 text-right">
-                          <button
-                            type="button"
-                            onClick={() => navigate(path)}
-                            className="inline-flex items-center rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
-                          >
-                            {label}
-                          </button>
-                        </td>
-                      );
+                      default:
+                        return null;
                     }
-                    default:
-                      return null;
-                  }
-                })}
-              </tr>
-            ))}
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </ResponsiveTableShell>
