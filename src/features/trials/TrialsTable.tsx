@@ -4,13 +4,16 @@
 // - Uses useTablePreferences(userId) for per-user visible columns and sorting.
 // - Supports export (CSV/XLSX) via shared helpers.
 // - Supports focusedId highlighting for deep-links.
+// - Supports soft delete / restore via RPC wrappers in ./api.ts (soft_delete_trials, restore_trials).
+//   * Invalidates TRIALS_QUERY_KEY on success.
 //
-// Patch v2.6 (lead pipeline UI):
-// - ADD: status column (default visible).
-// - Mobile cards show status badge: Aktif / Dönüştü / Kaybedildi.
-// - Export includes status if the column is visible.
+// Patch v2.7 (soft delete actions):
+// - ADD: Row-level soft delete / restore buttons in "İşlemler" column (desktop + mobile cards).
+// - Uses confirm() + optional prompt() for delete reason (sent to RPC as p_reason).
+// - Export continues to exclude "İşlemler" column.
 
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { TrialRow, TrialStatus } from './types';
 import { useTablePreferences } from '../../components/table/useTablePreferences';
 import { TableColumnsControl } from '../../components/table/TableColumnsControl';
@@ -19,6 +22,7 @@ import { useCurrentProfile } from '../auth/useCurrentProfile';
 import { TableExportButtons } from '../../components/table/TableExportButtons';
 import { exportToCsvFile, exportToXlsxFile } from '../../utils/csvUtils';
 import { ResponsiveTableShell } from '../../components/layout/ResponsiveTableShell';
+import { TRIALS_QUERY_KEY, softDeleteTrial, restoreTrial } from './api';
 
 type TrialsTableProps = {
   items: TrialRow[];
@@ -167,6 +171,38 @@ export function TrialsTable({
   const { data: profile } = useCurrentProfile();
   const userId = profile?.id ?? null;
 
+  const queryClient = useQueryClient();
+
+  const [pendingRowId, setPendingRowId] = useState<string | null>(null);
+
+  const softDeleteMutation = useMutation<void, Error, { id: string; reason: string | null }>({
+    mutationFn: async ({ id, reason }) => {
+      setPendingRowId(id);
+      try {
+        await softDeleteTrial(id, reason);
+      } finally {
+        setPendingRowId((prev) => (prev === id ? null : prev));
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TRIALS_QUERY_KEY });
+    },
+  });
+
+  const restoreMutation = useMutation<void, Error, { id: string }>({
+    mutationFn: async ({ id }) => {
+      setPendingRowId(id);
+      try {
+        await restoreTrial(id);
+      } finally {
+        setPendingRowId((prev) => (prev === id ? null : prev));
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TRIALS_QUERY_KEY });
+    },
+  });
+
   const {
     state: prefsState,
     visibleColumns,
@@ -228,6 +264,7 @@ export function TrialsTable({
   const handleExport = (type: 'csv' | 'xlsx') => {
     if (!sortedItems.length) return;
 
+    // Export intentionally excludes row actions.
     const exportableColumns = visibleColumns.filter((c) => c.id !== 'actions');
     if (!exportableColumns.length) return;
 
@@ -275,6 +312,27 @@ export function TrialsTable({
     }
   };
 
+  const handleSoftDeleteClick = (trial: TrialRow) => {
+    if (!trial?.id) return;
+
+    const ok = window.confirm('Bu deneme kaydını silmek (soft delete) istiyor musunuz?');
+    if (!ok) return;
+
+    // Optional reason prompt; empty input is treated as null.
+    const reasonRaw = window.prompt('Silme nedeni (opsiyonel):', '');
+    const reason = (reasonRaw ?? '').trim();
+    softDeleteMutation.mutate({ id: trial.id, reason: reason.length ? reason : null });
+  };
+
+  const handleRestoreClick = (trial: TrialRow) => {
+    if (!trial?.id) return;
+
+    const ok = window.confirm('Bu deneme kaydını geri getirmek istiyor musunuz?');
+    if (!ok) return;
+
+    restoreMutation.mutate({ id: trial.id });
+  };
+
   if (sortedItems.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-500 sm:text-sm">
@@ -286,7 +344,7 @@ export function TrialsTable({
 
   return (
     <div className="space-y-3">
-      {/* Toolbar: sol sayım, sağda filtre slotu + sütun kontrolü + export */}
+      {/* Toolbar: left count; right: optional slot + columns + export */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[11px] text-slate-500">
           Toplam <span className="font-semibold">{sortedItems.length}</span>{' '}
@@ -306,10 +364,15 @@ export function TrialsTable({
         </div>
       </div>
 
-      {/* Mobile: card list (md altı) */}
+      {/* Mobile: card list (md and down) */}
       <div className="space-y-3 md:hidden">
         {sortedItems.map((t) => {
           const isFocused = focusedId && t.id === focusedId;
+          const isDeleted = (t.deleted_at ?? null) != null;
+          const isBusy =
+            pendingRowId === t.id ||
+            softDeleteMutation.isPending ||
+            restoreMutation.isPending;
 
           const noteText =
             t.note && t.note.length > 100 ? `${t.note.slice(0, 100)}…` : t.note ?? '';
@@ -331,6 +394,7 @@ export function TrialsTable({
                   </p>
                   <p className="mt-0.5 text-[11px] text-slate-500">
                     Kayıt: {formatShortDate(t.created_at)}
+                    {isDeleted ? ' · (Silinmiş)' : ''}
                   </p>
                 </div>
 
@@ -388,7 +452,29 @@ export function TrialsTable({
                 </div>
               )}
 
-              <div className="mt-3 flex justify-end">
+              <div className="mt-3 flex items-center justify-end gap-2">
+                {isDeleted ? (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => handleRestoreClick(t)}
+                    className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    title="Silinmiş kaydı geri getir"
+                  >
+                    Geri getir
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => handleSoftDeleteClick(t)}
+                    className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-medium text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    title="Kayıt soft delete yapılır"
+                  >
+                    Sil
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => onSelectRow(t)}
@@ -439,6 +525,11 @@ export function TrialsTable({
             <tbody>
               {sortedItems.map((t) => {
                 const isFocused = focusedId && t.id === focusedId;
+                const isDeleted = (t.deleted_at ?? null) != null;
+                const isBusy =
+                  pendingRowId === t.id ||
+                  softDeleteMutation.isPending ||
+                  restoreMutation.isPending;
 
                 return (
                   <tr
@@ -457,6 +548,11 @@ export function TrialsTable({
                               className="whitespace-nowrap px-4 py-2 text-slate-700"
                             >
                               {formatDate(t.created_at)}
+                              {isDeleted ? (
+                                <span className="ml-2 text-[11px] text-rose-700">
+                                  (Silinmiş)
+                                </span>
+                              ) : null}
                             </td>
                           );
                         case 'status':
@@ -527,13 +623,37 @@ export function TrialsTable({
                               key={col.id}
                               className="whitespace-nowrap px-4 py-2 text-right"
                             >
-                              <button
-                                type="button"
-                                onClick={() => onSelectRow(t)}
-                                className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                              >
-                                Detay
-                              </button>
+                              <div className="inline-flex items-center gap-2">
+                                {isDeleted ? (
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => handleRestoreClick(t)}
+                                    className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                    title="Silinmiş kaydı geri getir"
+                                  >
+                                    Geri getir
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => handleSoftDeleteClick(t)}
+                                    className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                    title="Kayıt soft delete yapılır"
+                                  >
+                                    Sil
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectRow(t)}
+                                  className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                >
+                                  Detay
+                                </button>
+                              </div>
                             </td>
                           );
                         default:
