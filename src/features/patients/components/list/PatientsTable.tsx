@@ -1,17 +1,13 @@
 // src/features/patients/components/list/PatientsTable.tsx
 // Summary: Patients listing UI with responsive layout: mobile cards + desktop table.
 // Integrations:
-// - Uses useTablePreferences for per-user persistence of:
-//    * column visibility
-//    * sorting
-//    * table-level UI toggles (e.g., show/hide SoftDeleteModeFilter on PatientsPage)
+// - Uses useTablePreferences for per-user persistence of column visibility/sorting/ui toggles.
 // - Desktop toolbar includes TableColumnsControl + TableExportButtons.
 // - Export uses csvUtils helpers and respects visible columns + current sorted order.
 //
-// Patch v2.3 (soft delete filter toggle wiring):
-// - Adds a "Görünüm" toggle in the Columns dropdown: "Silinenler filtresi".
-// - Toggle persists via useTablePreferences.ui.showSoftDeleteFilter.
-// - Aligns tableId to "patients" so PatientsPage and PatientsTable share the same preference bucket.
+// Soft delete UI:
+// - If onDeletePatient is provided, "Sil" button is shown for active rows.
+// - If onRestorePatient is provided, "Geri Al" button is shown for deleted rows.
 
 import { useMemo } from 'react';
 import type { PatientRow } from '../../types';
@@ -21,20 +17,23 @@ import { TableColumnsControl } from '../../../../components/table/TableColumnsCo
 import type { TableColumnDef } from '../../../../components/table/tableTypes';
 import { useCurrentProfile } from '../../../auth/useCurrentProfile';
 import { TableExportButtons } from '../../../../components/table/TableExportButtons';
-import {
-  exportToCsvFile,
-  exportToXlsxFile,
-} from '../../../../utils/csvUtils';
+import { exportToCsvFile, exportToXlsxFile } from '../../../../utils/csvUtils';
 
 type PatientsTableProps = {
   patients: PatientRow[];
   onSelectPatient: (patient: PatientRow) => void;
+
   /**
    * Optional soft-delete handler.
-   * If provided, a "Sil" button is rendered and this callback is invoked
-   * only after user confirmation.
+   * If provided, a "Sil" button is rendered for ACTIVE rows only.
    */
   onDeletePatient?: (patient: PatientRow) => void;
+
+  /**
+   * Optional restore handler.
+   * If provided, a "Geri Al" button is rendered for DELETED rows only.
+   */
+  onRestorePatient?: (patient: PatientRow) => void;
 };
 
 type PatientTableColumnId =
@@ -54,89 +53,18 @@ type PatientTableColumnId =
 const PATIENT_COLUMNS: TableColumnDef<
   PatientRow & { _colId?: PatientTableColumnId }
 >[] = [
-  {
-    id: 'created_at',
-    label: 'Alış (Kayıt)',
-    sortable: true,
-    isDefaultVisible: true,
-    accessor: (p) => p.created_at ?? null,
-  },
-  {
-    id: 'full_name',
-    label: 'Ad Soyad',
-    sortable: true,
-    isDefaultVisible: true,
-    accessor: (p) => p.full_name ?? '',
-  },
-  {
-    id: 'national_id',
-    label: 'TC Kimlik No',
-    sortable: false,
-    isDefaultVisible: true,
-    accessor: (p) => p.national_id ?? '',
-  },
-  {
-    id: 'phone',
-    label: 'Telefon',
-    sortable: false,
-    isDefaultVisible: true,
-    accessor: (p) => p.phone ?? '',
-  },
-  {
-    id: 'device',
-    label: 'Cihaz Modeli',
-    sortable: false,
-    isDefaultVisible: true,
-    accessor: (p) => getDeviceLabel(p),
-  },
-  {
-    id: 'ear',
-    label: 'Kulak',
-    sortable: false,
-    isDefaultVisible: true,
-    accessor: (p) => getDeviceEarLabel(p),
-  },
-  {
-    id: 'sale_total_amount',
-    label: 'Toplam Satış',
-    sortable: true,
-    isDefaultVisible: true,
-    accessor: (p) => p.sale_total_amount ?? 0,
-  },
-  {
-    id: 'satisfaction_10',
-    label: 'Memnuniyet (1–10)',
-    sortable: true,
-    isDefaultVisible: true,
-    accessor: (p) => p.satisfaction_10 ?? -1,
-  },
-  {
-    id: 'last_visit_at',
-    label: 'Son Görüşme',
-    sortable: true,
-    isDefaultVisible: true,
-    accessor: (p) => p.last_visit_at ?? null,
-  },
-  {
-    id: 'sgk',
-    label: 'SGK',
-    sortable: true,
-    isDefaultVisible: true,
-    accessor: (p) => (p.sgk_flag ? 1 : 0),
-  },
-  {
-    id: 'invoice',
-    label: 'Fatura',
-    sortable: true,
-    isDefaultVisible: true,
-    accessor: (p) => (p.invoice_issued ? 1 : 0),
-  },
-  {
-    id: 'actions',
-    label: 'İşlemler',
-    sortable: false,
-    isDefaultVisible: true,
-  },
+  { id: 'created_at', label: 'Alış (Kayıt)', sortable: true, isDefaultVisible: true, accessor: (p) => p.created_at ?? null },
+  { id: 'full_name', label: 'Ad Soyad', sortable: true, isDefaultVisible: true, accessor: (p) => p.full_name ?? '' },
+  { id: 'national_id', label: 'TC Kimlik No', sortable: false, isDefaultVisible: true, accessor: (p) => p.national_id ?? '' },
+  { id: 'phone', label: 'Telefon', sortable: false, isDefaultVisible: true, accessor: (p) => p.phone ?? '' },
+  { id: 'device', label: 'Cihaz Modeli', sortable: false, isDefaultVisible: true, accessor: (p) => getDeviceLabel(p) },
+  { id: 'ear', label: 'Kulak', sortable: false, isDefaultVisible: true, accessor: (p) => getDeviceEarLabel(p) },
+  { id: 'sale_total_amount', label: 'Toplam Satış', sortable: true, isDefaultVisible: true, accessor: (p) => p.sale_total_amount ?? 0 },
+  { id: 'satisfaction_10', label: 'Memnuniyet (1–10)', sortable: true, isDefaultVisible: true, accessor: (p) => p.satisfaction_10 ?? -1 },
+  { id: 'last_visit_at', label: 'Son Görüşme', sortable: true, isDefaultVisible: true, accessor: (p) => p.last_visit_at ?? null },
+  { id: 'sgk', label: 'SGK', sortable: true, isDefaultVisible: true, accessor: (p) => (p.sgk_flag ? 1 : 0) },
+  { id: 'invoice', label: 'Fatura', sortable: true, isDefaultVisible: true, accessor: (p) => (p.invoice_issued ? 1 : 0) },
+  { id: 'actions', label: 'İşlemler', sortable: false, isDefaultVisible: true },
 ];
 
 function formatDate(value: string | null): string {
@@ -155,18 +83,13 @@ function formatSgkWarning(p: PatientRow): string | null {
 
   if (!needsPrescription && !needsRecording) return null;
 
-  if (needsPrescription && needsRecording) {
-    return 'Reçete ve sistem kaydı eksik';
-  }
+  if (needsPrescription && needsRecording) return 'Reçete ve sistem kaydı eksik';
   if (needsPrescription) return 'Reçete bekleniyor';
   return 'Sisteme işlenecek';
 }
 
 function formatInvoiceWarning(p: PatientRow): string | null {
-  // Eski kayıtlarla uyum için sadece "explicit false" durumda uyarı gösteriyoruz.
-  if (p.invoice_issued === false) {
-    return 'Fatura henüz kesilmedi';
-  }
+  if (p.invoice_issued === false) return 'Fatura henüz kesilmedi';
   return null;
 }
 
@@ -203,6 +126,7 @@ export function PatientsTable({
   patients,
   onSelectPatient,
   onDeletePatient,
+  onRestorePatient,
 }: PatientsTableProps) {
   const { data: profile } = useCurrentProfile();
   const userId = profile?.id ?? null;
@@ -215,14 +139,23 @@ export function PatientsTable({
         `Silme işlemi, hastayı listeden kaldırır ve soft delete olarak işaretler. ` +
         `Gerekirse daha sonra geri alınabilir.`,
     );
-
     if (!confirmed) return;
 
     onDeletePatient(patient);
   };
 
-  // IMPORTANT:
-  // Use the same tableId as PatientsPage so the UI toggle ("Silinenler filtresi") is shared.
+  const handleRestoreClick = (patient: PatientRow) => {
+    if (!onRestorePatient) return;
+
+    const confirmed = window.confirm(
+      `Bu hastayı geri almak istediğinizden emin misiniz?\n\n` +
+        `Geri alma işlemi, hastayı tekrar aktif listelere dahil eder.`,
+    );
+    if (!confirmed) return;
+
+    onRestorePatient(patient);
+  };
+
   const {
     state: prefsState,
     visibleColumns,
@@ -248,24 +181,20 @@ export function PatientsTable({
     const col = PATIENT_COLUMNS.find((c) => c.id === prefsState.sortBy);
     if (!col || !col.sortable) return patients;
 
-    const accessor =
-      col.accessor ?? ((row: PatientRow) => (row as any)[col.id]);
+    const accessor = col.accessor ?? ((row: PatientRow) => (row as any)[col.id]);
 
     const sorted = [...patients];
     sorted.sort((a, b) => {
       const va = accessor(a);
       const vb = accessor(b);
 
-      // Null/undefined en sona
       const aNull = va == null;
       const bNull = vb == null;
       if (aNull && bNull) return 0;
       if (aNull) return 1;
       if (bNull) return -1;
 
-      // Date string varsa Date olarak sort et
       if (typeof va === 'string' && typeof vb === 'string') {
-        // Tarih gibi ise Date.parse ile, değilse normal string compare
         const aTime = Date.parse(va);
         const bTime = Date.parse(vb);
         if (!Number.isNaN(aTime) && !Number.isNaN(bTime)) {
@@ -284,7 +213,6 @@ export function PatientsTable({
         return 0;
       }
 
-      // Boolean / diğer tipler için fallback
       const av = va as any;
       const bv = vb as any;
       if (av < bv) return prefsState.sortDir === 'asc' ? -1 : 1;
@@ -298,11 +226,7 @@ export function PatientsTable({
   const handleExport = (type: 'csv' | 'xlsx') => {
     if (sortedPatients.length === 0) return;
 
-    // "İşlemler" kolonunu export'a dahil etmiyoruz
-    const exportableColumns = visibleColumns.filter(
-      (col) => col.id !== 'actions',
-    );
-
+    const exportableColumns = visibleColumns.filter((col) => col.id !== 'actions');
     if (exportableColumns.length === 0) return;
 
     const headers = exportableColumns.map((col) => col.label);
@@ -344,17 +268,9 @@ export function PatientsTable({
     const baseFileName = 'patients_export';
 
     if (type === 'csv') {
-      exportToCsvFile({
-        fileName: baseFileName,
-        headers,
-        rows: rowsForExport,
-      });
+      exportToCsvFile({ fileName: baseFileName, headers, rows: rowsForExport });
     } else {
-      exportToXlsxFile({
-        fileName: baseFileName,
-        headers,
-        rows: rowsForExport,
-      });
+      exportToXlsxFile({ fileName: baseFileName, headers, rows: rowsForExport });
     }
   };
 
@@ -369,12 +285,13 @@ export function PatientsTable({
 
   return (
     <div className="space-y-3">
-      {/* Mobile: card list (md altı) */}
       <div className="space-y-3 md:hidden">
         {sortedPatients.map((p) => {
+          const isDeleted = !!p.deleted_at;
           const sgkWarning = formatSgkWarning(p);
           const invoiceWarning = formatInvoiceWarning(p);
           const hasAnyWarning = !!sgkWarning || !!invoiceWarning;
+
           const deviceLabel = getDeviceLabel(p);
           const deviceEarLabel = getDeviceEarLabel(p);
           const satisfactionDisplay =
@@ -387,7 +304,9 @@ export function PatientsTable({
                 'rounded-lg border px-3 py-3 shadow-sm ' +
                 (hasAnyWarning
                   ? 'border-amber-200 bg-amber-50/60'
-                  : 'border-slate-200 bg-white')
+                  : isDeleted
+                    ? 'border-slate-200 bg-slate-50'
+                    : 'border-slate-200 bg-white')
               }
             >
               <div className="flex items-start justify-between gap-2">
@@ -401,7 +320,13 @@ export function PatientsTable({
                       ? ` · Son görüşme: ${formatDate(p.last_visit_at)}`
                       : ''}
                   </p>
+                  {isDeleted && (
+                    <p className="mt-1 text-[11px] font-medium text-amber-800">
+                      Silinmiş kayıt
+                    </p>
+                  )}
                 </div>
+
                 <div className="flex flex-col items-end gap-1">
                   <button
                     type="button"
@@ -410,7 +335,8 @@ export function PatientsTable({
                   >
                     Detay
                   </button>
-                  {onDeletePatient && (
+
+                  {!isDeleted && onDeletePatient && (
                     <button
                       type="button"
                       onClick={() => handleDeleteClick(p)}
@@ -419,13 +345,19 @@ export function PatientsTable({
                       Sil
                     </button>
                   )}
+
+                  {isDeleted && onRestorePatient && (
+                    <button
+                      type="button"
+                      onClick={() => handleRestoreClick(p)}
+                      className="inline-flex items-center rounded-md border border-emerald-200 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50"
+                    >
+                      Geri Al
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Mobile details grid:
-                  - 1 column on very narrow phones
-                  - 2 columns starting from sm breakpoint (>=640px)
-                */}
               <div className="mt-2 grid grid-cols-1 gap-2 text-[11px] text-slate-700 sm:grid-cols-2">
                 <div>
                   <span className="block text-[10px] uppercase text-slate-400">
@@ -449,9 +381,7 @@ export function PatientsTable({
                   <span className="block text-[10px] uppercase text-slate-400">
                     Cihaz
                   </span>
-                  <span className="line-clamp-2 font-medium">
-                    {deviceLabel}
-                  </span>
+                  <span className="line-clamp-2 font-medium">{deviceLabel}</span>
                 </div>
                 <div>
                   <span className="block text-[10px] uppercase text-slate-400">
@@ -519,14 +449,11 @@ export function PatientsTable({
         })}
       </div>
 
-      {/* Desktop: classic table (md ve üzeri) */}
       <ResponsiveTableShell className="hidden md:block">
-        {/* Toolbar: left count + right column control + export buttons */}
         <div className="flex items-center justify-between px-3 py-2 sm:px-4 sm:py-2.5">
           <p className="text-[11px] text-slate-500 sm:text-xs">
-            Toplam{' '}
-            <span className="font-semibold">{sortedPatients.length}</span> hasta
-            kaydı var.
+            Toplam <span className="font-semibold">{sortedPatients.length}</span>{' '}
+            hasta kaydı var.
           </p>
           <div className="flex items-center gap-2">
             <TableColumnsControl
@@ -547,8 +474,6 @@ export function PatientsTable({
             <tr>
               {visibleColumns.map((col) => {
                 const isSorted = prefsState.sortBy === col.id;
-                const showSortIcon = col.sortable;
-
                 const alignClass =
                   col.id === 'sale_total_amount'
                     ? 'text-right'
@@ -568,7 +493,7 @@ export function PatientsTable({
                   >
                     <span className="inline-flex items-center gap-1">
                       {col.label}
-                      {showSortIcon && isSorted && (
+                      {col.sortable && isSorted && (
                         <span className="text-[10px]">
                           {prefsState.sortDir === 'asc' ? '▲' : '▼'}
                         </span>
@@ -579,8 +504,10 @@ export function PatientsTable({
               })}
             </tr>
           </thead>
+
           <tbody>
             {sortedPatients.map((p) => {
+              const isDeleted = !!p.deleted_at;
               const sgkWarning = formatSgkWarning(p);
               const invoiceWarning = formatInvoiceWarning(p);
               const hasAnyWarning = !!sgkWarning || !!invoiceWarning;
@@ -594,7 +521,8 @@ export function PatientsTable({
                   key={p.id}
                   className={
                     'border-t border-slate-100 ' +
-                    (hasAnyWarning ? 'bg-amber-50/40' : '')
+                    (hasAnyWarning ? 'bg-amber-50/40 ' : '') +
+                    (isDeleted ? 'opacity-80 ' : '')
                   }
                 >
                   {visibleColumns.map((col) => {
@@ -614,7 +542,14 @@ export function PatientsTable({
                             key={col.id}
                             className="max-w-[220px] truncate px-3 py-2 text-slate-800 sm:px-4 sm:py-2.5"
                           >
-                            {p.full_name}
+                            <div className="flex items-center gap-2">
+                              <span className="truncate">{p.full_name}</span>
+                              {isDeleted && (
+                                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                                  Silinmiş
+                                </span>
+                              )}
+                            </div>
                           </td>
                         );
                       case 'national_id':
@@ -703,11 +638,6 @@ export function PatientsTable({
                                   {sgkWarning}
                                 </span>
                               )}
-                              {invoiceWarning && (
-                                <span className="text-[10px] font-medium text-amber-700">
-                                  {invoiceWarning}
-                                </span>
-                              )}
                             </div>
                           </td>
                         );
@@ -732,6 +662,11 @@ export function PatientsTable({
                                   {formatDate(p.invoice_issued_at)}
                                 </span>
                               )}
+                              {invoiceWarning && (
+                                <span className="text-[10px] font-medium text-amber-700">
+                                  {invoiceWarning}
+                                </span>
+                              )}
                             </div>
                           </td>
                         );
@@ -749,13 +684,24 @@ export function PatientsTable({
                               >
                                 Detay
                               </button>
-                              {onDeletePatient && (
+
+                              {!isDeleted && onDeletePatient && (
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteClick(p)}
                                   className="inline-flex items-center rounded-md border border-red-200 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
                                 >
                                   Sil
+                                </button>
+                              )}
+
+                              {isDeleted && onRestorePatient && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRestoreClick(p)}
+                                  className="inline-flex items-center rounded-md border border-emerald-200 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                                >
+                                  Geri Al
                                 </button>
                               )}
                             </div>
