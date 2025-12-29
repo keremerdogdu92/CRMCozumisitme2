@@ -1,12 +1,17 @@
 // src/features/patients/components/detail/PatientDetailDrawer.tsx
-// Tabbed patient detail drawer using the shared SideDrawer shell and per-tab components.
+// Summary: Tabbed patient detail drawer using the shared SideDrawer shell and per-tab components.
+// Integrations:
+// - SGK save is delegated to parent via onSave (PatientsPage).
+// - Invoice updates use updatePatientInvoiceStatus (DB-backed).
+// - Meetings tab reads patient meetings via meetings/api.
+// - Soft delete + restore uses DB RPC wrappers (softDeletePatient / restorePatient).
+//
+// Security notes:
+// - Do NOT directly UPDATE patients.deleted_at from the client.
+// - Use DB RPCs so org scoping + audit triggers are enforced server-side.
 
 import { useEffect, useState } from 'react';
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PatientRow } from '../../types';
 import { SideDrawer } from '../../../../components/layout/SideDrawer';
 import { PatientDetailInfoTab } from './PatientDetailInfoTab';
@@ -15,14 +20,13 @@ import { PatientDetailDevicesTab } from './PatientDetailDevicesTab';
 import { PatientDetailSgkInvoiceTab } from './PatientDetailSgkInvoiceTab';
 import { PatientDetailAccessoriesTab } from './PatientDetailAccessoriesTab';
 import { PatientDetailBatteryPrescriptionsTab } from './PatientDetailBatteryPrescriptionsTab';
-import { PATIENTS_QUERY_KEY } from '../../api/api.core';
+import { PATIENTS_QUERY_KEY, restorePatient, softDeletePatient } from '../../api';
 import { updatePatientInvoiceStatus } from '../../api/api.patients.update';
 import type { MeetingRow } from '../../../meetings/types';
 import {
   MEETINGS_BY_PATIENT_QUERY_KEY,
   fetchMeetingsByPatientId,
 } from '../../../meetings/api';
-import { supabaseClient } from '../../../../utils/supabaseClient';
 
 type PatientDetailTabId =
   | 'info'
@@ -48,8 +52,6 @@ type PatientDetailDrawerProps = {
   isSaving: boolean;
   errorMsg?: string;
 
-  // Optional: allow caller to open on a specific tab and with the
-  // senet plan form expanded.
   initialTab?: PatientDetailTabId;
   initialShowPlanForm?: boolean;
 };
@@ -80,8 +82,7 @@ export function PatientDetailDrawer({
   const [sgkPrescriptionNo, setSgkPrescriptionNo] = useState<string>(
     patient.sgk_prescription_no ?? '',
   );
-  const [activeTab, setActiveTab] =
-    useState<PatientDetailTabId>(initialTab);
+  const [activeTab, setActiveTab] = useState<PatientDetailTabId>(initialTab);
 
   // Sisteme işlendiği tarih (timestamptz) – DB’den gelen değer.
   const [sgkRecordedToSystemAt, setSgkRecordedToSystemAt] = useState<
@@ -91,7 +92,7 @@ export function PatientDetailDrawer({
     ((patient as any).sgk_recorded_to_system_at as string | null) ?? null,
   );
 
-  // Invoice state (DB-backed) – burada tutuluyor.
+  // Invoice state (DB-backed)
   const [invoiceIssued, setInvoiceIssued] = useState<boolean>(
     patient.invoice_issued === true,
   );
@@ -103,10 +104,7 @@ export function PatientDetailDrawer({
   const queryClient = useQueryClient();
 
   const invoiceMutation = useMutation({
-    mutationFn: (params: {
-      invoiceIssued: boolean;
-      invoiceIssuedAt: string | null;
-    }) =>
+    mutationFn: (params: { invoiceIssued: boolean; invoiceIssuedAt: string | null }) =>
       updatePatientInvoiceStatus({
         id: patient.id,
         invoiceIssued: params.invoiceIssued,
@@ -120,9 +118,7 @@ export function PatientDetailDrawer({
     },
     onError: (err) => {
       setInvoiceIssued(patient.invoice_issued === true);
-      setInvoiceIssuedAt(
-        (patient.invoice_issued_at as string | null) ?? null,
-      );
+      setInvoiceIssuedAt((patient.invoice_issued_at as string | null) ?? null);
 
       const message =
         err instanceof Error
@@ -132,50 +128,9 @@ export function PatientDetailDrawer({
     },
   });
 
-  // Soft delete (hasta silme) mutasyonu.
-  const deletePatientMutation = useMutation({
-    // Arg: patientId
-    mutationFn: async (patientId: string) => {
-      const { data: userData, error: userError } =
-        await supabaseClient.auth.getUser();
-
-      if (userError) {
-        console.error(
-          'STEP_DELETE_USER: Failed to get current user for patient delete',
-          userError,
-        );
-        throw new Error(
-          'Kullanıcı bilgisi alınırken hata oluştu. Lütfen tekrar deneyin.',
-        );
-      }
-
-      const user = userData.user;
-      if (!user) {
-        throw new Error(
-          'Oturum bulunamadı. Tekrar giriş yapıp silme işlemini deneyin.',
-        );
-      }
-
-      const nowIso = new Date().toISOString();
-
-      const { error } = await supabaseClient
-        .from('patients')
-        .update({
-          deleted_at: nowIso,
-          deleted_by: user.id,
-          delete_reason: 'manual_soft_delete',
-        })
-        .eq('id', patientId);
-
-      if (error) {
-        console.error(
-          'STEP_DELETE_PATIENT: Failed to soft-delete patient',
-          error,
-        );
-        throw new Error(
-          'Hasta silinirken bir hata oluştu. Lütfen tekrar deneyin.',
-        );
-      }
+  const softDeleteMutation = useMutation({
+    mutationFn: async () => {
+      await softDeletePatient(patient.id, 'manual_soft_delete');
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
@@ -191,9 +146,23 @@ export function PatientDetailDrawer({
     },
   });
 
-  // Drawer her yeni hasta için (veya yeniden açıldığında) state'i resetler.
-  // Backend'den gelen küçük güncellemeler (ör. hızlı fatura kaydı) sırasında
-  // aktif sekme ve lokal SGK formu artık sıfırlanmaz.
+  const restoreMutation = useMutation({
+    mutationFn: async () => {
+      await restorePatient(patient.id);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
+    },
+    onError: (err) => {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Hasta geri alınırken beklenmeyen bir hata oluştu.';
+      // eslint-disable-next-line no-alert
+      alert(message);
+    },
+  });
+
   useEffect(() => {
     if (!open) return;
 
@@ -204,9 +173,7 @@ export function PatientDetailDrawer({
     setActiveTab(initialTab);
 
     setInvoiceIssued(patient.invoice_issued === true);
-    setInvoiceIssuedAt(
-      (patient.invoice_issued_at as string | null) ?? null,
-    );
+    setInvoiceIssuedAt((patient.invoice_issued_at as string | null) ?? null);
     setInvoiceError(null);
 
     setSgkRecordedToSystemAt(
@@ -235,8 +202,13 @@ export function PatientDetailDrawer({
   };
 
   const handleSoftDeletePatient = (row: PatientRow) => {
-    if (deletePatientMutation.isPending) return;
-    deletePatientMutation.mutate(row.id);
+    if (softDeleteMutation.isPending) return;
+    softDeleteMutation.mutate();
+  };
+
+  const handleRestorePatient = (row: PatientRow) => {
+    if (restoreMutation.isPending) return;
+    restoreMutation.mutate();
   };
 
   const tabs: { id: PatientDetailTabId; label: string }[] = [
@@ -250,7 +222,6 @@ export function PatientDetailDrawer({
     { id: 'audiogram', label: 'Audiogram' },
   ];
 
-  // Bu hastaya bağlı görüşmeler (meeting_type = 'patient')
   const {
     data: meetings = [],
     isLoading: isMeetingsLoading,
@@ -292,7 +263,6 @@ export function PatientDetailDrawer({
       subtitle={patient.full_name}
       footer={footer}
     >
-      {/* Tab bar */}
       <div className="border-b border-slate-200 pb-2">
         <div className="flex flex-wrap gap-1">
           {tabs.map((tab) => {
@@ -316,12 +286,14 @@ export function PatientDetailDrawer({
         </div>
       </div>
 
-      {/* Tab contents */}
       <div className="mt-4 space-y-4 text-sm">
         {activeTab === 'info' && (
           <PatientDetailInfoTab
             patient={patient}
             onDeletePatient={handleSoftDeletePatient}
+            onRestorePatient={handleRestorePatient}
+            isDeleting={softDeleteMutation.isPending}
+            isRestoring={restoreMutation.isPending}
           />
         )}
 
@@ -353,9 +325,7 @@ export function PatientDetailDrawer({
           />
         )}
 
-        {activeTab === 'devices' && (
-          <PatientDetailDevicesTab patient={patient} />
-        )}
+        {activeTab === 'devices' && <PatientDetailDevicesTab patient={patient} />}
 
         {activeTab === 'meetings' && (
           <section className="space-y-2">
@@ -364,9 +334,7 @@ export function PatientDetailDrawer({
             </h4>
 
             {isMeetingsLoading && (
-              <p className="text-xs text-slate-500">
-                Görüşmeler yükleniyor...
-              </p>
+              <p className="text-xs text-slate-500">Görüşmeler yükleniyor...</p>
             )}
 
             {isMeetingsError && (
@@ -376,81 +344,69 @@ export function PatientDetailDrawer({
               </p>
             )}
 
-            {!isMeetingsLoading &&
-              !isMeetingsError &&
-              typedMeetings.length === 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs text-slate-500">
-                    Bu hasta için kayıtlı görüşme bulunmuyor.
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    Yeni görüşme eklemek için üst menüden{' '}
-                    <span className="font-semibold">Görüşmeler</span>{' '}
-                    ekranına gidip, görüşme tipi olarak{' '}
-                    <span className="font-semibold">Hasta</span> seçerek
-                    ilgili kişiyi seçebilirsiniz.
-                  </p>
-                </div>
-              )}
+            {!isMeetingsLoading && !isMeetingsError && typedMeetings.length === 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-slate-500">
+                  Bu hasta için kayıtlı görüşme bulunmuyor.
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  Yeni görüşme eklemek için üst menüden{' '}
+                  <span className="font-semibold">Görüşmeler</span> ekranına gidip,
+                  görüşme tipi olarak <span className="font-semibold">Hasta</span>{' '}
+                  seçerek ilgili kişiyi seçebilirsiniz.
+                </p>
+              </div>
+            )}
 
-            {!isMeetingsLoading &&
-              !isMeetingsError &&
-              typedMeetings.length > 0 && (
-                <div className="space-y-2">
-                  <table className="min-w-full border border-slate-200 text-[11px]">
-                    <thead className="bg-slate-50 text-slate-600">
-                      <tr>
-                        <th className="px-2 py-1 text-left font-medium">
-                          Tarih
-                        </th>
-                        <th className="px-2 py-1 text-left font-medium">
-                          Başlık
-                        </th>
-                        <th className="px-2 py-1 text-left font-medium">
-                          Sonraki Tarih
-                        </th>
-                        <th className="px-2 py-1 text-left font-medium">
-                          Memnuniyet
-                        </th>
-                        <th className="px-2 py-1 text-left font-medium">
-                          Not
-                        </th>
+            {!isMeetingsLoading && !isMeetingsError && typedMeetings.length > 0 && (
+              <div className="space-y-2">
+                <table className="min-w-full border border-slate-200 text-[11px]">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="px-2 py-1 text-left font-medium">Tarih</th>
+                      <th className="px-2 py-1 text-left font-medium">Başlık</th>
+                      <th className="px-2 py-1 text-left font-medium">
+                        Sonraki Tarih
+                      </th>
+                      <th className="px-2 py-1 text-left font-medium">
+                        Memnuniyet
+                      </th>
+                      <th className="px-2 py-1 text-left font-medium">Not</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {typedMeetings.map((m) => (
+                      <tr
+                        key={m.id}
+                        className="border-t border-slate-100 align-top"
+                      >
+                        <td className="px-2 py-1 text-slate-800">
+                          {formatDate(m.at)}
+                        </td>
+                        <td className="px-2 py-1 text-slate-800">
+                          {m.subject ?? '-'}
+                        </td>
+                        <td className="px-2 py-1 text-slate-800">
+                          {formatDate(m.next_at)}
+                        </td>
+                        <td className="px-2 py-1 text-slate-800">
+                          {m.satisfaction_10 ?? '-'}
+                        </td>
+                        <td className="px-2 py-1 text-slate-600">
+                          {m.note ? m.note.slice(0, 160) : '-'}
+                          {m.note && m.note.length > 160 ? '…' : ''}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {typedMeetings.map((m) => (
-                        <tr
-                          key={m.id}
-                          className="border-t border-slate-100 align-top"
-                        >
-                          <td className="px-2 py-1 text-slate-800">
-                            {formatDate(m.at)}
-                          </td>
-                          <td className="px-2 py-1 text-slate-800">
-                            {m.subject ?? '-'}
-                          </td>
-                          <td className="px-2 py-1 text-slate-800">
-                            {formatDate(m.next_at)}
-                          </td>
-                          <td className="px-2 py-1 text-slate-800">
-                            {m.satisfaction_10 ?? '-'}
-                          </td>
-                          <td className="px-2 py-1 text-slate-600">
-                            {m.note ? m.note.slice(0, 160) : '-'}
-                            {m.note && m.note.length > 160 ? '…' : ''}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <p className="text-[11px] text-slate-400">
-                    Yeni görüşme eklemek için{' '}
-                    <span className="font-semibold">Görüşmeler</span> ana
-                    ekranını kullanın. Bu sekme sadece ilgili hasta
-                    görüşmelerini görüntüler.
-                  </p>
-                </div>
-              )}
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-[11px] text-slate-400">
+                  Yeni görüşme eklemek için <span className="font-semibold">Görüşmeler</span>{' '}
+                  ana ekranını kullanın. Bu sekme sadece ilgili hasta görüşmelerini
+                  görüntüler.
+                </p>
+              </div>
+            )}
           </section>
         )}
 
@@ -463,10 +419,7 @@ export function PatientDetailDrawer({
         )}
 
         {activeTab === 'batteryPrescriptions' && (
-          <PatientDetailBatteryPrescriptionsTab
-            patientId={patient.id}
-            open={open}
-          />
+          <PatientDetailBatteryPrescriptionsTab patientId={patient.id} open={open} />
         )}
 
         {activeTab === 'audiogram' && (
@@ -475,9 +428,9 @@ export function PatientDetailDrawer({
               Audiogram
             </h4>
             <p className="text-xs text-slate-500">
-              Audiogram sonuçları ve işitme testleri bu sekmede tutulacak.
-              İleride grafikli bir görünüm ve &quot;önce / sonra&quot;
-              karşılaştırma seçenekleri eklenebilir.
+              Audiogram sonuçları ve işitme testleri bu sekmede tutulacak. İleride
+              grafikli bir görünüm ve &quot;önce / sonra&quot; karşılaştırma
+              seçenekleri eklenebilir.
             </p>
           </section>
         )}
