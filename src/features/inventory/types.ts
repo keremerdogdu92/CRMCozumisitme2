@@ -1,5 +1,5 @@
 // src/features/inventory/types.ts
-// Shared types for the Inventory (stok) feature.
+// Summary: Shared types for the Inventory (stok) feature.
 
 export type InventoryItemType = 'hearing_aid' | 'charger';
 
@@ -41,10 +41,19 @@ export type InventoryItemRow = {
   sold_at: string | null;
   /** Resolved from patients.full_name via sold_patient_id; null if not sold or not found. */
   sold_patient_name: string | null;
+
   created_at: string;
   updated_at: string;
+
   /** Soft delete timestamp; null if aktif satır. */
   deleted_at: string | null;
+
+  /**
+   * Soft delete metadata (optional).
+   * These fields may be null depending on DB state and row history.
+   */
+  deleted_by: string | null;
+  delete_reason: string | null;
 };
 
 /**
