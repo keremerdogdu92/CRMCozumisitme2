@@ -1,13 +1,14 @@
 // src/components/table/useTablePreferences.ts
 // Summary: Manages per-table column visibility, sorting, and UI toggle preferences (with localStorage).
 // Integrations:
-// - Used by feature tables to persist column visibility and sorting.
-// - Also supports UI toggles (e.g., show/hide SoftDeleteModeFilter) stored under state.ui.
+// - Used by feature tables to persist column visibility, sorting, and optional UI toggles.
+// - UI toggles live under state.ui (e.g., show/hide SoftDeleteModeFilter on page-level toolbars).
 //
-// Patch v2.2:
-// - ADD: state.ui to persist table-level UI toggles.
-// - ADD: isUiFlagEnabled / toggleUiFlag helpers.
-// - CHANGE: Preserve unknown saved column keys (do not wipe prefs if columns list is empty or changes).
+// Patch v2.3:
+// - FIX: Make updates resilient when multiple components use the same tableId/userId storage key.
+//        (Reads latest localStorage state before applying mutations, and listens to storage events.)
+// - KEEP: state.ui support for table-level UI toggles.
+// - KEEP: Preserve unknown saved column keys (do not wipe prefs if columns list changes).
 
 import { useEffect, useMemo, useState } from 'react';
 import type { SortDirection, TableColumnDef } from './tableTypes';
@@ -98,6 +99,14 @@ function loadInitialState<TRow>(
   };
 }
 
+function readLatestOrFallback(
+  storageKey: string,
+  fallback: TablePrefsState,
+): TablePrefsState {
+  if (typeof window === 'undefined') return fallback;
+  return safeParsePrefs(localStorage.getItem(storageKey)) ?? fallback;
+}
+
 export function useTablePreferences<TRow>(
   tableId: string,
   columns: TableColumnDef<TRow>[],
@@ -118,6 +127,20 @@ export function useTablePreferences<TRow>(
     setState(nextState);
   }, [columns, storageKey]);
 
+  // Keep in sync if another component/tab updates the same storage key.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== storageKey) return;
+      const next = loadInitialState(columns, storageKey);
+      setState(next);
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [columns, storageKey]);
+
   // Persist state
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -130,27 +153,39 @@ export function useTablePreferences<TRow>(
   );
 
   const toggleColumn = (columnId: string) => {
-    setState((prev) => ({
-      ...prev,
-      columns: {
-        ...prev.columns,
-        [columnId]: !(prev.columns[columnId] !== false),
-      },
-    }));
+    setState((prev) => {
+      // Read the latest to avoid overwriting concurrent updates
+      const base = readLatestOrFallback(storageKey, prev);
+      const currentValue =
+        typeof base.columns?.[columnId] === 'boolean'
+          ? base.columns[columnId]
+          : true;
+
+      return {
+        ...base,
+        columns: {
+          ...(base.columns ?? {}),
+          [columnId]: !currentValue,
+        },
+      };
+    });
   };
 
   const setSort = (columnId: string) => {
     setState((prev) => {
-      if (prev.sortBy !== columnId) {
+      const base = readLatestOrFallback(storageKey, prev);
+
+      if (base.sortBy !== columnId) {
         return {
-          ...prev,
+          ...base,
           sortBy: columnId,
           sortDir: 'asc',
         };
       }
-      const nextDir: SortDirection = prev.sortDir === 'asc' ? 'desc' : 'asc';
+
+      const nextDir: SortDirection = base.sortDir === 'asc' ? 'desc' : 'asc';
       return {
-        ...prev,
+        ...base,
         sortBy: columnId,
         sortDir: nextDir,
       };
@@ -167,14 +202,16 @@ export function useTablePreferences<TRow>(
 
   const toggleUiFlag = (flagId: string) => {
     setState((prev) => {
-      const current = prev.ui ?? {};
-      const nextValue = !(typeof current[flagId] === 'boolean' ? current[flagId] : true);
+      const base = readLatestOrFallback(storageKey, prev);
+      const current = base.ui ?? {};
+      const currentValue =
+        typeof current[flagId] === 'boolean' ? current[flagId] : true;
 
       return {
-        ...prev,
+        ...base,
         ui: {
           ...current,
-          [flagId]: nextValue,
+          [flagId]: !currentValue,
         },
       };
     });
