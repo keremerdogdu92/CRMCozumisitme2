@@ -9,6 +9,16 @@
 -- - Archive code generation via trigger trg_patients_archive_code -> set_patient_archive_code().
 -- - National ID uniqueness is enforced only for active (not soft-deleted) rows.
 --
+-- v3.3.0 (2026-01-22):
+-- - SOFT DELETE: When a patient is soft-deleted, any SOLD inventory_items bound to the patient
+--   (inventory_items.sold_patient_id = patient_id) are automatically returned to stock:
+--     - sold_patient_id = NULL
+--     - sold_at = NULL
+--     - ear_side = NULL
+--     - status = 'in_stock'
+--     - updated_at = now()
+--   This keeps patient devices + inventory screens consistent and prevents orphaned "sold" items.
+--
 -- v3.2.0 (2025-12-28):
 -- - SOFT DELETE: soft_delete_patients is idempotent (no-op if already deleted).
 -- - SOFT DELETE: restore_patients only affects rows that are currently deleted.
@@ -144,12 +154,28 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  -- 1) Soft delete patient (idempotent).
   UPDATE public.patients
   SET deleted_at = now(),
       delete_reason = p_reason
   WHERE id = p_id
     AND org_id = public.current_user_org_id()
     AND deleted_at IS NULL;
+
+  -- 2) Return patient's SOLD inventory items back to stock (idempotent).
+  --
+  -- The patient "devices" UI is driven by inventory_items.sold_patient_id.
+  -- When a patient is deleted, we must detach those inventory rows and restore stock state.
+  UPDATE public.inventory_items
+  SET sold_patient_id = NULL,
+      sold_at = NULL,
+      ear_side = NULL,
+      status = 'in_stock',
+      updated_at = now()
+  WHERE org_id = public.current_user_org_id()
+    AND deleted_at IS NULL
+    AND status = 'sold'
+    AND sold_patient_id = p_id;
 END;
 $function$;
 
