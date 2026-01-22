@@ -9,6 +9,10 @@
 // Security notes:
 // - Do NOT directly UPDATE patients.deleted_at from the client.
 // - Use DB RPCs so org scoping + audit triggers are enforced server-side.
+//
+// Patch:
+// - After patient soft delete, also invalidates INVENTORY_QUERY_KEY so returned-to-stock inventory
+//   items refresh immediately in Inventory screens (sold -> in_stock).
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,6 +25,7 @@ import { PatientDetailSgkInvoiceTab } from './PatientDetailSgkInvoiceTab';
 import { PatientDetailAccessoriesTab } from './PatientDetailAccessoriesTab';
 import { PatientDetailBatteryPrescriptionsTab } from './PatientDetailBatteryPrescriptionsTab';
 import { PATIENTS_QUERY_KEY, restorePatient, softDeletePatient } from '../../api';
+import { INVENTORY_QUERY_KEY } from '../../../inventory/api';
 import { updatePatientInvoiceStatus } from '../../api/api.patients.update';
 import type { MeetingRow } from '../../../meetings/types';
 import {
@@ -133,7 +138,13 @@ export function PatientDetailDrawer({
       await softDeletePatient(patient.id, 'manual_soft_delete');
     },
     onSuccess: () => {
+      // 1) Refresh patient lists
       void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
+
+      // 2) Refresh inventory lists because DB soft-delete returns SOLD items to stock
+      void queryClient.invalidateQueries({ queryKey: INVENTORY_QUERY_KEY });
+
+      // 3) Close drawer to avoid stale patient view after deletion
       onClose();
     },
     onError: (err) => {
@@ -201,12 +212,12 @@ export function PatientDetailDrawer({
     invoiceMutation.mutate(params);
   };
 
-  const handleSoftDeletePatient = (row: PatientRow) => {
+  const handleSoftDeletePatient = (_row: PatientRow) => {
     if (softDeleteMutation.isPending) return;
     softDeleteMutation.mutate();
   };
 
-  const handleRestorePatient = (row: PatientRow) => {
+  const handleRestorePatient = (_row: PatientRow) => {
     if (restoreMutation.isPending) return;
     restoreMutation.mutate();
   };

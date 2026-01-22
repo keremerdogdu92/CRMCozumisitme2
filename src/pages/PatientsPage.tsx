@@ -10,6 +10,9 @@
 // Patch:
 // - Wires PatientsTable onDeletePatient + onRestorePatient.
 // - Uses React Query mutations and invalidates PATIENTS_QUERY_KEY.
+// - IMPORTANT: After patient soft delete, also invalidates INVENTORY_QUERY_KEY so returned-to-stock
+//   inventory items (sold -> in_stock) refresh immediately.
+// - If the deleted patient is currently open in the detail drawer, the drawer is closed to avoid stale UI.
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -22,6 +25,7 @@ import {
   softDeletePatient,
   restorePatient,
 } from '../features/patients/api';
+import { INVENTORY_QUERY_KEY } from '../features/inventory/api';
 import type { NewPatientForm, PatientRow } from '../features/patients/types';
 import {
   NewPatientFormCard,
@@ -116,8 +120,18 @@ export default function PatientsPage() {
     mutationFn: async (patientId: string) => {
       await softDeletePatient(patientId, 'manual_soft_delete');
     },
-    onSuccess: () => {
+    onSuccess: (_data, patientId) => {
+      // 1) Refresh patient list
       void queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
+
+      // 2) Refresh inventory list because DB soft-delete RPC returns SOLD items to stock
+      void queryClient.invalidateQueries({ queryKey: INVENTORY_QUERY_KEY });
+
+      // 3) If the deleted patient is currently open in the drawer, close it to avoid stale UI
+      setDetailPatient((current) => {
+        if (!current) return current;
+        return current.id === patientId ? null : current;
+      });
     },
     onError: (err) => {
       const message =
