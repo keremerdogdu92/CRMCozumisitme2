@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-01-18T04:06:06.015Z",
+  "generatedAt": "2026-01-25T04:14:10.269Z",
   "scannedDirs": [
     "src",
     "api",
@@ -73,7 +73,7 @@
         "supabase.from",
         "raw.sql"
       ],
-      "hitCount": 32,
+      "hitCount": 33,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.create.ts",
@@ -2232,7 +2232,7 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patients.sql",
-          "line": 106,
+          "line": 116,
           "kind": "raw.sql",
           "snippet": "-- Soft delete stamp trigger (uses shared helper from core/soft_delete_helpers.sql)"
         }
@@ -2352,13 +2352,13 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patients.sql",
-          "line": 136,
+          "line": 146,
           "kind": "raw.sql",
           "snippet": "-- Idempotent: if already deleted, this UPDATE affects 0 rows and returns successfully."
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patients.sql",
-          "line": 160,
+          "line": 186,
           "kind": "raw.sql",
           "snippet": "-- Idempotent: if not deleted, this UPDATE affects 0 rows and returns successfully."
         }
@@ -2463,7 +2463,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/MeetingsTable.tsx",
-          "line": 201,
+          "line": 233,
           "kind": "raw.sql",
           "snippet": "// Defense-in-depth: hide reference meetings from non-admin users."
         }
@@ -2478,7 +2478,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/MeetingsTable.tsx",
-          "line": 271,
+          "line": 303,
           "kind": "raw.sql",
           "snippet": "// Exclude the \"actions\" column from exports."
         }
