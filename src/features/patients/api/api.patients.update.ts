@@ -1,5 +1,5 @@
 // src/features/patients/api/api.patients.update.ts
-// Update helpers for SGK fields, SGK profile info and invoice status on patients.
+// Update helpers for SGK fields, SGK profile info, invoice status, and personal info on patients.
 
 import { supabaseClient } from '../../../utils/supabaseClient';
 import type { PatientSgkUpdateInput, PatientPaymentMethod } from '../types';
@@ -229,4 +229,71 @@ export async function updatePatientInvoiceStatus(params: {
     invoice_issued_at:
       ((data as any).invoice_issued_at as string | null) ?? null,
   };
+}
+
+/**
+ * Update patient personal info (özlük bilgileri).
+ * Updates: full_name, phone, national_id, kin_phone, address, archive_code, satisfaction_10
+ */
+export async function updatePatientPersonalInfo(params: {
+  id: string;
+  fullName: string;
+  phone: string;
+  nationalId: string;
+  kinPhone: string;
+  address: string;
+  archiveCode: string;
+  satisfaction10: string; // "1" to "10" or empty
+}): Promise<void> {
+  const {
+    id,
+    fullName,
+    phone,
+    nationalId,
+    kinPhone,
+    address,
+    archiveCode,
+    satisfaction10,
+  } = params;
+
+  // Validation
+  const trimmedFullName = fullName.trim();
+  if (!trimmedFullName || trimmedFullName.length === 0) {
+    throw new Error('FULL_NAME: Ad Soyad zorunludur.');
+  }
+
+  const trimmedPhone = phone.trim();
+  if (!trimmedPhone || trimmedPhone.length === 0) {
+    throw new Error('PHONE: Telefon zorunludur.');
+  }
+
+  // Parse satisfaction (1-10 or null)
+  let satisfactionValue: number | null = null;
+  if (satisfaction10.trim().length > 0) {
+    const parsed = parseInt(satisfaction10.trim(), 10);
+    if (!Number.isNaN(parsed) && parsed >= 1 && parsed <= 10) {
+      satisfactionValue = parsed;
+    }
+  }
+
+  const { error } = await supabaseClient
+    .from('patients')
+    .update({
+      full_name: trimmedFullName,
+      phone: trimmedPhone,
+      national_id: nationalId.trim() || null,
+      kin_phone: kinPhone.trim() || null,
+      address: address.trim() || null,
+      archive_code: archiveCode.trim() || null,
+      satisfaction_10: satisfactionValue,
+    })
+    .eq('id', id);
+
+  if (error) {
+    console.error(
+      'Failed to update patient personal info (STEP_UPDATE_PERSONAL_INFO):',
+      error,
+    );
+    throw new Error('STEP_UPDATE_PERSONAL_INFO: ' + error.message);
+  }
 }
