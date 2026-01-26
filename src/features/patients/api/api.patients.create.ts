@@ -502,7 +502,13 @@ export async function createPatient(
     invoice_issued_at: invoiceIssuedAt,
   };
 
-  if (legacyCreatedAt) {
+  // Custom creation date: from purchaseDate (manual entry) or legacy import
+  if (input.purchaseDate) {
+    // User manually set a purchase date - use it for created_at
+    const purchaseDateIso = new Date(input.purchaseDate).toISOString();
+    insertPayload.created_at = purchaseDateIso;
+  } else if (legacyCreatedAt) {
+    // Legacy CSV import override
     insertPayload.created_at = legacyCreatedAt;
   }
 
