@@ -57,6 +57,9 @@ export function PatientDetailInfoTab({
   const [satisfaction10, setSatisfaction10] = useState(
     patient.satisfaction_10 != null ? String(patient.satisfaction_10) : '',
   );
+  const [createdAt, setCreatedAt] = useState(
+    patient.created_at ? new Date(patient.created_at).toISOString().split('T')[0] : '',
+  );
 
   const referenceDisplay =
     patient.reference_name && patient.reference_name.trim().length > 0
@@ -82,6 +85,9 @@ export function PatientDetailInfoTab({
       setSatisfaction10(
         patient.satisfaction_10 != null ? String(patient.satisfaction_10) : '',
       );
+      setCreatedAt(
+        patient.created_at ? new Date(patient.created_at).toISOString().split('T')[0] : '',
+      );
     }
   };
 
@@ -99,6 +105,7 @@ export function PatientDetailInfoTab({
         address,
         archiveCode,
         satisfaction10,
+        createdAt,
       });
 
       // Invalidate queries to refresh patient data
@@ -234,12 +241,21 @@ export function PatientDetailInfoTab({
             )}
           </div>
 
-          {/* Kayıt Tarihi - read-only */}
+          {/* Kayıt Tarihi */}
           <div className="flex justify-between gap-2">
             <span className="text-xs text-slate-500">Kayıt Tarihi</span>
-            <span className="text-sm text-slate-900">
-              {formatDate(patient.created_at)}
-            </span>
+            {isEditing ? (
+              <input
+                type="date"
+                value={createdAt}
+                onChange={(e) => setCreatedAt(e.target.value)}
+                className="rounded border border-slate-300 bg-white px-2 py-1 text-right text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              />
+            ) : (
+              <span className="text-sm text-slate-900">
+                {formatDate(patient.created_at)}
+              </span>
+            )}
           </div>
 
           {/* Son Görüşme - read-only */}

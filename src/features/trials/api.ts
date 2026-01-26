@@ -484,3 +484,61 @@ export async function linkTrialToPatientAndDelete(
     );
   }
 }
+
+/**
+ * Update trial personal info.
+ * Updates: full_name, phone, first_meet_at, next_meet_at, note, created_at
+ */
+export async function updateTrialInfo(params: {
+  id: string;
+  fullName: string;
+  phone: string;
+  firstMeetAt: string | null; // ISO string or null
+  nextMeetAt: string | null; // ISO string or null
+  note: string;
+  createdAt?: string; // yyyy-MM-dd format, optional
+}): Promise<void> {
+  const { id, fullName, phone, firstMeetAt, nextMeetAt, note, createdAt } = params;
+
+  // Validation
+  const trimmedFullName = fullName.trim();
+  if (!trimmedFullName || trimmedFullName.length === 0) {
+    throw new Error('FULL_NAME: Ad Soyad zorunludur.');
+  }
+
+  const trimmedPhone = phone.trim();
+  if (!trimmedPhone || trimmedPhone.length === 0) {
+    throw new Error('PHONE: Telefon zorunludur.');
+  }
+
+  // Parse created_at (optional)
+  let createdAtIso: string | undefined = undefined;
+  if (createdAt && createdAt.trim().length > 0) {
+    const date = new Date(createdAt);
+    if (!Number.isNaN(date.getTime())) {
+      createdAtIso = date.toISOString();
+    }
+  }
+
+  const updatePayload: Record<string, any> = {
+    full_name: trimmedFullName,
+    phone: trimmedPhone,
+    first_meet_at: firstMeetAt,
+    next_meet_at: nextMeetAt,
+    note: note.trim() || null,
+  };
+
+  if (createdAtIso !== undefined) {
+    updatePayload.created_at = createdAtIso;
+  }
+
+  const { error } = await supabaseClient
+    .from('trials')
+    .update(updatePayload)
+    .eq('id', id);
+
+  if (error) {
+    console.error('Failed to update trial info (STEP_UPDATE_TRIAL_INFO):', error);
+    throw new Error('STEP_UPDATE_TRIAL_INFO: ' + error.message);
+  }
+}

@@ -233,7 +233,7 @@ export async function updatePatientInvoiceStatus(params: {
 
 /**
  * Update patient personal info (özlük bilgileri).
- * Updates: full_name, phone, national_id, kin_phone, address, archive_code, satisfaction_10
+ * Updates: full_name, phone, national_id, kin_phone, address, archive_code, satisfaction_10, created_at
  */
 export async function updatePatientPersonalInfo(params: {
   id: string;
@@ -244,6 +244,7 @@ export async function updatePatientPersonalInfo(params: {
   address: string;
   archiveCode: string;
   satisfaction10: string; // "1" to "10" or empty
+  createdAt?: string; // yyyy-MM-dd format, optional
 }): Promise<void> {
   const {
     id,
@@ -254,6 +255,7 @@ export async function updatePatientPersonalInfo(params: {
     address,
     archiveCode,
     satisfaction10,
+    createdAt,
   } = params;
 
   // Validation
@@ -276,17 +278,32 @@ export async function updatePatientPersonalInfo(params: {
     }
   }
 
+  // Parse created_at (optional)
+  let createdAtIso: string | undefined = undefined;
+  if (createdAt && createdAt.trim().length > 0) {
+    const date = new Date(createdAt);
+    if (!Number.isNaN(date.getTime())) {
+      createdAtIso = date.toISOString();
+    }
+  }
+
+  const updatePayload: Record<string, any> = {
+    full_name: trimmedFullName,
+    phone: trimmedPhone,
+    national_id: nationalId.trim() || null,
+    kin_phone: kinPhone.trim() || null,
+    address: address.trim() || null,
+    archive_code: archiveCode.trim() || null,
+    satisfaction_10: satisfactionValue,
+  };
+
+  if (createdAtIso !== undefined) {
+    updatePayload.created_at = createdAtIso;
+  }
+
   const { error } = await supabaseClient
     .from('patients')
-    .update({
-      full_name: trimmedFullName,
-      phone: trimmedPhone,
-      national_id: nationalId.trim() || null,
-      kin_phone: kinPhone.trim() || null,
-      address: address.trim() || null,
-      archive_code: archiveCode.trim() || null,
-      satisfaction_10: satisfactionValue,
-    })
+    .update(updatePayload)
     .eq('id', id);
 
   if (error) {

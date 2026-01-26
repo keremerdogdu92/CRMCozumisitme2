@@ -24,6 +24,7 @@ import {
   TRIALS_QUERY_KEY,
   softDeleteTrial,
   restoreTrial,
+  updateTrialInfo,
 } from './api';
 import { openTrialOfferPrint } from './printTrialOffer';
 import {
@@ -125,6 +126,25 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
     null,
   );
 
+  // Edit state
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Form state
+  const [fullName, setFullName] = useState(trial?.full_name || '');
+  const [phone, setPhone] = useState(trial?.phone || '');
+  const [firstMeetAt, setFirstMeetAt] = useState(
+    trial?.first_meet_at ? new Date(trial.first_meet_at).toISOString().slice(0, 16) : '',
+  );
+  const [nextMeetAt, setNextMeetAt] = useState(
+    trial?.next_meet_at ? new Date(trial.next_meet_at).toISOString().slice(0, 16) : '',
+  );
+  const [note, setNote] = useState(trial?.note || '');
+  const [createdAt, setCreatedAt] = useState(
+    trial?.created_at ? new Date(trial.created_at).toISOString().split('T')[0] : '',
+  );
+
   // Org ayarları (logo, firma adı, iletişim bilgileri, watermark)
   const { data: orgSettings } = useOrgSettings();
 
@@ -195,15 +215,81 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
     },
   });
 
+  const handleEditClick = () => {
+    setIsEditing(!isEditing);
+    setEditError(null);
+    // Reset form to current trial data when opening edit
+    if (!isEditing && trial) {
+      setFullName(trial.full_name || '');
+      setPhone(trial.phone || '');
+      setFirstMeetAt(
+        trial.first_meet_at ? new Date(trial.first_meet_at).toISOString().slice(0, 16) : '',
+      );
+      setNextMeetAt(
+        trial.next_meet_at ? new Date(trial.next_meet_at).toISOString().slice(0, 16) : '',
+      );
+      setNote(trial.note || '');
+      setCreatedAt(
+        trial.created_at ? new Date(trial.created_at).toISOString().split('T')[0] : '',
+      );
+    }
+  };
+
+  const handleSave = async () => {
+    if (!trial) return;
+
+    setIsSaving(true);
+    setEditError(null);
+
+    try {
+      await updateTrialInfo({
+        id: trial.id,
+        fullName,
+        phone,
+        firstMeetAt: firstMeetAt ? new Date(firstMeetAt).toISOString() : null,
+        nextMeetAt: nextMeetAt ? new Date(nextMeetAt).toISOString() : null,
+        note,
+        createdAt,
+      });
+
+      // Invalidate queries to refresh trial data
+      await queryClient.invalidateQueries({ queryKey: TRIALS_QUERY_KEY });
+
+      setIsEditing(false);
+      setIsSaving(false);
+    } catch (err) {
+      console.error('Failed to update trial info:', err);
+      setEditError(
+        err instanceof Error ? err.message : 'Güncelleme sırasında bir hata oluştu.',
+      );
+      setIsSaving(false);
+    }
+  };
+
   useEffect(() => {
-    if (open) {
+    if (open && trial) {
       setActiveTab('summary');
       setIncludeDetailsForPrint(true);
       setConvertModalOpen(false);
       setSelectedDeviceIds([]);
       setPendingAction(null);
+      setIsEditing(false);
+      setEditError(null);
+      // Reset form state
+      setFullName(trial.full_name || '');
+      setPhone(trial.phone || '');
+      setFirstMeetAt(
+        trial.first_meet_at ? new Date(trial.first_meet_at).toISOString().slice(0, 16) : '',
+      );
+      setNextMeetAt(
+        trial.next_meet_at ? new Date(trial.next_meet_at).toISOString().slice(0, 16) : '',
+      );
+      setNote(trial.note || '');
+      setCreatedAt(
+        trial.created_at ? new Date(trial.created_at).toISOString().split('T')[0] : '',
+      );
     }
-  }, [open, trialId]);
+  }, [open, trialId, trial]);
 
   if (!trial) {
     return null;
@@ -399,7 +485,48 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm">
         {activeTab === 'summary' && (
           <section className="space-y-3">
-            <h4 className="text-xs font-semibold uppercase text-slate-500">Özet</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold uppercase text-slate-500">Özet</h4>
+              {!isSoftDeleted && (
+                <div className="flex items-center gap-2">
+                  {isEditing && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleEditClick}
+                        disabled={isSaving}
+                        className="text-xs font-medium text-slate-600 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        İptal
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        className="rounded-md bg-primary-600 px-3 py-1 text-xs font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isSaving ? 'Kaydediliyor...' : 'Kaydet'}
+                      </button>
+                    </>
+                  )}
+                  {!isEditing && (
+                    <button
+                      type="button"
+                      onClick={handleEditClick}
+                      className="text-xs font-medium text-primary-600 hover:text-primary-700"
+                    >
+                      Düzenle
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {editError && (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                {editError}
+              </div>
+            )}
 
             <div className="space-y-1 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
               <div className="flex items-center justify-between gap-2">
@@ -451,33 +578,89 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
                 </div>
               )}
 
+              {/* Ad Soyad */}
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Ad Soyad</span>
-                <span className="text-xs font-medium text-slate-900">
-                  {trial.full_name ?? '-'}
-                </span>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-right text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    placeholder="Ad Soyad"
+                  />
+                ) : (
+                  <span className="text-xs font-medium text-slate-900">
+                    {trial.full_name ?? '-'}
+                  </span>
+                )}
               </div>
+
+              {/* Telefon */}
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Telefon</span>
-                <span className="text-xs text-slate-900">{trial.phone ?? '-'}</span>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-right text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    placeholder="Telefon"
+                  />
+                ) : (
+                  <span className="text-xs text-slate-900">{trial.phone ?? '-'}</span>
+                )}
               </div>
+
+              {/* Kayıt Tarihi */}
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Kayıt Tarihi</span>
-                <span className="text-xs text-slate-900">
-                  {formatDate(trial.created_at)}
-                </span>
+                {isEditing ? (
+                  <input
+                    type="date"
+                    value={createdAt}
+                    onChange={(e) => setCreatedAt(e.target.value)}
+                    className="rounded border border-slate-300 bg-white px-2 py-1 text-right text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                ) : (
+                  <span className="text-xs text-slate-900">
+                    {formatDate(trial.created_at)}
+                  </span>
+                )}
               </div>
+
+              {/* İlk Görüşme */}
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">İlk Görüşme</span>
-                <span className="text-xs text-slate-900">
-                  {trial.first_meet_at ? formatDate(trial.first_meet_at) : '-'}
-                </span>
+                {isEditing ? (
+                  <input
+                    type="datetime-local"
+                    value={firstMeetAt}
+                    onChange={(e) => setFirstMeetAt(e.target.value)}
+                    className="rounded border border-slate-300 bg-white px-2 py-1 text-right text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                ) : (
+                  <span className="text-xs text-slate-900">
+                    {trial.first_meet_at ? formatDate(trial.first_meet_at) : '-'}
+                  </span>
+                )}
               </div>
+
+              {/* Sonraki Randevu */}
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Sonraki Randevu</span>
-                <span className="text-xs text-slate-900">
-                  {trial.next_meet_at ? formatDate(trial.next_meet_at) : '-'}
-                </span>
+                {isEditing ? (
+                  <input
+                    type="datetime-local"
+                    value={nextMeetAt}
+                    onChange={(e) => setNextMeetAt(e.target.value)}
+                    className="rounded border border-slate-300 bg-white px-2 py-1 text-right text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                ) : (
+                  <span className="text-xs text-slate-900">
+                    {trial.next_meet_at ? formatDate(trial.next_meet_at) : '-'}
+                  </span>
+                )}
               </div>
               <div className="flex justify-between gap-2">
                 <span className="text-xs text-slate-500">Referans</span>
@@ -491,11 +674,22 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
                     : referenceLite?.full_name ?? '-'}
                 </span>
               </div>
+              {/* Not */}
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-slate-500">Not</span>
-                <span className="whitespace-pre-line text-xs text-slate-900">
-                  {trial.note && trial.note.trim() ? trial.note : '-'}
-                </span>
+                {isEditing ? (
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    rows={3}
+                    className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    placeholder="Not"
+                  />
+                ) : (
+                  <span className="whitespace-pre-line text-xs text-slate-900">
+                    {trial.note && trial.note.trim() ? trial.note : '-'}
+                  </span>
+                )}
               </div>
             </div>
 
