@@ -99,11 +99,15 @@ async function attachDevicesToPatientFromDrafts(params: {
   orgId: string;
   patientId: string;
   drafts: NewPatientDeviceDraft[];
+  purchaseDate?: string | null;
 }): Promise<void> {
-  const { orgId, patientId, drafts } = params;
+  const { orgId, patientId, drafts, purchaseDate } = params;
   if (!drafts || drafts.length === 0) return;
 
-  const nowIso = new Date().toISOString();
+  // Use provided purchase date if available, otherwise use current date
+  const soldAtIso = purchaseDate
+    ? new Date(purchaseDate).toISOString()
+    : new Date().toISOString();
 
   for (const draft of drafts) {
     const inventoryItemId = safeTrim(draft.inventoryItemId ?? '');
@@ -120,7 +124,7 @@ async function attachDevicesToPatientFromDrafts(params: {
           .from('inventory_items')
           .update({
             sold_patient_id: patientId,
-            sold_at: nowIso,
+            sold_at: soldAtIso,
             status: 'sold',
             ear_side: side,
           })
@@ -199,7 +203,7 @@ async function attachDevicesToPatientFromDrafts(params: {
         .from('inventory_items')
         .update({
           sold_patient_id: patientId,
-          sold_at: nowIso,
+          sold_at: soldAtIso,
           status: 'sold',
           ear_side: side,
         })
@@ -243,19 +247,23 @@ async function attachChargerToPatient(params: {
   orgId: string;
   patientId: string;
   chargerInventoryItemId: string;
+  purchaseDate?: string | null;
 }): Promise<void> {
-  const { orgId, patientId, chargerInventoryItemId } = params;
+  const { orgId, patientId, chargerInventoryItemId, purchaseDate } = params;
   const id = safeTrim(chargerInventoryItemId);
   if (!id) return;
 
-  const nowIso = new Date().toISOString();
+  // Use provided purchase date if available, otherwise use current date
+  const soldAtIso = purchaseDate
+    ? new Date(purchaseDate).toISOString()
+    : new Date().toISOString();
 
   try {
     const { data: updatedRows, error } = await supabaseClient
       .from('inventory_items')
       .update({
         sold_patient_id: patientId,
-        sold_at: nowIso,
+        sold_at: soldAtIso,
         status: 'sold',
         // chargers should not carry ear_side; do not overwrite existing value unless needed
       })
@@ -609,6 +617,7 @@ export async function createPatient(
         orgId,
         patientId: inserted.id,
         drafts: deviceDrafts,
+        purchaseDate: input.purchaseDate,
       });
     } catch (err) {
       console.error(
@@ -624,6 +633,7 @@ export async function createPatient(
         orgId,
         patientId: inserted.id,
         chargerInventoryItemId,
+        purchaseDate: input.purchaseDate,
       });
     } catch (err) {
       console.error(

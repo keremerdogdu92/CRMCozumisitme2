@@ -103,6 +103,7 @@ export function useNewPatientForm({
     paymentMethod: '',
     saleTotal: '',
     cardFeeRate: '',
+    purchaseDate: null, // null = use today's date
     referenceId: null,
     referenceName: '',
     nationalId: '',
@@ -167,6 +168,7 @@ export function useNewPatientForm({
       paymentMethod: '',
       saleTotal: '',
       cardFeeRate: '',
+      purchaseDate: null,
       referenceId: null,
       referenceName: '',
       nationalId: '',
@@ -340,6 +342,8 @@ export function useNewPatientForm({
           formState.sgkFlag && isBatteryFlow
             ? !!formState.sgkPillPrescription
             : false,
+
+        purchaseDate: formState.purchaseDate,
 
         sgkFlag: formState.sgkFlag,
         sgkPrescriptionReceived: formState.sgkFlag

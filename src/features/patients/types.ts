@@ -356,6 +356,13 @@ export type NewPatientForm = {
 
   legacySaleDate?: string;
 
+  /**
+   * Optional purchase date for the patient's devices.
+   * - If null or undefined: defaults to now() when creating patient.
+   * - If provided: used as sold_at for devices (format: yyyy-MM-dd or ISO string).
+   */
+  purchaseDate?: string | null;
+
   referenceId: string | null;
   referenceName: string;
 

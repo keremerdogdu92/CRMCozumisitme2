@@ -307,6 +307,39 @@ export function NewPatientFormCard({
                 />
               </div>
             </div>
+
+            {/* Satın alım tarihi - küçük alan, dikkat çekmeyen */}
+            <div className="mt-2 flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                <input
+                  type="checkbox"
+                  checked={formState.purchaseDate === null}
+                  onChange={(e) => {
+                    setFormState((s) => ({
+                      ...s,
+                      purchaseDate: e.target.checked
+                        ? null
+                        : new Date().toISOString().split('T')[0],
+                    }));
+                  }}
+                  className="h-3 w-3 rounded border-slate-300 text-primary-600 focus:ring-1 focus:ring-primary-500"
+                />
+                <span>Bugün satın alındı</span>
+              </label>
+              {formState.purchaseDate !== null && (
+                <input
+                  type="date"
+                  value={formState.purchaseDate || ''}
+                  onChange={(e) =>
+                    setFormState((s) => ({
+                      ...s,
+                      purchaseDate: e.target.value,
+                    }))
+                  }
+                  className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              )}
+            </div>
           </div>
         </FormSection>
 
