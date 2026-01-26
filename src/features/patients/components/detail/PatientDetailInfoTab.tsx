@@ -29,6 +29,12 @@ type PatientDetailInfoTabProps = {
    */
   onRestorePatient?: (patient: PatientRow) => void;
 
+  /**
+   * Optional callback invoked after successful info save.
+   * Used to close the drawer so updated data appears immediately.
+   */
+  onInfoSaved?: () => void;
+
   isDeleting?: boolean;
   isRestoring?: boolean;
 };
@@ -37,6 +43,7 @@ export function PatientDetailInfoTab({
   patient,
   onDeletePatient,
   onRestorePatient,
+  onInfoSaved,
   isDeleting = false,
   isRestoring = false,
 }: PatientDetailInfoTabProps) {
@@ -111,8 +118,13 @@ export function PatientDetailInfoTab({
       // Invalidate queries to refresh patient data
       await queryClient.invalidateQueries({ queryKey: [PATIENTS_QUERY_KEY] });
 
-      setIsEditing(false);
-      setIsSaving(false);
+      // Close drawer so user sees updated data in the list
+      if (onInfoSaved) {
+        onInfoSaved();
+      } else {
+        setIsEditing(false);
+        setIsSaving(false);
+      }
     } catch (err) {
       console.error('Failed to update patient personal info:', err);
       setEditError(

@@ -303,6 +303,7 @@ export function PatientDetailDrawer({
             patient={patient}
             onDeletePatient={handleSoftDeletePatient}
             onRestorePatient={handleRestorePatient}
+            onInfoSaved={onClose}
             isDeleting={softDeleteMutation.isPending}
             isRestoring={restoreMutation.isPending}
           />

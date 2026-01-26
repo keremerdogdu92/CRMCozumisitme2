@@ -255,8 +255,8 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
       // Invalidate queries to refresh trial data
       await queryClient.invalidateQueries({ queryKey: TRIALS_QUERY_KEY });
 
-      setIsEditing(false);
-      setIsSaving(false);
+      // Close drawer so user sees updated data in the list
+      onClose();
     } catch (err) {
       console.error('Failed to update trial info:', err);
       setEditError(
