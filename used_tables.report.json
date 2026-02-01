@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-01-25T04:14:10.269Z",
+  "generatedAt": "2026-02-01T05:01:56.202Z",
   "scannedDirs": [
     "src",
     "api",
@@ -15,7 +15,7 @@
         "raw.sql",
         "supabase.from"
       ],
-      "hitCount": 34,
+      "hitCount": 35,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.fetch.ts",
@@ -61,7 +61,7 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 502,
+          "line": 516,
           "kind": "supabase.from",
           "snippet": ".from('patients')"
         }
@@ -234,7 +234,7 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 347,
+          "line": 355,
           "kind": "supabase.from",
           "snippet": ".from('profiles')"
         }
@@ -394,13 +394,13 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 327,
+          "line": 335,
           "kind": "raw.sql",
           "snippet": "* Create a new patient row with org_id taken from the current profile."
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 585,
+          "line": 599,
           "kind": "raw.sql",
           "snippet": "// patient_sale_breakdown rows are edited/saved exclusively from the Payments tab."
         },
@@ -705,7 +705,7 @@
         "raw.sql",
         "supabase.from"
       ],
-      "hitCount": 9,
+      "hitCount": 10,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
@@ -738,6 +738,12 @@
           "snippet": ".from('trials')"
         },
         {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
+          "line": 536,
+          "kind": "supabase.from",
+          "snippet": ".from('trials')"
+        },
+        {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/trials/trials.sql",
           "line": 93,
           "kind": "raw.sql",
@@ -748,12 +754,6 @@
           "line": 113,
           "kind": "raw.sql",
           "snippet": "UPDATE public.trials"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/trials/trials_convert_to_patient.rpc.sql",
-          "line": 41,
-          "kind": "raw.sql",
-          "snippet": "FROM public.trials"
         }
       ]
     },
@@ -870,6 +870,57 @@
           "line": 106,
           "kind": "raw.sql",
           "snippet": "UPDATE public.references"
+        }
+      ]
+    },
+    {
+      "name": "patient",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 7,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
+          "line": 80,
+          "kind": "raw.sql",
+          "snippet": "'Failed to update patient SGK fields (STEP_UPDATE_SGK):',"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
+          "line": 144,
+          "kind": "raw.sql",
+          "snippet": "'Failed to update patient SGK profile info (STEP_UPDATE_SGK_PROFILE):',"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
+          "line": 219,
+          "kind": "raw.sql",
+          "snippet": "'Failed to update patient invoice status (STEP_UPDATE_INVOICE):',"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
+          "line": 235,
+          "kind": "raw.sql",
+          "snippet": "* Update patient personal info (özlük bilgileri)."
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
+          "line": 311,
+          "kind": "raw.sql",
+          "snippet": "'Failed to update patient personal info (STEP_UPDATE_PERSONAL_INFO):',"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/detail/PatientDetailInfoTab.tsx",
+          "line": 129,
+          "kind": "raw.sql",
+          "snippet": "console.error('Failed to update patient personal info:', err);"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/detail/PatientDetailSgkInvoiceTab.tsx",
+          "line": 163,
+          "kind": "raw.sql",
+          "snippet": "// Initial sync from patient row whenever *patient changes* (ID bazında)"
         }
       ]
     },
@@ -1436,6 +1487,45 @@
       ]
     },
     {
+      "name": "trial",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 5,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/new/NewPatientDevicesSection.tsx",
+          "line": 11,
+          "kind": "raw.sql",
+          "snippet": "// - Model options per row now also include that row's prefilled model (from trial), so the select"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/new/NewPatientDevicesSection.tsx",
+          "line": 21,
+          "kind": "raw.sql",
+          "snippet": "//   * which brand/model came from trial,"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/TrialDetailDrawer.tsx",
+          "line": 261,
+          "kind": "raw.sql",
+          "snippet": "console.error('Failed to update trial info:', err);"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
+          "line": 489,
+          "kind": "raw.sql",
+          "snippet": "* Update trial personal info."
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
+          "line": 541,
+          "kind": "raw.sql",
+          "snippet": "console.error('Failed to update trial info (STEP_UPDATE_TRIAL_INFO):', error);"
+        }
+      ]
+    },
+    {
       "name": "only",
       "kinds": [
         "raw.sql"
@@ -1537,39 +1627,6 @@
           "line": 354,
           "kind": "supabase.from",
           "snippet": ".from('meeting_satisfaction_answers')"
-        }
-      ]
-    },
-    {
-      "name": "patient",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 4,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
-          "line": 80,
-          "kind": "raw.sql",
-          "snippet": "'Failed to update patient SGK fields (STEP_UPDATE_SGK):',"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
-          "line": 144,
-          "kind": "raw.sql",
-          "snippet": "'Failed to update patient SGK profile info (STEP_UPDATE_SGK_PROFILE):',"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
-          "line": 219,
-          "kind": "raw.sql",
-          "snippet": "'Failed to update patient invoice status (STEP_UPDATE_INVOICE):',"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/detail/PatientDetailSgkInvoiceTab.tsx",
-          "line": 163,
-          "kind": "raw.sql",
-          "snippet": "// Initial sync from patient row whenever *patient changes* (ID bazında)"
         }
       ]
     },
@@ -1736,7 +1793,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 113,
+          "line": 117,
           "kind": "raw.sql",
           "snippet": "// Side is optional and may be empty string from UI."
         },
@@ -1748,7 +1805,7 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/types.ts",
-          "line": 437,
+          "line": 444,
           "kind": "raw.sql",
           "snippet": "* Lines from UI draft. Caller is responsible for filtering out empty lines."
         }
@@ -2045,27 +2102,6 @@
           "line": 245,
           "kind": "raw.sql",
           "snippet": "// Refresh plan from backend and sync into form state"
-        }
-      ]
-    },
-    {
-      "name": "trial",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 2,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/new/NewPatientDevicesSection.tsx",
-          "line": 11,
-          "kind": "raw.sql",
-          "snippet": "// - Model options per row now also include that row's prefilled model (from trial), so the select"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/new/NewPatientDevicesSection.tsx",
-          "line": 21,
-          "kind": "raw.sql",
-          "snippet": "//   * which brand/model came from trial,"
         }
       ]
     },
@@ -2590,6 +2626,21 @@
       ]
     },
     {
+      "name": "purchaseDate",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
+          "line": 505,
+          "kind": "raw.sql",
+          "snippet": "// Custom creation date: from purchaseDate (manual entry) or legacy import"
+        }
+      ]
+    },
+    {
       "name": "helpers",
       "kinds": [
         "raw.sql"
@@ -2600,7 +2651,7 @@
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
           "line": 2,
           "kind": "raw.sql",
-          "snippet": "// Update helpers for SGK fields, SGK profile info and invoice status on patients."
+          "snippet": "// Update helpers for SGK fields, SGK profile info, invoice status, and personal info on patients."
         }
       ]
     },
@@ -2748,7 +2799,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/hooks/useNewPatientForm.ts",
-          "line": 371,
+          "line": 375,
           "kind": "raw.sql",
           "snippet": "// - others: strict & mapped from primary row."
         }
