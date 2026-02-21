@@ -532,7 +532,7 @@ export function PatientsTable({
                           return (
                             <td
                               key={col.id}
-                              className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                              className="whitespace-nowrap px-2 py-1.5 text-slate-700 md:px-3 md:py-2 xl:px-4 xl:py-2.5"
                             >
                               {formatDate(p.created_at)}
                             </td>
@@ -557,7 +557,7 @@ export function PatientsTable({
                           return (
                             <td
                               key={col.id}
-                              className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                              className="whitespace-nowrap px-2 py-1.5 text-slate-700 md:px-3 md:py-2 xl:px-4 xl:py-2.5"
                             >
                               {p.national_id && p.national_id.trim().length > 0
                                 ? p.national_id
@@ -568,7 +568,7 @@ export function PatientsTable({
                           return (
                             <td
                               key={col.id}
-                              className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                              className="whitespace-nowrap px-2 py-1.5 text-slate-700 md:px-3 md:py-2 xl:px-4 xl:py-2.5"
                             >
                               {p.phone ?? '-'}
                             </td>
@@ -577,7 +577,7 @@ export function PatientsTable({
                           return (
                             <td
                               key={col.id}
-                              className="px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                              className="px-2 py-1.5 text-slate-700 md:px-3 md:py-2 xl:px-4 xl:py-2.5"
                             >
                               {deviceLabel}
                             </td>
@@ -586,7 +586,7 @@ export function PatientsTable({
                           return (
                             <td
                               key={col.id}
-                              className="px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                              className="px-2 py-1.5 text-slate-700 md:px-3 md:py-2 xl:px-4 xl:py-2.5"
                             >
                               {deviceEarLabel}
                             </td>
@@ -613,7 +613,7 @@ export function PatientsTable({
                           return (
                             <td
                               key={col.id}
-                              className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                              className="whitespace-nowrap px-2 py-1.5 text-slate-700 md:px-3 md:py-2 xl:px-4 xl:py-2.5"
                             >
                               {formatDate(p.last_visit_at)}
                             </td>
@@ -646,7 +646,7 @@ export function PatientsTable({
                           return (
                             <td
                               key={col.id}
-                              className="px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                              className="px-2 py-1.5 text-slate-700 md:px-3 md:py-2 xl:px-4 xl:py-2.5"
                             >
                               <div className="flex flex-col items-start gap-0.5">
                                 <span
