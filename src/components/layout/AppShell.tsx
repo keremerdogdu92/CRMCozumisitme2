@@ -27,7 +27,7 @@ export function AppShell({ children }: PropsWithChildren) {
 
       <div className="flex flex-1 flex-col">
         <Topbar onMenuClick={() => setIsMobileSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
+        <main className="flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
           {children}
         </main>
       </div>
