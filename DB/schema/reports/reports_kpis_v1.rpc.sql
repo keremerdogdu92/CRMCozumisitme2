@@ -1,19 +1,33 @@
 -- DB/schema/reports/reports_kpis_v1.rpc.sql
 -- Purpose: Supabase RPC to aggregate reports KPIs (org-scoped, Europe/Istanbul month window).
--- Scope: totalReceivables, monthlyTaxAmount, yearlyTaxAmount, firmTotals, stock, devices,
---        monthlyTurnover, sgkDueThisMonth, sgkDueNextThreeMonths, revenueByMonth, devicesPie.
+-- Pattern: Same as dashboard_kpis — returns table(...) so Supabase JS client gives data[0] directly.
 -- Notes:
 --  - Month window: [monthStart 00:00, nextMonthStart 00:00) in Europe/Istanbul.
 --  - Excludes soft-deleted rows where deleted_at IS NOT NULL.
---  - Org resolution: authenticated users → profiles.org_id; service_role returns zeros (no org_id param).
+--  - Org resolution: authenticated users → profiles.org_id; service_role → null (returns zeros).
 --  - revenueByMonth: last 12 months ending with p_month, based on patients.created_at.
 --  - totalReceivables: sum of ALL meeting_payments across all time (all methods).
 
+drop function if exists public.reports_kpis_v1(date);
+
 create or replace function public.reports_kpis_v1(
-  p_month date default current_date  -- any date within the target month, e.g. '2025-02-01'
-) returns jsonb
+  p_month date default current_date
+) returns table (
+  "totalReceivables"       numeric,
+  "monthlyTaxAmount"       numeric,
+  "yearlyTaxAmount"        numeric,
+  "firmTotals"             jsonb,
+  "totalStockQuantity"     bigint,
+  "totalStockCost"         numeric,
+  "monthDevicesSoldCount"  bigint,
+  "monthDevicesSoldCost"   numeric,
+  "monthlyTurnover"        numeric,
+  "sgkDueThisMonth"        numeric,
+  "sgkDueNextThreeMonths"  numeric,
+  "revenueByMonth"         jsonb,
+  "devicesPie"             jsonb
+)
 language sql stable
-security invoker
 as $$
 with org_ctx as (
   select case
@@ -23,16 +37,12 @@ with org_ctx as (
 ),
 window_bounds as (
   select
-    -- Selected month boundaries (UTC) using Europe/Istanbul
     (date_trunc('month', timezone('Europe/Istanbul', p_month::timestamptz)) at time zone 'Europe/Istanbul') as month_start_utc,
     (date_trunc('month', timezone('Europe/Istanbul', p_month::timestamptz)) + interval '1 month') at time zone 'Europe/Istanbul' as month_end_utc,
-    -- Date boundaries for date-only comparisons (sgk_expected_reimbursement_month)
     (date_trunc('month', timezone('Europe/Istanbul', p_month::timestamptz)))::date as month_start_ist_date,
     (date_trunc('month', timezone('Europe/Istanbul', p_month::timestamptz)) + interval '1 month')::date as month_end_ist_date,
-    -- 12-month window for yearly aggregations (12 months back from start of selected month)
     (date_trunc('month', timezone('Europe/Istanbul', p_month::timestamptz)) - interval '11 months') at time zone 'Europe/Istanbul' as year_start_utc
 ),
--- Monthly revenue for the last 12 months ending with p_month (bar chart data)
 monthly_revenue as (
   select
     to_char(timezone('Europe/Istanbul', pt.created_at), 'YYYY-MM') as month_key,
@@ -49,7 +59,6 @@ monthly_revenue as (
   group by month_key, month_label
   order by month_key
 ),
--- Device pie chart for selected month (brand + model distribution)
 device_pie as (
   select
     coalesce(i.brand, 'Bilinmiyor') || ' ' || coalesce(i.model, '') as label,
@@ -67,19 +76,17 @@ device_pie as (
   group by label
   order by value desc
 )
-select jsonb_build_object(
-  -- Toplam alacaklar: tüm zamanlar, tüm ödeme yöntemleri
-  'totalReceivables', coalesce((
+select
+  coalesce((
     select sum(mp.amount)
     from public.meeting_payments mp
     cross join org_ctx o
     where o.org_id is not null
       and mp.org_id = o.org_id
       and mp.deleted_at is null
-  ), 0),
+  ), 0) as "totalReceivables",
 
-  -- Aylık vergi (card fee): seçili ayda oluşturulan hastalar
-  'monthlyTaxAmount', coalesce((
+  coalesce((
     select sum(coalesce(pt.card_fee_amount, 0))
     from public.patients pt
     cross join window_bounds w
@@ -89,10 +96,9 @@ select jsonb_build_object(
       and pt.deleted_at is null
       and pt.created_at >= w.month_start_utc
       and pt.created_at < w.month_end_utc
-  ), 0),
+  ), 0) as "monthlyTaxAmount",
 
-  -- Yıllık vergi (card fee): son 12 ayda oluşturulan hastalar
-  'yearlyTaxAmount', coalesce((
+  coalesce((
     select sum(coalesce(pt.card_fee_amount, 0))
     from public.patients pt
     cross join window_bounds w
@@ -102,10 +108,9 @@ select jsonb_build_object(
       and pt.deleted_at is null
       and pt.created_at >= w.year_start_utc
       and pt.created_at < w.month_end_utc
-  ), 0),
+  ), 0) as "yearlyTaxAmount",
 
-  -- Firmalara çekilen tutarlar (seçili aydaki meeting_payments)
-  'firmTotals', (
+  (
     select jsonb_build_object(
       'siventosTotal', coalesce(sum(mp.amount) filter (where lower(mp.method) = 'sivantos'), 0),
       'timeTotal',     coalesce(sum(mp.amount) filter (where lower(mp.method) = 'tim'), 0),
@@ -119,10 +124,9 @@ select jsonb_build_object(
       and mp.deleted_at is null
       and mp.created_at >= w.month_start_utc
       and mp.created_at < w.month_end_utc
-  ),
+  ) as "firmTotals",
 
-  -- Stoktaki cihaz adedi (in_stock, silinmemiş)
-  'totalStockQuantity', coalesce((
+  coalesce((
     select count(1)
     from public.inventory_items i
     cross join org_ctx o
@@ -130,10 +134,9 @@ select jsonb_build_object(
       and i.org_id = o.org_id
       and i.deleted_at is null
       and i.status = 'in_stock'
-  ), 0),
+  ), 0) as "totalStockQuantity",
 
-  -- Stoktaki cihazların toplam maliyeti
-  'totalStockCost', coalesce((
+  coalesce((
     select sum(coalesce(i.purchase_price, 0))
     from public.inventory_items i
     cross join org_ctx o
@@ -141,10 +144,9 @@ select jsonb_build_object(
       and i.org_id = o.org_id
       and i.deleted_at is null
       and i.status = 'in_stock'
-  ), 0),
+  ), 0) as "totalStockCost",
 
-  -- Seçili ayda satılan hearing_aid adedi
-  'monthDevicesSoldCount', coalesce((
+  coalesce((
     select count(1)
     from public.inventory_items i
     cross join window_bounds w
@@ -156,10 +158,9 @@ select jsonb_build_object(
       and i.status = 'sold'
       and i.sold_at >= w.month_start_utc
       and i.sold_at < w.month_end_utc
-  ), 0),
+  ), 0) as "monthDevicesSoldCount",
 
-  -- Seçili ayda satılan cihazların toplam maliyeti (purchase_price)
-  'monthDevicesSoldCost', coalesce((
+  coalesce((
     select sum(coalesce(i.purchase_price, 0))
     from public.inventory_items i
     cross join window_bounds w
@@ -171,10 +172,9 @@ select jsonb_build_object(
       and i.status = 'sold'
       and i.sold_at >= w.month_start_utc
       and i.sold_at < w.month_end_utc
-  ), 0),
+  ), 0) as "monthDevicesSoldCost",
 
-  -- Aylık ciro: seçili ayda oluşturulan hastalar için sale_total_amount toplamı
-  'monthlyTurnover', coalesce((
+  coalesce((
     select sum(coalesce(pt.sale_total_amount, 0))
     from public.patients pt
     cross join window_bounds w
@@ -184,10 +184,9 @@ select jsonb_build_object(
       and pt.deleted_at is null
       and pt.created_at >= w.month_start_utc
       and pt.created_at < w.month_end_utc
-  ), 0),
+  ), 0) as "monthlyTurnover",
 
-  -- Bu ay SGK'dan yatması beklenen tutar (sgk_expected_reimbursement_month = seçili ay)
-  'sgkDueThisMonth', coalesce((
+  coalesce((
     select sum(coalesce(pt.sgk_expected_reimbursement, 0))
     from public.patients pt
     cross join window_bounds w
@@ -197,10 +196,9 @@ select jsonb_build_object(
       and pt.deleted_at is null
       and pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
       and pt.sgk_expected_reimbursement_month < w.month_end_ist_date
-  ), 0),
+  ), 0) as "sgkDueThisMonth",
 
-  -- Önümüzdeki 3 ay SGK toplamı (seçili ay dahil +3 ay)
-  'sgkDueNextThreeMonths', coalesce((
+  coalesce((
     select sum(coalesce(pt.sgk_expected_reimbursement, 0))
     from public.patients pt
     cross join window_bounds w
@@ -210,35 +208,27 @@ select jsonb_build_object(
       and pt.deleted_at is null
       and pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
       and pt.sgk_expected_reimbursement_month < (w.month_start_ist_date + interval '3 months')::date
-  ), 0),
+  ), 0) as "sgkDueNextThreeMonths",
 
-  -- 12 aylık ciro grafiği (bar chart) — JSON array of MonthlyRevenuePoint
-  'revenueByMonth', coalesce((
+  coalesce((
     select jsonb_agg(
-      jsonb_build_object(
-        'monthKey', mr.month_key,
-        'label',    mr.month_label,
-        'total',    mr.total
-      ) order by mr.month_key
+      jsonb_build_object('monthKey', mr.month_key, 'label', mr.month_label, 'total', mr.total)
+      order by mr.month_key
     )
     from monthly_revenue mr
-  ), '[]'::jsonb),
+  ), '[]'::jsonb) as "revenueByMonth",
 
-  -- Seçili ayda satılan cihazların marka-model dağılımı (pie chart) — JSON array of PieSlice
-  'devicesPie', coalesce((
+  coalesce((
     select jsonb_agg(
-      jsonb_build_object(
-        'label', dp.label,
-        'value', dp.value
-      ) order by dp.value desc
+      jsonb_build_object('label', dp.label, 'value', dp.value)
+      order by dp.value desc
     )
     from device_pie dp
-  ), '[]'::jsonb)
-);
+  ), '[]'::jsonb) as "devicesPie";
 $$;
 
 -- Example usage:
--- select public.reports_kpis_v1('2025-02-01');
+-- select * from public.reports_kpis_v1('2026-02-01');
 
 -- Permissions: allow authenticated users and service_role; revoke public/anon.
 revoke all on function public.reports_kpis_v1(date) from public, anon;

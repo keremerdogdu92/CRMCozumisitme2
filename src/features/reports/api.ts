@@ -24,14 +24,10 @@ async function fetchReportsKpis(filter: ReportsMonthFilter): Promise<ReportsKpis
     throw error;
   }
 
-  // reports_kpis_v1 returns jsonb, so Supabase wraps it as:
-  // [{ "reports_kpis_v1": { ...kpis... } }]
-  // Unwrap the array and the function-name key to get the actual payload.
-  const first = Array.isArray(data) && data.length > 0 ? data[0] : data;
-  const payload =
-    first != null && typeof first === 'object' && 'reports_kpis_v1' in first
-      ? (first as Record<string, unknown>)['reports_kpis_v1']
-      : first;
+  // reports_kpis_v1 returns table(...), so Supabase wraps it as:
+  // [{ totalReceivables: ..., revenueByMonth: [...], ... }]
+  // Take the first row directly.
+  const payload = Array.isArray(data) && data.length > 0 ? data[0] : data;
 
   const raw = (payload as ReportsKpis | null) ?? {
     totalReceivables: 0,
