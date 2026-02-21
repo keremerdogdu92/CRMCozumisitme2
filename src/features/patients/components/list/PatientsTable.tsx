@@ -721,5 +721,6 @@ export function PatientsTable({
           </div>
         </ResponsiveTableShell>
       </div>
-      );
+    </div>
+  );
 }
