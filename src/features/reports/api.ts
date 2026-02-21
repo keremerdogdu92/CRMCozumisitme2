@@ -29,7 +29,19 @@ async function fetchReportsKpis(filter: ReportsMonthFilter): Promise<ReportsKpis
   // Take the first row directly.
   const payload = Array.isArray(data) && data.length > 0 ? data[0] : data;
 
-  const raw = (payload as ReportsKpis | null) ?? {
+  // eslint-disable-next-line no-console
+  console.log('[Reports] raw payload', payload);
+
+  // Supabase may return jsonb columns as JSON strings — parse defensively.
+  const parseJsonbArray = (val: unknown): unknown[] => {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+      try { return JSON.parse(val) as unknown[]; } catch { return []; }
+    }
+    return [];
+  };
+
+  const base = (payload as ReportsKpis | null) ?? {
     totalReceivables: 0,
     monthlyTaxAmount: 0,
     yearlyTaxAmount: 0,
@@ -43,6 +55,13 @@ async function fetchReportsKpis(filter: ReportsMonthFilter): Promise<ReportsKpis
     sgkDueNextThreeMonths: 0,
     revenueByMonth: [],
     devicesPie: [],
+  };
+
+  // Ensure jsonb array fields are always real JS arrays (not strings).
+  const raw: ReportsKpis = {
+    ...base,
+    revenueByMonth: parseJsonbArray(base.revenueByMonth) as ReportsKpis['revenueByMonth'],
+    devicesPie: parseJsonbArray(base.devicesPie) as ReportsKpis['devicesPie'],
   };
 
   return raw;
