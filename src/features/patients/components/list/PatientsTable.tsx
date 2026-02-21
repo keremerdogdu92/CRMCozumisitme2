@@ -450,277 +450,275 @@ export function PatientsTable({
       </div>
 
       {/* Desktop/tablet */}
-      <div className="hidden space-y-3 md:block">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[11px] text-slate-500 sm:text-xs">
-            Toplam <span className="font-semibold">{sortedPatients.length}</span>{' '}
-            hasta kaydı var.
-          </p>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <TableColumnsControl
-              columns={PATIENT_COLUMNS}
-              isColumnVisible={isColumnVisible}
-              toggleColumn={toggleColumn}
-              uiToggles={uiToggles}
-            />
-            <TableExportButtons
-              onExportCsv={() => handleExport('csv')}
-              onExportXlsx={() => handleExport('xlsx')}
-            />
-          </div>
+      <div className="hidden flex-col gap-2 sm:flex-row sm:items-center sm:justify-between md:flex">
+        <p className="text-[11px] text-slate-500 sm:text-xs">
+          Toplam <span className="font-semibold">{sortedPatients.length}</span>{' '}
+          hasta kaydı var.
+        </p>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <TableColumnsControl
+            columns={PATIENT_COLUMNS}
+            isColumnVisible={isColumnVisible}
+            toggleColumn={toggleColumn}
+            uiToggles={uiToggles}
+          />
+          <TableExportButtons
+            onExportCsv={() => handleExport('csv')}
+            onExportXlsx={() => handleExport('xlsx')}
+          />
         </div>
+      </div>
 
-        <ResponsiveTableShell>
-          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table className="min-w-full text-xs lg:text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  {visibleColumns.map((col) => {
-                    const isSorted = prefsState.sortBy === col.id;
-                    const alignClass =
-                      col.id === 'sale_total_amount'
-                        ? 'text-right'
-                        : col.id === 'satisfaction_10'
-                          ? 'text-center'
-                          : col.id === 'actions'
-                            ? 'text-right'
-                            : 'text-left';
-
-                    return (
-                      <th
-                        key={col.id}
-                        className={`px-3 py-2 text-[11px] font-medium text-slate-600 sm:px-4 sm:py-2.5 sm:text-xs ${col.sortable ? 'cursor-pointer select-none' : ''
-                          } ${alignClass}`}
-                        onClick={() => col.sortable && setSort(col.id)}
-                      >
-                        <span className="inline-flex items-center gap-1">
-                          {col.label}
-                          {col.sortable && isSorted && (
-                            <span className="text-[10px]">
-                              {prefsState.sortDir === 'asc' ? '▲' : '▼'}
-                            </span>
-                          )}
-                        </span>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-
-              <tbody>
-                {sortedPatients.map((p) => {
-                  const isDeleted = !!p.deleted_at;
-                  const sgkWarning = formatSgkWarning(p);
-                  const invoiceWarning = formatInvoiceWarning(p);
-                  const hasAnyWarning = !!sgkWarning || !!invoiceWarning;
-                  const deviceLabel = getDeviceLabel(p);
-                  const deviceEarLabel = getDeviceEarLabel(p);
-                  const satisfactionDisplay =
-                    p.satisfaction_10 != null ? `${p.satisfaction_10} / 10` : '-';
+      <ResponsiveTableShell className="hidden md:block">
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+          <table className="min-w-full text-xs lg:text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                {visibleColumns.map((col) => {
+                  const isSorted = prefsState.sortBy === col.id;
+                  const alignClass =
+                    col.id === 'sale_total_amount'
+                      ? 'text-right'
+                      : col.id === 'satisfaction_10'
+                        ? 'text-center'
+                        : col.id === 'actions'
+                          ? 'text-right'
+                          : 'text-left';
 
                   return (
-                    <tr
-                      key={p.id}
-                      className={
-                        'border-t border-slate-100 ' +
-                        (hasAnyWarning ? 'bg-amber-50/40 ' : '') +
-                        (isDeleted ? 'opacity-80 ' : '')
-                      }
+                    <th
+                      key={col.id}
+                      className={`px-3 py-2 text-[11px] font-medium text-slate-600 sm:px-4 sm:py-2.5 sm:text-xs ${col.sortable ? 'cursor-pointer select-none' : ''
+                        } ${alignClass}`}
+                      onClick={() => col.sortable && setSort(col.id)}
                     >
-                      {visibleColumns.map((col) => {
-                        switch (col.id as PatientTableColumnId) {
-                          case 'created_at':
-                            return (
-                              <td
-                                key={col.id}
-                                className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
-                              >
-                                {formatDate(p.created_at)}
-                              </td>
-                            );
-                          case 'full_name':
-                            return (
-                              <td
-                                key={col.id}
-                                className="max-w-[220px] truncate px-3 py-2 text-slate-800 sm:px-4 sm:py-2.5"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span className="truncate">{p.full_name}</span>
-                                  {isDeleted && (
-                                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
-                                      Silinmiş
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                            );
-                          case 'national_id':
-                            return (
-                              <td
-                                key={col.id}
-                                className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
-                              >
-                                {p.national_id && p.national_id.trim().length > 0
-                                  ? p.national_id
-                                  : '-'}
-                              </td>
-                            );
-                          case 'phone':
-                            return (
-                              <td
-                                key={col.id}
-                                className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
-                              >
-                                {p.phone ?? '-'}
-                              </td>
-                            );
-                          case 'device':
-                            return (
-                              <td
-                                key={col.id}
-                                className="px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
-                              >
-                                {deviceLabel}
-                              </td>
-                            );
-                          case 'ear':
-                            return (
-                              <td
-                                key={col.id}
-                                className="px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
-                              >
-                                {deviceEarLabel}
-                              </td>
-                            );
-                          case 'sale_total_amount':
-                            return (
-                              <td
-                                key={col.id}
-                                className="px-3 py-2 text-right text-slate-700 sm:px-4 sm:py-2.5"
-                              >
-                                {formatPrice(p.sale_total_amount)}
-                              </td>
-                            );
-                          case 'satisfaction_10':
-                            return (
-                              <td
-                                key={col.id}
-                                className="px-3 py-2 text-center text-slate-700 sm:px-4 sm:py-2.5"
-                              >
-                                {satisfactionDisplay}
-                              </td>
-                            );
-                          case 'last_visit_at':
-                            return (
-                              <td
-                                key={col.id}
-                                className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
-                              >
-                                {formatDate(p.last_visit_at)}
-                              </td>
-                            );
-                          case 'sgk':
-                            return (
-                              <td
-                                key={col.id}
-                                className="px-3 py-2 text-center sm:px-4 sm:py-2.5"
-                              >
-                                <div className="flex flex-col items-center gap-0.5">
-                                  <span
-                                    className={
-                                      p.sgk_flag
-                                        ? 'inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700'
-                                        : 'inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500'
-                                    }
-                                  >
-                                    {p.sgk_flag ? 'Evet' : 'Hayır'}
-                                  </span>
-                                  {sgkWarning && (
-                                    <span className="text-[10px] font-medium text-amber-700">
-                                      {sgkWarning}
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                            );
-                          case 'invoice':
-                            return (
-                              <td
-                                key={col.id}
-                                className="px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
-                              >
-                                <div className="flex flex-col items-start gap-0.5">
-                                  <span
-                                    className={
-                                      p.invoice_issued
-                                        ? 'inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700'
-                                        : 'inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500'
-                                    }
-                                  >
-                                    {p.invoice_issued ? 'Kesildi' : 'Yok'}
-                                  </span>
-                                  {p.invoice_issued_at && (
-                                    <span className="text-[10px] text-slate-500">
-                                      {formatDate(p.invoice_issued_at)}
-                                    </span>
-                                  )}
-                                  {invoiceWarning && (
-                                    <span className="text-[10px] font-medium text-amber-700">
-                                      {invoiceWarning}
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                            );
-                          case 'actions':
-                            return (
-                              <td
-                                key={col.id}
-                                className="whitespace-nowrap px-3 py-2 text-right sm:px-4 sm:py-2.5"
-                              >
-                                <div className="inline-flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => onSelectPatient(p)}
-                                    className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                                  >
-                                    Detay
-                                  </button>
-
-                                  {!isDeleted && onDeletePatient && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteClick(p)}
-                                      className="inline-flex items-center rounded-md border border-red-200 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
-                                    >
-                                      Sil
-                                    </button>
-                                  )}
-
-                                  {isDeleted && onRestorePatient && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRestoreClick(p)}
-                                      className="inline-flex items-center rounded-md border border-emerald-200 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
-                                    >
-                                      Geri Al
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            );
-                          default:
-                            return null;
-                        }
-                      })}
-                    </tr>
+                      <span className="inline-flex items-center gap-1">
+                        {col.label}
+                        {col.sortable && isSorted && (
+                          <span className="text-[10px]">
+                            {prefsState.sortDir === 'asc' ? '▲' : '▼'}
+                          </span>
+                        )}
+                      </span>
+                    </th>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        </ResponsiveTableShell>
-      </div>
+              </tr>
+            </thead>
+
+            <tbody>
+              {sortedPatients.map((p) => {
+                const isDeleted = !!p.deleted_at;
+                const sgkWarning = formatSgkWarning(p);
+                const invoiceWarning = formatInvoiceWarning(p);
+                const hasAnyWarning = !!sgkWarning || !!invoiceWarning;
+                const deviceLabel = getDeviceLabel(p);
+                const deviceEarLabel = getDeviceEarLabel(p);
+                const satisfactionDisplay =
+                  p.satisfaction_10 != null ? `${p.satisfaction_10} / 10` : '-';
+
+                return (
+                  <tr
+                    key={p.id}
+                    className={
+                      'border-t border-slate-100 ' +
+                      (hasAnyWarning ? 'bg-amber-50/40 ' : '') +
+                      (isDeleted ? 'opacity-80 ' : '')
+                    }
+                  >
+                    {visibleColumns.map((col) => {
+                      switch (col.id as PatientTableColumnId) {
+                        case 'created_at':
+                          return (
+                            <td
+                              key={col.id}
+                              className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                            >
+                              {formatDate(p.created_at)}
+                            </td>
+                          );
+                        case 'full_name':
+                          return (
+                            <td
+                              key={col.id}
+                              className="max-w-[220px] truncate px-3 py-2 text-slate-800 sm:px-4 sm:py-2.5"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="truncate">{p.full_name}</span>
+                                {isDeleted && (
+                                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                                    Silinmiş
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        case 'national_id':
+                          return (
+                            <td
+                              key={col.id}
+                              className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                            >
+                              {p.national_id && p.national_id.trim().length > 0
+                                ? p.national_id
+                                : '-'}
+                            </td>
+                          );
+                        case 'phone':
+                          return (
+                            <td
+                              key={col.id}
+                              className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                            >
+                              {p.phone ?? '-'}
+                            </td>
+                          );
+                        case 'device':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                            >
+                              {deviceLabel}
+                            </td>
+                          );
+                        case 'ear':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                            >
+                              {deviceEarLabel}
+                            </td>
+                          );
+                        case 'sale_total_amount':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-right text-slate-700 sm:px-4 sm:py-2.5"
+                            >
+                              {formatPrice(p.sale_total_amount)}
+                            </td>
+                          );
+                        case 'satisfaction_10':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-center text-slate-700 sm:px-4 sm:py-2.5"
+                            >
+                              {satisfactionDisplay}
+                            </td>
+                          );
+                        case 'last_visit_at':
+                          return (
+                            <td
+                              key={col.id}
+                              className="whitespace-nowrap px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                            >
+                              {formatDate(p.last_visit_at)}
+                            </td>
+                          );
+                        case 'sgk':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-center sm:px-4 sm:py-2.5"
+                            >
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span
+                                  className={
+                                    p.sgk_flag
+                                      ? 'inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700'
+                                      : 'inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500'
+                                  }
+                                >
+                                  {p.sgk_flag ? 'Evet' : 'Hayır'}
+                                </span>
+                                {sgkWarning && (
+                                  <span className="text-[10px] font-medium text-amber-700">
+                                    {sgkWarning}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        case 'invoice':
+                          return (
+                            <td
+                              key={col.id}
+                              className="px-3 py-2 text-slate-700 sm:px-4 sm:py-2.5"
+                            >
+                              <div className="flex flex-col items-start gap-0.5">
+                                <span
+                                  className={
+                                    p.invoice_issued
+                                      ? 'inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700'
+                                      : 'inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500'
+                                  }
+                                >
+                                  {p.invoice_issued ? 'Kesildi' : 'Yok'}
+                                </span>
+                                {p.invoice_issued_at && (
+                                  <span className="text-[10px] text-slate-500">
+                                    {formatDate(p.invoice_issued_at)}
+                                  </span>
+                                )}
+                                {invoiceWarning && (
+                                  <span className="text-[10px] font-medium text-amber-700">
+                                    {invoiceWarning}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        case 'actions':
+                          return (
+                            <td
+                              key={col.id}
+                              className="whitespace-nowrap px-3 py-2 text-right sm:px-4 sm:py-2.5"
+                            >
+                              <div className="inline-flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectPatient(p)}
+                                  className="inline-flex items-center rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                >
+                                  Detay
+                                </button>
+
+                                {!isDeleted && onDeletePatient && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteClick(p)}
+                                    className="inline-flex items-center rounded-md border border-red-200 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                                  >
+                                    Sil
+                                  </button>
+                                )}
+
+                                {isDeleted && onRestorePatient && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRestoreClick(p)}
+                                    className="inline-flex items-center rounded-md border border-emerald-200 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                                  >
+                                    Geri Al
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        default:
+                          return null;
+                      }
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </ResponsiveTableShell>
     </div>
   );
 }
