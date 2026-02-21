@@ -44,9 +44,6 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <section>
         <h2 className="text-xl font-semibold text-slate-900">Genel Bakış</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Supabase dashboard_kpis RPC ile aylık KPI verileri çekiliyor.
-        </p>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
