@@ -471,7 +471,7 @@ export function PatientsTable({
 
       <ResponsiveTableShell className="hidden md:block">
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          <table className="min-w-full text-xs lg:text-sm">
+          <table className="min-w-[900px] text-xs lg:text-sm">
             <thead className="bg-slate-50">
               <tr>
                 {visibleColumns.map((col) => {
