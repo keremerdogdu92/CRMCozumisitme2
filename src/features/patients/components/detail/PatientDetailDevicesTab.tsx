@@ -19,6 +19,7 @@ import {
   createDeviceRepairForInventoryItem,
   useDeviceRepairs,
 } from '../../api/api.repairs';
+import { updatePatientSaleAmount } from '../../api/api.patients.update';
 
 type PatientDetailDevicesTabProps = {
   patient: PatientRow;
@@ -113,6 +114,11 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
+  // Sale amount inline edit state
+  const [isEditingSale, setIsEditingSale] = useState(false);
+  const [saleAmountDraft, setSaleAmountDraft] = useState('');
+  const [isSavingSale, setIsSavingSale] = useState(false);
+
   const openRepairModalForDevice = (device: PatientDeviceRow) => {
     setRepairDevice(device);
     setRepairReason('');
@@ -190,6 +196,24 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
     }
   };
 
+  const handleSaveSaleAmount = async () => {
+    setIsSavingSale(true);
+    try {
+      const num = saleAmountDraft.trim() ? Number(saleAmountDraft) : null;
+      await updatePatientSaleAmount({
+        id: patient.id,
+        saleTotalAmount: num != null && Number.isFinite(num) ? num : null,
+      });
+      setIsEditingSale(false);
+      // Invalidate patient list so drawer re-renders with updated value
+      queryClient.invalidateQueries({ queryKey: ['patients'] });
+    } catch (err) {
+      console.error('updatePatientSaleAmount error:', err);
+    } finally {
+      setIsSavingSale(false);
+    }
+  };
+
   const handleSaveRepair = async () => {
     if (!repairDevice) return;
     if (!profile?.org_id) {
@@ -256,10 +280,58 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
           </span>
         </div>
 
-        {/* Actual sale price total (first sale) */}
-        <div className="flex justify-between gap-2">
-          <span className="text-xs text-slate-500">Gerçek Satış Fiyatı (ilk satış)</span>
-          <span className="text-xs font-semibold text-slate-900">{saleTotal}</span>
+        {/* Actual sale price total (first sale) — inline editable */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-slate-500">Gerçek Satış Fiyatı</span>
+          {isEditingSale ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                className="w-28 rounded border border-slate-300 px-1.5 py-0.5 text-right text-xs"
+                value={saleAmountDraft}
+                onChange={(e) => setSaleAmountDraft(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveSaleAmount();
+                  if (e.key === 'Escape') setIsEditingSale(false);
+                }}
+              />
+              <button
+                type="button"
+                className="text-[11px] font-semibold text-primary-600 disabled:opacity-50"
+                onClick={handleSaveSaleAmount}
+                disabled={isSavingSale}
+              >
+                {isSavingSale ? '...' : 'Kaydet'}
+              </button>
+              <button
+                type="button"
+                className="text-[11px] text-slate-400"
+                onClick={() => setIsEditingSale(false)}
+                disabled={isSavingSale}
+              >
+                İptal
+              </button>
+            </div>
+          ) : (
+            <span className="flex items-center gap-1">
+              <span className="text-xs font-semibold text-slate-900">{saleTotal}</span>
+              <button
+                type="button"
+                className="text-[11px] text-blue-600 underline"
+                onClick={() => {
+                  setSaleAmountDraft(
+                    patient.sale_total_amount != null
+                      ? String(patient.sale_total_amount)
+                      : '',
+                  );
+                  setIsEditingSale(true);
+                }}
+              >
+                Düzenle
+              </button>
+            </span>
+          )}
         </div>
 
         <p className="mt-1 text-[11px] leading-snug text-slate-500">

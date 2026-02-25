@@ -314,3 +314,22 @@ export async function updatePatientPersonalInfo(params: {
     throw new Error('STEP_UPDATE_PERSONAL_INFO: ' + error.message);
   }
 }
+
+/**
+ * Update only patients.sale_total_amount in-place.
+ * No columns are moved or renamed — just a simple value update.
+ */
+export async function updatePatientSaleAmount(params: {
+  id: string;
+  saleTotalAmount: number | null;
+}): Promise<void> {
+  const { error } = await supabaseClient
+    .from('patients')
+    .update({ sale_total_amount: params.saleTotalAmount })
+    .eq('id', params.id);
+
+  if (error) {
+    console.error('Failed to update sale_total_amount:', error);
+    throw new Error('STEP_UPDATE_SALE_AMOUNT: ' + error.message);
+  }
+}
