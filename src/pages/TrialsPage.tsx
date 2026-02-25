@@ -132,7 +132,7 @@ export default function TrialsPage() {
   }
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 md:p-8">
+    <div className="space-y-6 py-4 sm:py-6 md:py-8">
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>

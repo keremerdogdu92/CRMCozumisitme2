@@ -230,7 +230,7 @@ export default function PatientsPage() {
   };
 
   return (
-    <div className="space-y-5 overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6 lg:px-8 lg:py-8">
+    <div className="space-y-5 py-4 sm:py-6 lg:py-8">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Hastalar</h2>

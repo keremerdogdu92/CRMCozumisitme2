@@ -97,7 +97,7 @@ export default function InventoryPage() {
   };
 
   return (
-    <div className="space-y-6 p-8">
+    <div className="space-y-6 py-8">
       {/* Header + actions */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>

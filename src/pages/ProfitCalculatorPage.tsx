@@ -27,7 +27,7 @@ export default function ProfitCalculatorPage() {
   }
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4 py-4">
       {/* Üstte hızlı komisyon aracı */}
       <ProfitCalculatorQuickCommission />
 
