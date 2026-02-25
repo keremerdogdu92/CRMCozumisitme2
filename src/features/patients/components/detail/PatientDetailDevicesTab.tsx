@@ -10,6 +10,7 @@ import type { DeviceRepairRow, PatientDeviceRow, PatientRow } from '../../types'
 import { formatAmount } from '../../patientFormatUtils';
 import {
   PATIENT_DEVICES_BY_PATIENT_QUERY_KEY,
+  updateInventoryItem,
   usePatientDevices,
 } from '../../api/api.devices';
 import { useCurrentProfile } from '../../../auth/useCurrentProfile';
@@ -99,6 +100,19 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
   const [isSavingRepair, setIsSavingRepair] = useState(false);
   const [repairError, setRepairError] = useState<string | null>(null);
 
+  // Edit device modal state
+  const [editDevice, setEditDevice] = useState<PatientDeviceRow | null>(null);
+  const [editFields, setEditFields] = useState({
+    barcode: '',
+    serial_no: '',
+    ear_side: '' as string,
+    purchase_price: '',
+    list_price: '',
+    device_price: '',
+  });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   const openRepairModalForDevice = (device: PatientDeviceRow) => {
     setRepairDevice(device);
     setRepairReason('');
@@ -115,6 +129,65 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
     setRepairCargoTrackingNo('');
     setRepairShipNow(true);
     setRepairError(null);
+  };
+
+  const openEditModal = (d: PatientDeviceRow) => {
+    setEditDevice(d);
+    setEditFields({
+      barcode: d.barcode ?? '',
+      serial_no: d.serial_no ?? '',
+      ear_side: d.ear_side ?? '',
+      purchase_price: d.purchase_price != null ? String(d.purchase_price) : '',
+      list_price: d.list_price != null ? String(d.list_price) : '',
+      device_price: d.device_price != null ? String(d.device_price) : '',
+    });
+    setEditError(null);
+  };
+
+  const closeEditModal = () => {
+    setEditDevice(null);
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editDevice) return;
+    setIsSavingEdit(true);
+    setEditError(null);
+
+    try {
+      const earVal = editFields.ear_side;
+      const ear: 'right' | 'left' | 'bilateral' | null =
+        earVal === 'right' || earVal === 'left' || earVal === 'bilateral'
+          ? earVal
+          : null;
+
+      await updateInventoryItem(editDevice.id, {
+        barcode: editFields.barcode || null,
+        serial_no: editFields.serial_no || null,
+        ear_side: ear,
+        purchase_price: editFields.purchase_price
+          ? Number(editFields.purchase_price)
+          : null,
+        list_price: editFields.list_price
+          ? Number(editFields.list_price)
+          : null,
+        device_price: editFields.device_price
+          ? Number(editFields.device_price)
+          : null,
+      });
+
+      closeEditModal();
+      queryClient.invalidateQueries({
+        queryKey: PATIENT_DEVICES_BY_PATIENT_QUERY_KEY(patient.id),
+      });
+    } catch (err) {
+      console.error('updateInventoryItem error:', err);
+      setEditError(
+        err instanceof Error ? err.message : 'Cihaz güncellenirken hata oluştu.',
+      );
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
   const handleSaveRepair = async () => {
@@ -277,13 +350,22 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
                       </div>
                     )}
 
-                    <button
-                      type="button"
-                      className="mt-1 text-left text-[11px] text-slate-500 underline"
-                      onClick={() => openRepairModalForDevice(d)}
-                    >
-                      Tamir süreci başlat
-                    </button>
+                    <div className="mt-1 flex gap-3">
+                      <button
+                        type="button"
+                        className="text-[11px] text-blue-600 underline"
+                        onClick={() => openEditModal(d)}
+                      >
+                        Düzenle
+                      </button>
+                      <button
+                        type="button"
+                        className="text-[11px] text-slate-500 underline"
+                        onClick={() => openRepairModalForDevice(d)}
+                      >
+                        Tamir süreci başlat
+                      </button>
+                    </div>
                   </>
                 );
               })()}
@@ -374,6 +456,144 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
                 disabled={isSavingRepair}
               >
                 {isSavingRepair ? 'Kaydediliyor...' : 'Kaydet'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit device modal */}
+      {editDevice && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-3">
+          <div className="w-full max-w-md rounded-lg bg-white p-4 shadow-lg">
+            <h5 className="text-sm font-semibold text-slate-900">
+              Cihaz Düzenle:{' '}
+              {[editDevice.brand, editDevice.model].filter(Boolean).join(' ')}
+            </h5>
+
+            <div className="mt-3 space-y-2">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-[11px] text-slate-600">
+                    Barkod
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                    value={editFields.barcode}
+                    onChange={(e) =>
+                      setEditFields((f) => ({ ...f, barcode: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-slate-600">
+                    Seri No
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                    value={editFields.serial_no}
+                    onChange={(e) =>
+                      setEditFields((f) => ({ ...f, serial_no: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] text-slate-600">
+                  Kulak Tarafı
+                </label>
+                <select
+                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                  value={editFields.ear_side}
+                  onChange={(e) =>
+                    setEditFields((f) => ({ ...f, ear_side: e.target.value }))
+                  }
+                >
+                  <option value="">Seçiniz</option>
+                  <option value="right">Sağ</option>
+                  <option value="left">Sol</option>
+                  <option value="bilateral">Çift</option>
+                </select>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-[11px] text-slate-600">
+                    Alış Fiyatı
+                  </label>
+                  <input
+                    type="number"
+                    className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                    value={editFields.purchase_price}
+                    onChange={(e) =>
+                      setEditFields((f) => ({
+                        ...f,
+                        purchase_price: e.target.value,
+                      }))
+                    }
+                    placeholder="₺"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-slate-600">
+                    Liste Fiyatı
+                  </label>
+                  <input
+                    type="number"
+                    className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                    value={editFields.list_price}
+                    onChange={(e) =>
+                      setEditFields((f) => ({
+                        ...f,
+                        list_price: e.target.value,
+                      }))
+                    }
+                    placeholder="₺"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-slate-600">
+                    Cihaz Fiyatı
+                  </label>
+                  <input
+                    type="number"
+                    className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                    value={editFields.device_price}
+                    onChange={(e) =>
+                      setEditFields((f) => ({
+                        ...f,
+                        device_price: e.target.value,
+                      }))
+                    }
+                    placeholder="₺"
+                  />
+                </div>
+              </div>
+
+              {editError && (
+                <p className="text-[11px] text-red-600">{editError}</p>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                type="button"
+                className="text-[11px] text-slate-600 underline"
+                onClick={closeEditModal}
+                disabled={isSavingEdit}
+              >
+                İptal
+              </button>
+              <button
+                type="button"
+                className="rounded-md bg-primary-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm disabled:opacity-50"
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit}
+              >
+                {isSavingEdit ? 'Kaydediliyor...' : 'Güncelle'}
               </button>
             </div>
           </div>

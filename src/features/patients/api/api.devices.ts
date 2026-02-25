@@ -41,6 +41,7 @@ export async function fetchPatientDevicesByPatientId(
       ear_side,
       purchase_price,
       list_price,
+      device_price,
       barcode,
       serial_no,
       sold_at
@@ -76,6 +77,8 @@ export async function fetchPatientDevicesByPatientId(
       purchase_price:
         row.purchase_price === null ? null : Number(row.purchase_price),
       list_price: row.list_price === null ? null : Number(row.list_price),
+      device_price:
+        row.device_price === null ? null : Number(row.device_price),
       barcode: (row.barcode as string | null) ?? null,
       serial_no: (row.serial_no as string | null) ?? null,
       sold_at: (row.sold_at as string | null) ?? null,
@@ -178,5 +181,31 @@ export async function attachDevicesToPatientFromDrafts(
     throw new Error(
       'Cihazları hastaya bağlarken hata oluştu: ' + errorMessages[0],
     );
+  }
+}
+
+/**
+ * Update editable fields on an inventory_items row.
+ * Used from PatientDetail → Cihazlar tab edit modal.
+ */
+export async function updateInventoryItem(
+  itemId: string,
+  fields: {
+    barcode?: string | null;
+    serial_no?: string | null;
+    ear_side?: 'right' | 'left' | 'bilateral' | null;
+    purchase_price?: number | null;
+    list_price?: number | null;
+    device_price?: number | null;
+  },
+): Promise<void> {
+  const { error } = await supabaseClient
+    .from('inventory_items')
+    .update(fields)
+    .eq('id', itemId);
+
+  if (error) {
+    console.error('updateInventoryItem error:', error);
+    throw error;
   }
 }

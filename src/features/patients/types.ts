@@ -230,6 +230,7 @@ export type PatientDeviceRow = {
   ear_side: PatientDeviceEarSide | null;
   purchase_price: number | null;
   list_price: number | null;
+  device_price: number | null;
   barcode: string | null;
   serial_no: string | null;
   sold_at: string | null;
