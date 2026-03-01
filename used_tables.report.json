@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-02-22T04:50:05.576Z",
+  "generatedAt": "2026-03-01T04:54:59.975Z",
   "scannedDirs": [
     "src",
     "api",
@@ -15,7 +15,7 @@
         "raw.sql",
         "supabase.from"
       ],
-      "hitCount": 41,
+      "hitCount": 42,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.fetch.ts",
@@ -73,7 +73,7 @@
         "supabase.from",
         "raw.sql"
       ],
-      "hitCount": 38,
+      "hitCount": 39,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.create.ts",
@@ -119,7 +119,7 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.devices.ts",
-          "line": 158,
+          "line": 161,
           "kind": "supabase.from",
           "snippet": ".from('inventory_items')"
         }
@@ -1144,7 +1144,7 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.devices.ts",
-          "line": 169,
+          "line": 172,
           "kind": "raw.sql",
           "snippet": "'attachDevicesToPatientFromDrafts update error:',"
         },
@@ -1171,6 +1171,51 @@
           "line": 206,
           "kind": "raw.sql",
           "snippet": "console.error('Supabase reference_gifts update error (REFG_UPDATE):', error);"
+        }
+      ]
+    },
+    {
+      "name": "only",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 6,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
+          "line": 319,
+          "kind": "raw.sql",
+          "snippet": "* Update only patients.sale_total_amount in-place."
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/catalogs/device_catalog_models.sql",
+          "line": 17,
+          "kind": "raw.sql",
+          "snippet": "-- - GRANTS: revoke anon; authenticated gets SELECT/INSERT/UPDATE only"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/inventory/import_jobs.sql",
+          "line": 23,
+          "kind": "raw.sql",
+          "snippet": "-- - GRANTS: remove anon; authenticated gets SELECT/INSERT/UPDATE only; service_role full"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_accessories.sql",
+          "line": 21,
+          "kind": "raw.sql",
+          "snippet": "-- - GRANTS: authenticated SELECT/INSERT/UPDATE only (no DELETE)"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_payments.sql",
+          "line": 21,
+          "kind": "raw.sql",
+          "snippet": "-- - GRANTS: authenticated SELECT/INSERT/UPDATE only (no DELETE)"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/device_repairs.sql",
+          "line": 19,
+          "kind": "raw.sql",
+          "snippet": "-- - GRANTS: revoke anon; authenticated gets SELECT/INSERT/UPDATE only; service_role full"
         }
       ]
     },
@@ -1544,45 +1589,6 @@
       ]
     },
     {
-      "name": "only",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 5,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/catalogs/device_catalog_models.sql",
-          "line": 17,
-          "kind": "raw.sql",
-          "snippet": "-- - GRANTS: revoke anon; authenticated gets SELECT/INSERT/UPDATE only"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/inventory/import_jobs.sql",
-          "line": 23,
-          "kind": "raw.sql",
-          "snippet": "-- - GRANTS: remove anon; authenticated gets SELECT/INSERT/UPDATE only; service_role full"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_accessories.sql",
-          "line": 21,
-          "kind": "raw.sql",
-          "snippet": "-- - GRANTS: authenticated SELECT/INSERT/UPDATE only (no DELETE)"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_payments.sql",
-          "line": 21,
-          "kind": "raw.sql",
-          "snippet": "-- - GRANTS: authenticated SELECT/INSERT/UPDATE only (no DELETE)"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/device_repairs.sql",
-          "line": 19,
-          "kind": "raw.sql",
-          "snippet": "-- - GRANTS: revoke anon; authenticated gets SELECT/INSERT/UPDATE only; service_role full"
-        }
-      ]
-    },
-    {
       "name": "an",
       "kinds": [
         "raw.sql"
@@ -1823,7 +1829,7 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/types.ts",
-          "line": 444,
+          "line": 445,
           "kind": "raw.sql",
           "snippet": "* Lines from UI draft. Caller is responsible for filtering out empty lines."
         }
@@ -2607,9 +2613,39 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.devices.ts",
-          "line": 116,
+          "line": 119,
           "kind": "raw.sql",
           "snippet": "* - Cihaz sayısı tipik olarak az olacağı için her satır ayrı UPDATE ile gider."
+        }
+      ]
+    },
+    {
+      "name": "editable",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.devices.ts",
+          "line": 188,
+          "kind": "raw.sql",
+          "snippet": "* Update editable fields on an inventory_items row."
+        }
+      ]
+    },
+    {
+      "name": "PatientDetail",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.devices.ts",
+          "line": 189,
+          "kind": "raw.sql",
+          "snippet": "* Used from PatientDetail → Cihazlar tab edit modal."
         }
       ]
     },
@@ -2685,6 +2721,21 @@
           "line": 188,
           "kind": "raw.sql",
           "snippet": "* Update invoice status for a given patient."
+        }
+      ]
+    },
+    {
+      "name": "sale_total_amount",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
+          "line": 332,
+          "kind": "raw.sql",
+          "snippet": "console.error('Failed to update sale_total_amount:', error);"
         }
       ]
     },
@@ -2862,7 +2913,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/types.ts",
-          "line": 336,
+          "line": 337,
           "kind": "raw.sql",
           "snippet": "* - sgkDeviceCount is a manual choice (NOT derived from devices)."
         }
