@@ -20,10 +20,28 @@ import { INVENTORY_QUERY_KEY } from './api.keys';
 import {
   buildInventoryImportPayload,
   type CsvRowObj,
+  type BarcodeCatalogKeyMap,
   type CatalogPriceMap,
   makeCatalogPriceKey,
+  makeCatalogPriceLookupKeys,
+  normalizeBarcodeForLookup,
   normalizeItemType,
 } from './inventoryImportUtils';
+
+type CatalogPriceRow = {
+  brand: string | null;
+  model: string | null;
+  item_type: InventoryItemType | null;
+  list_price: unknown;
+  purchase_price: unknown;
+};
+
+type InventoryBarcodeLookupRow = {
+  barcode: string | null;
+  brand: string | null;
+  model: string | null;
+  item_type: InventoryItemType | null;
+};
 
 /**
  * Basit header normalizasyonu:
@@ -139,11 +157,11 @@ export async function importInventoryFromCsv(
 
   // 2) Katalog fiyat haritasını hazırla (yalnızca her iki fiyat da boş olan satırlar için)
   const catalogPriceMap: CatalogPriceMap = {};
+  const barcodeCatalogKeyMap: BarcodeCatalogKeyMap = {};
 
   const combosNeedingCatalog = new Set<string>();
-  const brandsForFilter = new Set<string>();
-  const modelsForFilter = new Set<string>();
   const itemTypesForFilter = new Set<InventoryItemType>();
+  const barcodesForLookup = new Set<string>();
 
   csvObjects.forEach((row) => {
     const rawBrand = (row['brand'] ?? row['device_brand'] ?? '').trim();
@@ -163,9 +181,11 @@ export async function importInventoryFromCsv(
       const key = makeCatalogPriceKey(rawBrand, rawModel, itemType);
       if (!combosNeedingCatalog.has(key)) {
         combosNeedingCatalog.add(key);
-        brandsForFilter.add(rawBrand);
-        modelsForFilter.add(rawModel);
         itemTypesForFilter.add(itemType);
+      }
+      const barcode = normalizeBarcodeForLookup(row['barcode'] ?? '');
+      if (barcode) {
+        barcodesForLookup.add(barcode);
       }
     } catch {
       // Geçersiz item_type; blocking error olarak daha sonra util içinde ele alınacak.
@@ -185,21 +205,7 @@ export async function importInventoryFromCsv(
       .select('brand, model, item_type, list_price, purchase_price')
       .eq('org_id', orgId);
 
-    const brandList = Array.from(brandsForFilter);
-    const modelList = Array.from(modelsForFilter);
     const itemTypeList = Array.from(itemTypesForFilter);
-
-    if (brandList.length === 1) {
-      query = query.eq('brand', brandList[0]);
-    } else {
-      query = query.in('brand', brandList);
-    }
-
-    if (modelList.length === 1) {
-      query = query.eq('model', modelList[0]);
-    } else {
-      query = query.in('model', modelList);
-    }
 
     if (itemTypeList.length === 1) {
       query = query.eq('item_type', itemTypeList[0]);
@@ -217,18 +223,65 @@ export async function importInventoryFromCsv(
       throw new Error('IMPORT_CATALOG: ' + catalogError.message);
     }
 
-    for (const row of catalogRows ?? []) {
-      const brand = (row as any).brand as string | null;
-      const model = (row as any).model as string | null;
-      const itemType = (row as any).item_type as InventoryItemType | null;
+    for (const row of (catalogRows ?? []) as CatalogPriceRow[]) {
+      const brand = row.brand;
+      const model = row.model;
+      const itemType = row.item_type;
 
       if (!brand || !model || !itemType) continue;
 
       const key = makeCatalogPriceKey(brand, model, itemType);
       catalogPriceMap[key] = {
-        purchase_price: toNumberOrNull((row as any).purchase_price),
-        list_price: toNumberOrNull((row as any).list_price),
+        purchase_price: toNumberOrNull(row.purchase_price),
+        list_price: toNumberOrNull(row.list_price),
       };
+    }
+
+    const barcodeList = Array.from(barcodesForLookup);
+    if (barcodeList.length > 0) {
+      const { data: inventoryRows, error: inventoryError } = await supabaseClient
+        .from('inventory_items')
+        .select('barcode, brand, model, item_type')
+        .eq('org_id', orgId)
+        .is('deleted_at', null)
+        .in('barcode', barcodeList);
+
+      if (inventoryError) {
+        console.error(
+          'Failed to load barcode model matches for inventory import:',
+          inventoryError,
+        );
+        throw new Error('IMPORT_BARCODE_LOOKUP: ' + inventoryError.message);
+      }
+
+      const candidatesByBarcode = new Map<string, Set<string>>();
+
+      for (const row of (inventoryRows ?? []) as InventoryBarcodeLookupRow[]) {
+        const barcode = normalizeBarcodeForLookup(row.barcode ?? '');
+        const brand = row.brand;
+        const model = row.model;
+        const itemType = row.item_type;
+
+        if (!barcode || !brand || !model || !itemType) continue;
+
+        const matchingKey = makeCatalogPriceLookupKeys(
+          brand,
+          model,
+          itemType,
+        ).find((key) => catalogPriceMap[key]);
+
+        if (!matchingKey) continue;
+
+        const keys = candidatesByBarcode.get(barcode) ?? new Set<string>();
+        keys.add(matchingKey);
+        candidatesByBarcode.set(barcode, keys);
+      }
+
+      for (const [barcode, keys] of candidatesByBarcode.entries()) {
+        if (keys.size === 1) {
+          barcodeCatalogKeyMap[barcode] = Array.from(keys)[0];
+        }
+      }
     }
   }
 
@@ -244,6 +297,7 @@ export async function importInventoryFromCsv(
     jobId,
     csvObjects,
     catalogPriceMap,
+    barcodeCatalogKeyMap,
   });
 
   try {

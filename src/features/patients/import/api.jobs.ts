@@ -8,9 +8,16 @@ import type {
   PatientsImportStatusSummary,
   LegacyDevicesImportStatusSummary,
   LegacyDevicesImportRow,
+  InventoryImportStatusSummary,
+  InventoryImportRow,
 } from './types';
 
 const MAX_BATCH_SIZE = 200;
+
+type ImportJobCreateRow = {
+  id: string;
+  org_id: string;
+};
 
 async function getOrgContext(): Promise<{ orgId: string; userId: string }> {
   // 1) Get current user
@@ -81,7 +88,8 @@ export async function createPatientsImportJob(
     throw new Error('Failed to create import job: ' + error.message);
   }
 
-  return { jobId: (data as any).id as string, orgId: (data as any).org_id };
+  const row = data as ImportJobCreateRow;
+  return { jobId: row.id, orgId: row.org_id };
 }
 
 export async function insertPatientsImportRows(
@@ -118,7 +126,7 @@ export async function insertPatientsImportRows(
 async function countRows(
   table: string,
   jobId: string,
-  filters: Record<string, any>,
+  filters: Record<string, boolean | string | null>,
 ): Promise<number> {
   let query = supabaseClient
     .from(table)
@@ -204,7 +212,8 @@ export async function createLegacyDevicesImportJob(
     );
   }
 
-  return { jobId: (data as any).id as string, orgId: (data as any).org_id };
+  const row = data as ImportJobCreateRow;
+  return { jobId: row.id, orgId: row.org_id };
 }
 
 export async function insertLegacyDevicesImportRows(
@@ -275,6 +284,45 @@ export async function getLegacyDevicesImportJobSummary(
 }
 
 // -----------------------------
+// Inventory import
+// -----------------------------
+
+export async function getInventoryImportJobSummary(
+  jobId: string,
+): Promise<InventoryImportStatusSummary> {
+  const table = 'inventory_import_rows';
+
+  const [totalRows, importedRows, errorRows, warningRows] = await Promise.all([
+    countRows(table, jobId, {}),
+    countRows(table, jobId, { valid: true }),
+    countRows(table, jobId, { valid: false }),
+    (async () => {
+      const { count, error } = await supabaseClient
+        .from(table)
+        .select('id', { count: 'exact', head: true })
+        .eq('job_id', jobId)
+        .eq('valid', true)
+        .not('validation_error', 'is', null);
+      if (error) {
+        throw new Error(
+          'Failed to count inventory import warning rows: ' + error.message,
+        );
+      }
+      return count ?? 0;
+    })(),
+  ]);
+
+  return {
+    jobId,
+    totalRows,
+    importedRows,
+    errorRows,
+    validatedRows: importedRows,
+    warningRows,
+  };
+}
+
+// -----------------------------
 // v1 Import Fix Center helpers
 // -----------------------------
 
@@ -318,4 +366,25 @@ export async function fetchLegacyDevicesImportErrorRows(
   }
 
   return (data ?? []) as LegacyDevicesImportRow[];
+}
+
+export async function fetchInventoryImportErrorRows(
+  jobId: string,
+): Promise<InventoryImportRow[]> {
+  const { data, error } = await supabaseClient
+    .from('inventory_import_rows')
+    .select(
+      'id, job_id, row_index, raw_brand, raw_model, raw_item_type, raw_barcode, raw_serial_no, raw_status, raw_purchase_price, raw_list_price, raw_purchase_date, raw_notes, valid, validation_error',
+    )
+    .eq('job_id', jobId)
+    .eq('valid', false)
+    .order('row_index', { ascending: true });
+
+  if (error) {
+    throw new Error(
+      'Failed to fetch inventory import error rows: ' + error.message,
+    );
+  }
+
+  return (data ?? []) as InventoryImportRow[];
 }

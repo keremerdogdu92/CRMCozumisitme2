@@ -8,7 +8,7 @@ export type PatientsImportRow = {
   org_id: string;
   job_id: string;
   row_index: number;
-  raw_row: Record<string, any>;
+  raw_row: Record<string, unknown>;
   normalized_payload: PatientsImportNormalizedPayload | null;
   status: 'pending' | 'validated' | 'error' | 'imported';
   error_message: string | null;
@@ -64,7 +64,7 @@ export type LegacyDevicesImportRow = {
   org_id: string;
   job_id: string;
   row_index: number;
-  raw_row: Record<string, any>;
+  raw_row: Record<string, unknown>;
   normalized_payload: LegacyDeviceImportNormalizedPayload | null;
   status: 'pending' | 'validated' | 'error' | 'imported';
   error_message: string | null;
@@ -74,6 +74,33 @@ export type LegacyDevicesImportRow = {
 };
 
 export type LegacyDevicesImportStatusSummary = {
+  jobId: string;
+  totalRows: number;
+  importedRows: number;
+  errorRows: number;
+  validatedRows: number;
+  warningRows: number;
+};
+
+export type InventoryImportRow = {
+  id: number;
+  job_id: string;
+  row_index: number;
+  raw_brand: string | null;
+  raw_model: string | null;
+  raw_item_type: string | null;
+  raw_barcode: string | null;
+  raw_serial_no: string | null;
+  raw_status: string | null;
+  raw_purchase_price: string | null;
+  raw_list_price: string | null;
+  raw_purchase_date: string | null;
+  raw_notes: string | null;
+  valid: boolean | null;
+  validation_error: string | null;
+};
+
+export type InventoryImportStatusSummary = {
   jobId: string;
   totalRows: number;
   importedRows: number;

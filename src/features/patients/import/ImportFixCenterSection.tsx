@@ -8,14 +8,18 @@ import { supabaseClient } from '../../../utils/supabaseClient';
 import type {
   PatientsImportStatusSummary,
   LegacyDevicesImportStatusSummary,
+  InventoryImportStatusSummary,
   PatientsImportRow,
   LegacyDevicesImportRow,
+  InventoryImportRow,
 } from './types';
 import {
   fetchPatientsImportErrorRows,
   fetchLegacyDevicesImportErrorRows,
+  fetchInventoryImportErrorRows,
   getPatientsImportJobSummary,
   getLegacyDevicesImportJobSummary,
+  getInventoryImportJobSummary,
 } from './api.jobs';
 import { LegacyDeviceRowFixModal } from './LegacyDeviceRowFixModal';
 import { PatientRowFixModal } from './PatientRowFixModal';
@@ -32,10 +36,10 @@ type ImportJobRow = {
   source_filename: string | null;
 };
 
-type ImportDashboardTab = 'patients' | 'legacy';
+type ImportDashboardTab = 'inventory' | 'patients' | 'legacy';
 
 export function ImportFixCenterSection() {
-  const [activeTab, setActiveTab] = useState<ImportDashboardTab>('patients');
+  const [activeTab, setActiveTab] = useState<ImportDashboardTab>('inventory');
 
   const [jobs, setJobs] = useState<ImportJobRow[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
@@ -43,7 +47,10 @@ export function ImportFixCenterSection() {
 
   const [selectedJob, setSelectedJob] = useState<ImportJobRow | null>(null);
   const [jobSummary, setJobSummary] = useState<
-    PatientsImportStatusSummary | LegacyDevicesImportStatusSummary | null
+    | InventoryImportStatusSummary
+    | PatientsImportStatusSummary
+    | LegacyDevicesImportStatusSummary
+    | null
   >(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -53,6 +60,9 @@ export function ImportFixCenterSection() {
   >([]);
   const [legacyErrorRows, setLegacyErrorRows] = useState<
     LegacyDevicesImportRow[]
+  >([]);
+  const [inventoryErrorRows, setInventoryErrorRows] = useState<
+    InventoryImportRow[]
   >([]);
   const [rowsLoading, setRowsLoading] = useState(false);
   const [rowsError, setRowsError] = useState<string | null>(null);
@@ -72,10 +82,15 @@ export function ImportFixCenterSection() {
       setJobSummary(null);
       setPatientErrorRows([]);
       setLegacyErrorRows([]);
+      setInventoryErrorRows([]);
       setRowsError(null);
 
       const target =
-        activeTab === 'patients' ? 'patients' : 'legacy_patient_devices';
+        activeTab === 'inventory'
+          ? 'inventory'
+          : activeTab === 'patients'
+            ? 'patients'
+            : 'legacy_patient_devices';
 
       try {
         const { data, error } = await supabaseClient
@@ -111,7 +126,16 @@ export function ImportFixCenterSection() {
     setRowsError(null);
 
     try {
-      if (job.target_entity === 'patients') {
+      if (job.target_entity === 'inventory') {
+        const [summary, errorRows] = await Promise.all([
+          getInventoryImportJobSummary(job.id),
+          fetchInventoryImportErrorRows(job.id),
+        ]);
+        setJobSummary(summary);
+        setInventoryErrorRows(errorRows);
+        setPatientErrorRows([]);
+        setLegacyErrorRows([]);
+      } else if (job.target_entity === 'patients') {
         const [summary, errorRows] = await Promise.all([
           getPatientsImportJobSummary(job.id),
           fetchPatientsImportErrorRows(job.id),
@@ -119,6 +143,7 @@ export function ImportFixCenterSection() {
         setJobSummary(summary);
         setPatientErrorRows(errorRows);
         setLegacyErrorRows([]);
+        setInventoryErrorRows([]);
       } else if (job.target_entity === 'legacy_patient_devices') {
         const [summary, errorRows] = await Promise.all([
           getLegacyDevicesImportJobSummary(job.id),
@@ -127,10 +152,12 @@ export function ImportFixCenterSection() {
         setJobSummary(summary);
         setLegacyErrorRows(errorRows);
         setPatientErrorRows([]);
+        setInventoryErrorRows([]);
       } else {
         setJobSummary(null);
         setPatientErrorRows([]);
         setLegacyErrorRows([]);
+        setInventoryErrorRows([]);
       }
     } catch (err) {
       const msg =
@@ -149,6 +176,7 @@ export function ImportFixCenterSection() {
     void refreshSelectedJob(job);
   }
 
+  const showInventoryErrors = selectedJob?.target_entity === 'inventory';
   const showPatientErrors = selectedJob?.target_entity === 'patients';
   const showLegacyErrors =
     selectedJob?.target_entity === 'legacy_patient_devices';
@@ -157,6 +185,17 @@ export function ImportFixCenterSection() {
     <div className="space-y-3 text-[11px]">
       {/* Tabs */}
       <div className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5 text-xs">
+        <button
+          type="button"
+          onClick={() => setActiveTab('inventory')}
+          className={`rounded px-3 py-1 font-medium ${
+            activeTab === 'inventory'
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Stok import hatalari
+        </button>
         <button
           type="button"
           onClick={() => setActiveTab('patients')}
@@ -313,6 +352,14 @@ export function ImportFixCenterSection() {
               )}
 
               {!rowsLoading &&
+                showInventoryErrors &&
+                inventoryErrorRows.length === 0 && (
+                  <div className="text-[11px] text-slate-500">
+                    Bu job icin stok import hata satiri yok.
+                  </div>
+                )}
+
+              {!rowsLoading &&
                 showPatientErrors &&
                 patientErrorRows.length === 0 && (
                   <div className="text-[11px] text-slate-500">
@@ -325,6 +372,67 @@ export function ImportFixCenterSection() {
                 legacyErrorRows.length === 0 && (
                   <div className="text-[11px] text-slate-500">
                     Bu job için hata satırı yok (veya hepsi düzeltildi).
+                  </div>
+                )}
+
+              {!rowsLoading &&
+                showInventoryErrors &&
+                inventoryErrorRows.length > 0 && (
+                  <div className="mt-1 max-h-80 overflow-y-auto rounded-md border border-slate-200 bg-white">
+                    <table className="min-w-full border-collapse text-[11px]">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="px-2 py-1 text-left font-semibold">
+                            Row
+                          </th>
+                          <th className="px-2 py-1 text-left font-semibold">
+                            Marka / model
+                          </th>
+                          <th className="px-2 py-1 text-left font-semibold">
+                            Seri / barkod
+                          </th>
+                          <th className="px-2 py-1 text-left font-semibold">
+                            Hata
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inventoryErrorRows.map((r) => (
+                          <tr
+                            key={r.id}
+                            className="border-t border-slate-100 align-top"
+                          >
+                            <td className="px-2 py-1">
+                              <div className="font-mono text-[10px]">
+                                #{r.row_index}
+                              </div>
+                            </td>
+                            <td className="px-2 py-1">
+                              <div className="font-medium text-slate-800">
+                                {r.raw_brand ?? '-'}
+                              </div>
+                              <div className="text-[10px] text-slate-600">
+                                {r.raw_model ?? '-'} /{' '}
+                                {r.raw_item_type ?? '-'}
+                              </div>
+                            </td>
+                            <td className="px-2 py-1">
+                              <div className="font-mono text-[10px]">
+                                {r.raw_serial_no ?? '-'}
+                              </div>
+                              <div className="font-mono text-[10px] text-slate-500">
+                                {r.raw_barcode ?? '-'}
+                              </div>
+                            </td>
+                            <td className="px-2 py-1">
+                              <div className="line-clamp-3 text-[10px] text-slate-700">
+                                {r.validation_error ?? '(detay yok)'}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
 

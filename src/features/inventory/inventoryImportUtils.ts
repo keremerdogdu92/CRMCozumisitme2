@@ -44,9 +44,24 @@ export type ImportRowPayload = {
   validation_error: string | null;
 };
 
+export type InventoryItemImportPayload = {
+  org_id: string;
+  brand: string;
+  model: string;
+  item_type: InventoryItemType;
+  barcode: string | null;
+  serial_no: string | null;
+  ear_side: null;
+  status: InventoryStatus;
+  purchase_price: number | null;
+  list_price: number | null;
+  sold_patient_id: null;
+  sold_at: null;
+};
+
 export type InventoryImportBuildResult = {
   importRowsPayload: ImportRowPayload[];
-  inventoryItemsPayload: any[];
+  inventoryItemsPayload: InventoryItemImportPayload[];
   totalRows: number;
   importedCount: number;
   errorCount: number;
@@ -63,6 +78,37 @@ export type CatalogPriceMapEntry = {
 };
 
 export type CatalogPriceMap = Record<string, CatalogPriceMapEntry>;
+export type BarcodeCatalogKeyMap = Record<string, string>;
+
+export function normalizeCatalogMatchText(raw: string): string {
+  return raw
+    .trim()
+    .replace(/[İIı]/g, 'i')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function normalizeBarcodeForLookup(raw: string): string {
+  return raw.trim().replace(/\s+/g, '');
+}
+
+function applyCatalogModelAlias(
+  brandKey: string,
+  modelKey: string,
+  itemType: InventoryItemType,
+): string {
+  if (brandKey === 'rexton' && itemType === 'hearing_aid') {
+    if (modelKey.startsWith('b li ')) {
+      return `bicore ${modelKey}`;
+    }
+  }
+
+  return modelKey;
+}
 
 /**
  * Tek bir katalog anahtarı üret:
@@ -74,9 +120,23 @@ export function makeCatalogPriceKey(
   model: string,
   itemType: InventoryItemType,
 ): string {
-  return `${brand.trim().toLowerCase()}::${model
-    .trim()
-    .toLowerCase()}::${itemType}`;
+  return `${normalizeCatalogMatchText(brand)}::${normalizeCatalogMatchText(
+    model,
+  )}::${itemType}`;
+}
+
+export function makeCatalogPriceLookupKeys(
+  brand: string,
+  model: string,
+  itemType: InventoryItemType,
+): string[] {
+  const brandKey = normalizeCatalogMatchText(brand);
+  const modelKey = normalizeCatalogMatchText(model);
+  const directKey = `${brandKey}::${modelKey}::${itemType}`;
+  const aliasedModelKey = applyCatalogModelAlias(brandKey, modelKey, itemType);
+  const aliasedKey = `${brandKey}::${aliasedModelKey}::${itemType}`;
+
+  return aliasedKey === directKey ? [directKey] : [directKey, aliasedKey];
 }
 
 /**
@@ -210,15 +270,17 @@ export function buildInventoryImportPayload(args: {
   jobId: string;
   csvObjects: CsvRowObj[];
   catalogPriceMap?: CatalogPriceMap;
+  barcodeCatalogKeyMap?: BarcodeCatalogKeyMap;
 }): InventoryImportBuildResult {
-  const { orgId, jobId, csvObjects, catalogPriceMap } = args;
+  const { orgId, jobId, csvObjects, catalogPriceMap, barcodeCatalogKeyMap } =
+    args;
 
   const totalRows = csvObjects.length;
   let importedCount = 0;
   let errorCount = 0;
 
   const importRowsPayload: ImportRowPayload[] = [];
-  const inventoryItemsPayload: any[] = [];
+  const inventoryItemsPayload: InventoryItemImportPayload[] = [];
 
   csvObjects.forEach((row, idx) => {
     const rowIndex = idx + 2; // 1 = header, so rows start at 2
@@ -322,8 +384,26 @@ export function buildInventoryImportPayload(args: {
 
     // 7) Hem CSV'de hem de hesaplanan değerlerde fiyat boşsa → katalogtan doldurmayı dene
     if (valid && purchasePrice == null && listPrice == null && catalogPriceMap) {
-      const key = makeCatalogPriceKey(rawBrand, rawModel, itemType);
-      const catalog = catalogPriceMap[key];
+      const lookupKeys = makeCatalogPriceLookupKeys(rawBrand, rawModel, itemType);
+      const barcodeCatalogKey = rawBarcode
+        ? barcodeCatalogKeyMap?.[normalizeBarcodeForLookup(rawBarcode)]
+        : undefined;
+      const candidateKeys = barcodeCatalogKey
+        ? [
+            barcodeCatalogKey,
+            ...lookupKeys.filter((key) => key !== barcodeCatalogKey),
+          ]
+        : lookupKeys;
+      let catalog: CatalogPriceMapEntry | undefined;
+      let matchedByBarcode = false;
+
+      for (const key of candidateKeys) {
+        catalog = catalogPriceMap[key];
+        if (catalog) {
+          matchedByBarcode = key === barcodeCatalogKey;
+          break;
+        }
+      }
 
       if (catalog) {
         purchasePrice =
@@ -337,7 +417,9 @@ export function buildInventoryImportPayload(args: {
             'CSV satırında purchase_price ve list_price boş, ve katalogta da bu model için fiyat değeri yok.';
         } else {
           warnings.push(
-            'purchase_price ve list_price CSV’de boş olduğu için katalog fiyatları ile dolduruldu.',
+            matchedByBarcode
+              ? 'purchase_price ve list_price CSVde bos oldugu icin barkodla eslesen katalog fiyatlari ile dolduruldu.'
+              : 'purchase_price ve list_price CSV’de boş olduğu için katalog fiyatları ile dolduruldu.',
           );
         }
       } else {
