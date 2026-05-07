@@ -137,6 +137,7 @@ export async function fetchTrials(
       created_at,
       reference_id,
       note,
+      offer_note,
       deleted_at,
       status,
       lost_at,
@@ -183,6 +184,7 @@ export async function fetchTrialsByReferenceId(
       created_at,
       reference_id,
       note,
+      offer_note,
       deleted_at,
       status,
       lost_at,
@@ -411,6 +413,7 @@ export async function createTrial(input: NewTrialForm): Promise<void> {
         : null,
       reference_id: input.referenceId ?? null,
       note: input.note.trim() || null,
+      offer_note: input.offerNote.trim() || null,
 
       // Lead pipeline defaults are handled by DB (status='active')
     })
@@ -487,7 +490,7 @@ export async function linkTrialToPatientAndDelete(
 
 /**
  * Update trial personal info.
- * Updates: full_name, phone, first_meet_at, next_meet_at, note, created_at
+ * Updates: full_name, phone, first_meet_at, next_meet_at, note, offer_note, created_at
  */
 export async function updateTrialInfo(params: {
   id: string;
@@ -496,9 +499,19 @@ export async function updateTrialInfo(params: {
   firstMeetAt: string | null; // ISO string or null
   nextMeetAt: string | null; // ISO string or null
   note: string;
+  offerNote: string;
   createdAt?: string; // yyyy-MM-dd format, optional
 }): Promise<void> {
-  const { id, fullName, phone, firstMeetAt, nextMeetAt, note, createdAt } = params;
+  const {
+    id,
+    fullName,
+    phone,
+    firstMeetAt,
+    nextMeetAt,
+    note,
+    offerNote,
+    createdAt,
+  } = params;
 
   // Validation
   const trimmedFullName = fullName.trim();
@@ -526,6 +539,7 @@ export async function updateTrialInfo(params: {
     first_meet_at: firstMeetAt,
     next_meet_at: nextMeetAt,
     note: note.trim() || null,
+    offer_note: offerNote.trim() || null,
   };
 
   if (createdAtIso !== undefined) {

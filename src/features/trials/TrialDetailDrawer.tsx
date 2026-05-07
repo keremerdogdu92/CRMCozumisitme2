@@ -141,6 +141,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
     trial?.next_meet_at ? new Date(trial.next_meet_at).toISOString().slice(0, 16) : '',
   );
   const [note, setNote] = useState(trial?.note || '');
+  const [offerNote, setOfferNote] = useState(trial?.offer_note || '');
   const [createdAt, setCreatedAt] = useState(
     trial?.created_at ? new Date(trial.created_at).toISOString().split('T')[0] : '',
   );
@@ -229,6 +230,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
         trial.next_meet_at ? new Date(trial.next_meet_at).toISOString().slice(0, 16) : '',
       );
       setNote(trial.note || '');
+      setOfferNote(trial.offer_note || '');
       setCreatedAt(
         trial.created_at ? new Date(trial.created_at).toISOString().split('T')[0] : '',
       );
@@ -249,6 +251,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
         firstMeetAt: firstMeetAt ? new Date(firstMeetAt).toISOString() : null,
         nextMeetAt: nextMeetAt ? new Date(nextMeetAt).toISOString() : null,
         note,
+        offerNote,
         createdAt,
       });
 
@@ -285,6 +288,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
         trial.next_meet_at ? new Date(trial.next_meet_at).toISOString().slice(0, 16) : '',
       );
       setNote(trial.note || '');
+      setOfferNote(trial.offer_note || '');
       setCreatedAt(
         trial.created_at ? new Date(trial.created_at).toISOString().split('T')[0] : '',
       );
@@ -674,20 +678,39 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
                     : referenceLite?.full_name ?? '-'}
                 </span>
               </div>
-              {/* Not */}
+              {/* Internal note */}
               <div className="flex flex-col gap-1">
-                <span className="text-xs text-slate-500">Not</span>
+                <span className="text-xs text-slate-500">İç Not</span>
                 {isEditing ? (
                   <textarea
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     rows={3}
                     className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    placeholder="Not"
+                    placeholder="Ekip içi not"
                   />
                 ) : (
                   <span className="whitespace-pre-line text-xs text-slate-900">
                     {trial.note && trial.note.trim() ? trial.note : '-'}
+                  </span>
+                )}
+              </div>
+              {/* Patient-facing offer note */}
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-slate-500">Teklif Notu</span>
+                {isEditing ? (
+                  <textarea
+                    value={offerNote}
+                    onChange={(e) => setOfferNote(e.target.value)}
+                    rows={3}
+                    className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    placeholder="Hastaya basılacak teklif notu"
+                  />
+                ) : (
+                  <span className="whitespace-pre-line text-xs text-slate-900">
+                    {trial.offer_note && trial.offer_note.trim()
+                      ? trial.offer_note
+                      : '-'}
                   </span>
                 )}
               </div>

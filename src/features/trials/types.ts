@@ -21,6 +21,7 @@ export type TrialRow = {
   created_at: string;
   reference_id: string | null;
   note: string | null;
+  offer_note: string | null;
 
   // Lead pipeline
   status: TrialStatus;
@@ -62,6 +63,9 @@ export type NewTrialForm = {
 
   // Optional internal note about this trial
   note: string;
+
+  // Optional patient-facing note printed on the trial offer
+  offerNote: string;
 
   // Device lines for this trial
   devices: TrialDeviceFormRow[];

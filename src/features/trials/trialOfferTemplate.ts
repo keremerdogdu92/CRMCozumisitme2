@@ -23,6 +23,21 @@ function formatPriceForPrint(amount: number | null | undefined): string {
   }
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatMultilineTextForPrint(value: string | null | undefined): string {
+  const trimmed = value?.trim();
+  if (!trimmed) return '';
+  return escapeHtml(trimmed).replace(/\r?\n/g, '<br />');
+}
+
 function getInitials(name: string | null | undefined): string {
   if (!name) return '';
   const parts = name
@@ -77,6 +92,7 @@ export function buildTrialOfferHtml(
     orgSettings?.offerWatermark ?? 'İşitme Cihazı Teklifi';
   const logoUrl = orgSettings?.logoUrl ?? null;
   const logoInitials = getInitials(companyName) || 'İÇ';
+  const offerNoteHtml = formatMultilineTextForPrint(trial.offer_note);
 
   const deviceRowsHtml = devices
     .map((d, index) => {
@@ -319,6 +335,11 @@ export function buildTrialOfferHtml(
       min-height: 80px;
       padding: 6px 8px;
       margin-top: 4px;
+      line-height: 1.5;
+      white-space: normal;
+    }
+    .notes-placeholder {
+      color: #9ca3af;
     }
     .signature-row {
       margin-top: 24px;
@@ -464,7 +485,10 @@ export function buildTrialOfferHtml(
     <div class="notes">
       Notlar:
       <div class="notes-box">
-        <!-- Bu alan el ile doldurulabilir -->
+        ${
+          offerNoteHtml ||
+          '<span class="notes-placeholder">Bu alan el ile doldurulabilir.</span>'
+        }
       </div>
     </div>
 

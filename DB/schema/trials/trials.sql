@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS public.trials (
   next_meet_at timestamp with time zone NULL,
   reference_id uuid NULL,
   note text NULL,
+  offer_note text NULL,
   created_at timestamp with time zone NULL DEFAULT now(),
 
   -- Lead pipeline fields

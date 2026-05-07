@@ -240,10 +240,10 @@ export function TrialNewFormCard({
           )}
         </div>
 
-        {/* Note field */}
+        {/* Internal note field */}
         <div className="md:col-span-4">
           <label className="block text-xs font-medium text-slate-600 mb-1">
-            Not (opsiyonel)
+            İç Not (opsiyonel)
           </label>
           <textarea
             value={values.note}
@@ -253,7 +253,24 @@ export function TrialNewFormCard({
             placeholder="Örn. İlk görüşmede sağ kulağa daha yatkın, kızıyla birlikte geldi, sessiz ortam tercih ediyor."
           />
           <p className="mt-1 text-[11px] text-slate-500">
-            Bu alan sadece iç notlar içindir; hastaya gösterilen teklif çıktısında yer almaz.
+            Bu alan sadece ekip içi takip içindir; teklif çıktısına basılmaz.
+          </p>
+        </div>
+
+        {/* Patient-facing offer note field */}
+        <div className="md:col-span-4">
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            Teklif Notu (opsiyonel)
+          </label>
+          <textarea
+            value={values.offerNote}
+            onChange={(e) => onChange({ offerNote: e.target.value })}
+            rows={3}
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            placeholder="Örn. Teklif 7 gün geçerlidir, ödeme seçenekleri görüşme sırasında paylaşılacaktır."
+          />
+          <p className="mt-1 text-[11px] text-slate-500">
+            Bu alan hastaya verilen teklif çıktısındaki Notlar bölümünde gösterilir.
           </p>
         </div>
 
