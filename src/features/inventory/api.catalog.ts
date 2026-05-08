@@ -11,6 +11,11 @@ export type InventoryCatalogPriceResult = {
   list_price: number | null;
 };
 
+type CatalogPriceRow = {
+  purchase_price: unknown;
+  list_price: unknown;
+};
+
 export async function fetchCatalogPriceForInventory(args: {
   orgId: string;
   brand: string;
@@ -43,7 +48,7 @@ export async function fetchCatalogPriceForInventory(args: {
   };
 
   return {
-    purchase_price: toNumberOrNull((data as any).purchase_price),
-    list_price: toNumberOrNull((data as any).list_price),
+    purchase_price: toNumberOrNull((data as CatalogPriceRow).purchase_price),
+    list_price: toNumberOrNull((data as CatalogPriceRow).list_price),
   };
 }

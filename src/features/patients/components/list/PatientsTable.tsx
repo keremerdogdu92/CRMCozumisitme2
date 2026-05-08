@@ -50,9 +50,7 @@ type PatientTableColumnId =
   | 'invoice'
   | 'actions';
 
-const PATIENT_COLUMNS: TableColumnDef<
-  PatientRow & { _colId?: PatientTableColumnId }
->[] = [
+const PATIENT_COLUMNS: TableColumnDef<PatientRow>[] = [
     { id: 'created_at', label: 'Alış (Kayıt)', sortable: true, isDefaultVisible: true, accessor: (p) => p.created_at ?? null },
     { id: 'full_name', label: 'Ad Soyad', sortable: true, isDefaultVisible: true, accessor: (p) => p.full_name ?? '' },
     { id: 'national_id', label: 'TC Kimlik No', sortable: false, isDefaultVisible: true, accessor: (p) => p.national_id ?? '' },
@@ -181,7 +179,8 @@ export function PatientsTable({
     const col = PATIENT_COLUMNS.find((c) => c.id === prefsState.sortBy);
     if (!col || !col.sortable) return patients;
 
-    const accessor = col.accessor ?? ((row: PatientRow) => (row as any)[col.id]);
+    const accessor =
+      col.accessor ?? ((row: PatientRow) => (row as Record<string, unknown>)[col.id]);
 
     const sorted = [...patients];
     sorted.sort((a, b) => {
@@ -213,8 +212,8 @@ export function PatientsTable({
         return 0;
       }
 
-      const av = va as any;
-      const bv = vb as any;
+      const av = va as number;
+      const bv = vb as number;
       if (av < bv) return prefsState.sortDir === 'asc' ? -1 : 1;
       if (av > bv) return prefsState.sortDir === 'asc' ? 1 : -1;
       return 0;

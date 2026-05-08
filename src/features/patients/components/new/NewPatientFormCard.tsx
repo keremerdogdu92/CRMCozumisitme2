@@ -545,7 +545,7 @@ export function NewPatientFormCard({
                 installmentCount={senetInstallmentCount}
                 firstDueDate={senetFirstDueDate}
                 dayOfMonth={senetDayOfMonth}
-                setSaleTotal={(_v: string) => {
+                setSaleTotal={() => {
                   return;
                 }}
                 setUpfrontPaid={setSenetUpfrontPaid}

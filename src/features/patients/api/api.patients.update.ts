@@ -2,11 +2,16 @@
 // Update helpers for SGK fields, SGK profile info, invoice status, and personal info on patients.
 
 import { supabaseClient } from '../../../utils/supabaseClient';
-import type { PatientSgkUpdateInput, PatientPaymentMethod } from '../types';
+import type { PatientSgkUpdateInput } from '../types';
 import { parseMoneyToNumber } from './api.core';
 
 type PatientSgkUpdateWithRecordedAt = PatientSgkUpdateInput & {
   sgkRecordedToSystemAt?: string | null;
+};
+
+type InvoiceStatusDbRow = {
+  invoice_issued: boolean | null;
+  invoice_issued_at: string | null;
 };
 
 function normalizeRecordedAt(
@@ -223,11 +228,9 @@ export async function updatePatientInvoiceStatus(params: {
   }
 
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    invoice_issued: !!(data as any).invoice_issued,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    invoice_issued: !!(data as InvoiceStatusDbRow).invoice_issued,
     invoice_issued_at:
-      ((data as any).invoice_issued_at as string | null) ?? null,
+      (data as InvoiceStatusDbRow).invoice_issued_at ?? null,
   };
 }
 
@@ -287,7 +290,7 @@ export async function updatePatientPersonalInfo(params: {
     }
   }
 
-  const updatePayload: Record<string, any> = {
+  const updatePayload: Record<string, unknown> = {
     full_name: trimmedFullName,
     phone: trimmedPhone,
     national_id: nationalId.trim() || null,

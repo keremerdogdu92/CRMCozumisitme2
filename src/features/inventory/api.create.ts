@@ -14,6 +14,11 @@ import type { InventoryItemType, NewInventoryItemForm } from './types';
 import { INVENTORY_QUERY_KEY } from './api.keys';
 import { parsePriceOrNull } from './inventoryPriceUtils';
 
+type CatalogPriceRow = {
+  purchase_price: unknown;
+  list_price: unknown;
+};
+
 /**
  * Create a new inventory item using NewInventoryItemForm.
  */
@@ -109,8 +114,9 @@ export async function createInventoryItem(input: NewInventoryItemForm): Promise<
       return Number(num.toFixed(2));
     };
 
-    purchase_price = toNumberOrNull((catalogRow as any).purchase_price);
-    list_price = toNumberOrNull((catalogRow as any).list_price);
+    const catalogPriceRow = catalogRow as CatalogPriceRow;
+    purchase_price = toNumberOrNull(catalogPriceRow.purchase_price);
+    list_price = toNumberOrNull(catalogPriceRow.list_price);
 
     if (purchase_price === null && list_price === null) {
       throw new Error(

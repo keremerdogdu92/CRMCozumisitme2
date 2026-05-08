@@ -8,7 +8,7 @@ declare module '@netlify/serverless-functions-api' {
     context: unknown;
   }
 
-  export type Handler<TEvent = any, TResult = any> = (
+  export type Handler<TEvent = unknown, TResult = unknown> = (
     event: TEvent,
     context: FunctionContext
   ) => Promise<TResult> | TResult;

@@ -40,6 +40,8 @@ export interface PatientForReference {
   last_visit_at: string | null;
 }
 
+type PatientDbRow = Record<string, unknown>;
+
 export async function fetchPatientsByReferenceId(
   referenceId: string,
 ): Promise<PatientForReference[]> {
@@ -58,7 +60,7 @@ export async function fetchPatientsByReferenceId(
     throw error;
   }
 
-  return (data ?? []).map((row: any) => ({
+  return ((data ?? []) as PatientDbRow[]).map((row) => ({
     id: row.id as string,
     full_name: row.full_name as string,
     phone: (row.phone as string | null) ?? null,
@@ -135,7 +137,7 @@ export async function fetchPatients(params?: {
     throw error;
   }
 
-  const mapped: PatientRow[] = (data ?? []).map((row: any) => {
+  const mapped: PatientRow[] = ((data ?? []) as unknown as PatientDbRow[]).map((row) => {
     const patient: PatientRow = {
       id: row.id as string,
       full_name: row.full_name as string,
@@ -189,7 +191,7 @@ export async function fetchPatients(params?: {
 
       archive_code: (row.archive_code as string | null | undefined) ?? null,
 
-      payment_method: (row.payment_method as any) ?? null,
+      payment_method: (row.payment_method as PatientRow['payment_method']) ?? null,
       sale_total_amount:
         (row.sale_total_amount as number | null | undefined) ?? null,
       card_fee_rate:
@@ -254,7 +256,7 @@ export async function searchPatientsByName(
     throw error;
   }
 
-  return (data ?? []).map((row: any) => ({
+  return ((data ?? []) as PatientDbRow[]).map((row) => ({
     id: row.id as string,
     full_name: row.full_name as string,
   }));

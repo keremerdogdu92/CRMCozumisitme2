@@ -63,7 +63,7 @@ export function parseDateLike(
   // yyyy-mm-dd
   const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
   if (isoMatch) {
-    const [_, y, m, d] = isoMatch;
+    const [, y, m, d] = isoMatch;
     return { value: `${y}-${m}-${d}T00:00:00.000Z`, invalid: false };
   }
 
@@ -156,7 +156,7 @@ export function validateLegacyDeviceRow(params: {
 
   // 1) Patient national id (required, 11 digits)
   const patientNationalIdRaw = (rawRow['patient_national_id'] ?? '').trim();
-  let patientNationalId: string | null = patientNationalIdRaw || null;
+  const patientNationalId: string | null = patientNationalIdRaw || null;
 
   if (!patientNationalIdRaw) {
     issues.push({

@@ -31,7 +31,7 @@ export function parseDateLike(
 
   const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
   if (isoMatch) {
-    const [_, y, m, d] = isoMatch;
+    const [, y, m, d] = isoMatch;
     return { value: `${y}-${m}-${d}T00:00:00.000Z`, invalid: false };
   }
 
@@ -167,7 +167,7 @@ export function validatePatientsRow(params: {
   }
 
   const nationalIdRaw = (rawRow['national_id'] ?? '').trim();
-  let nationalId: string | null = nationalIdRaw || null;
+  const nationalId: string | null = nationalIdRaw || null;
   if (!nationalIdRaw) {
     issues.push({
       row_index: rowIndex,

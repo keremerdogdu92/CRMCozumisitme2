@@ -71,7 +71,7 @@ function sortRows<TRow>(
   if (!col || !col.sortable) return rows;
 
   const accessor =
-    col.accessor ?? ((row: TRow) => (row as any)[col.id as keyof TRow]);
+    col.accessor ?? ((row: TRow) => (row as Record<string, unknown>)[col.id]);
 
   const result = [...rows];
 
@@ -107,8 +107,8 @@ function sortRows<TRow>(
     }
 
     // Fallback for other comparable types
-    const av = va as any;
-    const bv = vb as any;
+    const av = va as number;
+    const bv = vb as number;
     if (av < bv) return sortDir === 'asc' ? -1 : 1;
     if (av > bv) return sortDir === 'asc' ? 1 : -1;
     return 0;

@@ -16,6 +16,22 @@ import {
 const DEVICE_MODEL_PRICES_TABLE = 'current_device_model_prices_public';
 const REFERENCES_TABLE = 'references';
 
+type DeviceModelOptionRow = {
+  brand: string | null;
+  model: string | null;
+  item_type: string | null;
+  list_price?: unknown;
+  purchase_price?: unknown;
+};
+
+type ReferenceOptionRow = {
+  id: string;
+  full_name: string | null;
+  commission_scheme: ReferenceScheme;
+  commission_percent: unknown;
+  commission_fixed: unknown;
+};
+
 /**
  * Cihaz model seçenekleri:
  * current_device_model_prices_public içindeki
@@ -37,7 +53,7 @@ export async function fetchDeviceModelOptions(): Promise<DeviceModelOption[]> {
   const seen = new Set<string>();
   const result: DeviceModelOption[] = [];
 
-  for (const row of (data ?? []) as any[]) {
+  for (const row of (data ?? []) as DeviceModelOptionRow[]) {
     if (!row.model) continue;
 
     const brand = (row.brand ?? '').trim() || null;
@@ -78,7 +94,7 @@ export async function fetchChargerOptions(): Promise<DeviceModelOption[]> {
 
   const result: DeviceModelOption[] = [];
 
-  for (const row of (data ?? []) as any[]) {
+  for (const row of (data ?? []) as DeviceModelOptionRow[]) {
     if (!row.model) continue;
 
     const brand = (row.brand ?? '').trim() || null;
@@ -106,8 +122,10 @@ export async function fetchChargerOptions(): Promise<DeviceModelOption[]> {
  */
 export async function fetchEffectiveDeviceCost(
   model: string,
-  asOfDate: string, // currently ignored, kept for future historical pricing
+  _asOfDate: string, // currently ignored, kept for future historical pricing
 ): Promise<DevicePriceInfo> {
+  void _asOfDate;
+
   if (!model) {
     return { deviceCost: null, listPrice: null };
   }
@@ -155,7 +173,7 @@ export async function fetchReferenceOptions(): Promise<ReferenceOption[]> {
     throw error;
   }
 
-  return (data ?? []).map((row: any) => {
+  return ((data ?? []) as ReferenceOptionRow[]).map((row) => {
     const scheme = (row.commission_scheme ?? null) as ReferenceScheme | null;
 
     const percent =

@@ -8,6 +8,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabaseClient } from '../../../utils/supabaseClient';
 import type { PatientDeviceRow, NewPatientDeviceDraft } from '../types';
 
+type PatientDeviceDbRow = Record<string, unknown>;
+
 // React Query key for patient devices
 export const PATIENT_DEVICES_BY_PATIENT_QUERY_KEY = (patientId: string) =>
   ['patient-devices', patientId] as const;
@@ -59,7 +61,7 @@ export async function fetchPatientDevicesByPatientId(
     throw error;
   }
 
-  return (data ?? []).map((row: any): PatientDeviceRow => {
+  return ((data ?? []) as PatientDeviceDbRow[]).map((row): PatientDeviceRow => {
     const rawEar = (row.ear_side as string | null) ?? null;
 
     let ear_side: PatientDeviceRow['ear_side'] = null;

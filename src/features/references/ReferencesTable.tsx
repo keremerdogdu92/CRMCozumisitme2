@@ -168,9 +168,7 @@ function getReminderSortValue(r: ReferenceRow): number {
   return next.getTime();
 }
 
-export const REFERENCE_COLUMNS: TableColumnDef<
-  ReferenceRow & { _colId?: ReferenceTableColumnId }
->[] = [
+export const REFERENCE_COLUMNS: TableColumnDef<ReferenceRow>[] = [
   {
     id: 'created_at',
     label: 'Kayıt',
@@ -305,7 +303,7 @@ export function ReferencesTable({
 
     const accessor =
       col.accessor ??
-      ((row: ReferenceRow) => (row as any)[col.id as keyof ReferenceRow]);
+      ((row: ReferenceRow) => (row as Record<string, unknown>)[col.id]);
 
     const result = [...items];
 
@@ -339,8 +337,8 @@ export function ReferencesTable({
         return 0;
       }
 
-      const av = va as any;
-      const bv = vb as any;
+      const av = va as number;
+      const bv = vb as number;
       if (av < bv) return prefsState.sortDir === 'asc' ? -1 : 1;
       if (av > bv) return prefsState.sortDir === 'asc' ? 1 : -1;
       return 0;

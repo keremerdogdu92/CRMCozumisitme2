@@ -55,6 +55,11 @@ type FetchTrialsOptions = {
   mode?: SoftDeleteMode;
 };
 
+type SoftDeleteFilterQuery<TQuery> = {
+  is(column: string, value: null): TQuery;
+  not(column: string, operator: string, value: null): TQuery;
+};
+
 /**
  * Applies soft-delete visibility filter to a Supabase select query.
  *
@@ -64,7 +69,10 @@ type FetchTrialsOptions = {
  *
  * We keep typing intentionally permissive here to avoid coupling to internal generics.
  */
-function applySoftDeleteModeFilter(query: any, mode: SoftDeleteMode) {
+function applySoftDeleteModeFilter<TQuery extends SoftDeleteFilterQuery<TQuery>>(
+  query: TQuery,
+  mode: SoftDeleteMode,
+): TQuery {
   if (mode === 'active') {
     return query.is('deleted_at', null);
   }
@@ -533,7 +541,7 @@ export async function updateTrialInfo(params: {
     }
   }
 
-  const updatePayload: Record<string, any> = {
+  const updatePayload: Record<string, unknown> = {
     full_name: trimmedFullName,
     phone: trimmedPhone,
     first_meet_at: firstMeetAt,

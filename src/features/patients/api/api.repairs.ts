@@ -4,10 +4,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabaseClient } from '../../../utils/supabaseClient';
 import type { DeviceRepairRow, DeviceRepairStatus } from '../types';
-import { PATIENT_DEVICES_BY_PATIENT_QUERY_KEY } from './api.devices';
 
 export const DEVICE_REPAIRS_BY_PATIENT_QUERY_KEY = (patientId: string) =>
   ['device-repairs', patientId] as const;
+
+type DeviceRepairDbRow = Record<string, unknown>;
 
 export type DeviceRepairsActiveSummary = {
   total: number;
@@ -31,7 +32,7 @@ export async function fetchDeviceRepairsByPatientId(
     throw error;
   }
 
-  return (data ?? []).map((row: any): DeviceRepairRow => ({
+  return ((data ?? []) as DeviceRepairDbRow[]).map((row): DeviceRepairRow => ({
     id: row.id as string,
     org_id: row.org_id as string,
     patient_id: (row.patient_id as string | null) ?? null,
@@ -152,7 +153,7 @@ export async function updateDeviceRepairStatus(
   const { repairId, nextStatus, meetingIdForDelivery } = input;
 
   const nowIso = new Date().toISOString();
-  const updatePatch: Record<string, any> = {
+  const updatePatch: Record<string, string | null> = {
     status: nextStatus,
     last_status_changed: nowIso,
   };
@@ -261,7 +262,7 @@ export async function fetchActiveDeviceRepairsSummary(
 
   let oldestOpen: string | null = null;
 
-  (data ?? []).forEach((row: any) => {
+  ((data ?? []) as DeviceRepairDbRow[]).forEach((row) => {
     const status = row.status as DeviceRepairStatus;
     if (byStatus[status] != null) {
       byStatus[status] += 1;

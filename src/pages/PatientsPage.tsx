@@ -59,7 +59,7 @@ type PatientsPageLocationState =
     }
   | undefined;
 
-const EMPTY_COLUMNS: TableColumnDef<any>[] = [];
+const EMPTY_COLUMNS: TableColumnDef<PatientRow>[] = [];
 const PATIENTS_TABLE_PREFS_ID = 'patients';
 
 export default function PatientsPage() {

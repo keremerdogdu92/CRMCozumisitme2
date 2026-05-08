@@ -56,6 +56,7 @@ export default function TrialsPage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const { data: profile } = useCurrentProfile();
+  void profile;
 
   const [search, setSearch] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -72,9 +73,6 @@ export default function TrialsPage() {
 
   // If we deep-link to a specific row, do not accidentally hide it by soft-delete mode.
   const effectiveSoftDeleteMode: SoftDeleteMode = focusId ? 'all' : softDeleteMode;
-
-  // Kept for potential future role-based UI tweaks; not used for soft-delete gating anymore.
-  const isAdmin = profile?.role === 'admin';
 
   const queryKey = useMemo(
     () => ['trials', { softDeleteMode: effectiveSoftDeleteMode }] as const,

@@ -2,7 +2,7 @@
 // Summary: Reference selection and income tax configuration for the Profit Calculator.
 
 import React from "react";
-import type { ProfitCalcInputs, ReferenceOption } from "../types";
+import type { ProfitCalcInputs, ReferenceOption, ReferenceScheme } from "../types";
 
 type ReferenceTaxSectionProps = {
   inputs: ProfitCalcInputs;
@@ -54,7 +54,7 @@ export const ReferenceTaxSection: React.FC<ReferenceTaxSectionProps> = ({
             className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             value={inputs.referenceScheme ?? ""}
             onChange={(e) =>
-              onChange("referenceScheme", (e.target.value || null) as any)
+              onChange("referenceScheme", (e.target.value || null) as ReferenceScheme)
             }
           >
             <option value="">Yok</option>

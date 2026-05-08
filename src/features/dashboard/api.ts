@@ -10,6 +10,15 @@ import type {
 } from './types';
 import { DASHBOARD_QUERY_KEY } from './api.keys';
 
+type UpcomingMeetingRpcRow = {
+  id: string;
+  meeting_type: string | null;
+  subject: string | null;
+  subject_name: string | null;
+  at: string | null;
+  next_at: string | null;
+};
+
 function toNumber(value: unknown): number {
   if (value === null || value === undefined) return 0;
   const num = typeof value === 'number' ? value : Number(value);
@@ -133,7 +142,7 @@ async function fetchUpcomingMeetings(
     return [];
   }
 
-  return (data as any[]).map((row) => {
+  return (data as UpcomingMeetingRpcRow[]).map((row) => {
     const mt = String(row.meeting_type ?? '').toLowerCase();
     const meetingType: UpcomingMeetingItem['meetingType'] =
       mt === 'patient' || mt === 'trial' || mt === 'reference' ? mt : 'other';

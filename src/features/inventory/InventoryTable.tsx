@@ -59,9 +59,7 @@ type InventoryTableColumnId =
   | 'status'
   | 'actions';
 
-const INVENTORY_COLUMNS: TableColumnDef<
-  InventoryItemRow & { _colId?: InventoryTableColumnId }
->[] = [
+const INVENTORY_COLUMNS: TableColumnDef<InventoryItemRow>[] = [
   {
     id: 'created_at',
     label: 'Eklenme',
@@ -262,7 +260,7 @@ export function InventoryTable({
     const accessor =
       col.accessor ??
       ((row: InventoryItemRow) =>
-        (row as any)[col.id as keyof InventoryItemRow]);
+        (row as Record<string, unknown>)[col.id]);
 
     const result = [...filtered];
     result.sort((a, b) => {
@@ -294,8 +292,8 @@ export function InventoryTable({
         return 0;
       }
 
-      const av = va as any;
-      const bv = vb as any;
+      const av = va as number;
+      const bv = vb as number;
       if (av < bv) return prefsState.sortDir === 'asc' ? -1 : 1;
       if (av > bv) return prefsState.sortDir === 'asc' ? 1 : -1;
       return 0;
@@ -315,8 +313,7 @@ export function InventoryTable({
     const rows = sorted.map((item) =>
       exportableColumns.map((col) => {
         const id = col.id as InventoryTableColumnId;
-        const customExport =
-          col.exportAccessor?.(item as any as InventoryItemRow);
+        const customExport = col.exportAccessor?.(item);
         if (customExport !== undefined) return customExport;
 
         switch (id) {

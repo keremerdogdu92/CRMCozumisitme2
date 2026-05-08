@@ -43,6 +43,15 @@ export type NewReferenceGiftInput = {
   giftAt: string;
 };
 
+type ReferenceGiftDbRow = Record<string, unknown>;
+type ReferenceGiftUpdatePayload = {
+  gift_type?: string;
+  amount?: number | null;
+  gift_note?: string | null;
+  gift_at?: string | null;
+  deleted_at?: string | null;
+};
+
 export const REFERENCE_GIFTS_QUERY_KEY = (referenceId: string) =>
   ['reference-gifts', referenceId] as const;
 
@@ -50,7 +59,7 @@ export const REFERENCE_GIFTS_QUERY_KEY = (referenceId: string) =>
 // Helpers
 // -----------------------------
 
-function toNumberOrNull(v: any): number | null {
+function toNumberOrNull(v: unknown): number | null {
   if (v === null || v === undefined) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -144,7 +153,7 @@ export async function fetchReferenceGiftsByReferenceId(
   }
 
   return (
-    data?.map((row: any) => ({
+    (data as ReferenceGiftDbRow[] | null | undefined)?.map((row) => ({
       id: row.id as string,
       org_id: row.org_id as string,
       reference_id: row.reference_id as string,
@@ -189,7 +198,7 @@ export async function updateReferenceGift(
   const giftId = id.trim();
   if (!giftId) throw new Error('REFG_UPDATE: Missing gift id');
 
-  const payload: any = {};
+  const payload: ReferenceGiftUpdatePayload = {};
 
   if ('giftType' in patch) payload.gift_type = (patch.giftType || 'other').trim();
   if ('amount' in patch) payload.amount = patch.amount ?? null;

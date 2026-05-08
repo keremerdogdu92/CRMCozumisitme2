@@ -394,7 +394,7 @@ export function PatientDetailSgkInvoiceTab({
     let finalDate: string | null = null;
 
     if (invoiceIssuedDraft) {
-      let value = invoiceDateDraft && invoiceDateDraft.trim().length > 0
+      const value = invoiceDateDraft && invoiceDateDraft.trim().length > 0
         ? invoiceDateDraft.trim()
         : todayAsDateInput();
 

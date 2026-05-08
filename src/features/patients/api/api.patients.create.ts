@@ -66,6 +66,8 @@ export type CreatePatientOptions = {
 
 type InventoryItemStatus = 'in_stock' | 'sold' | string;
 type InventoryEarSide = 'right' | 'left' | 'bilateral' | null;
+type PatientInsertPayload = Record<string, unknown>;
+type PatientInsertDbRow = Record<string, unknown>;
 
 function normalizeSide(side: string): InventoryEarSide {
   return side === 'right' || side === 'left' || side === 'bilateral'
@@ -475,7 +477,7 @@ export async function createPatient(
   const sgkRecordedToSystemAt =
     input.sgkFlag && input.sgkRecordedToSystem ? nowIso : null;
 
-  const insertPayload: Record<string, any> = {
+  const insertPayload: PatientInsertPayload = {
     org_id: orgId,
     full_name: input.fullName.trim(),
     phone: input.phone.trim() || null,
@@ -553,7 +555,7 @@ export async function createPatient(
     throw new Error('STEP_INSERT: ' + insertError.message);
   }
 
-  const row: any = data;
+  const row = data as unknown as PatientInsertDbRow;
 
   const inserted: PatientRow = {
     id: row.id as string,
@@ -598,6 +600,7 @@ export async function createPatient(
   // NOTE (v2.12): sale breakdown is NO LONGER auto-created here.
   // patient_sale_breakdown rows are edited/saved exclusively from the Payments tab.
   const saleBreakdownDraft = input.saleBreakdownDraft ?? [];
+  void saleBreakdownDraft;
   const installmentPlanDraft = input.installmentPlanDraft ?? null;
   const deviceDrafts = input.deviceDrafts ?? [];
   const chargerInventoryItemId = input.chargerInventoryItemId ?? null;

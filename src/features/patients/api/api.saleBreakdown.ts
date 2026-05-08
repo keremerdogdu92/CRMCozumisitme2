@@ -12,6 +12,8 @@ import type {
 } from '../types';
 import { parseMoneyToNumber } from './api.core';
 
+type PatientSaleBreakdownDbRow = Record<string, unknown>;
+
 /**
  * Fetch sale breakdown rows for a given patient.
  */
@@ -45,7 +47,7 @@ export async function fetchPatientSaleBreakdown(
     throw error;
   }
 
-  return (data ?? []).map((row: any) => ({
+  return ((data ?? []) as unknown as PatientSaleBreakdownDbRow[]).map((row) => ({
     id: row.id as string,
     org_id: row.org_id as string,
     patient_id: row.patient_id as string,
@@ -213,7 +215,7 @@ export async function savePatientSaleBreakdown(params: {
     );
   }
 
-  return (data ?? []).map((row: any) => ({
+  return ((data ?? []) as unknown as PatientSaleBreakdownDbRow[]).map((row) => ({
     id: row.id as string,
     org_id: row.org_id as string,
     patient_id: row.patient_id as string,

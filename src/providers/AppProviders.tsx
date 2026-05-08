@@ -23,7 +23,7 @@ const queryClient = new QueryClient();
 export function AppProviders({ children }: PropsWithChildren) {
   useEffect(() => {
     const { data: sub } = supabaseClient.auth.onAuthStateChange(
-      (_event, _session) => {
+      () => {
         // Auth state changed → refresh anything that depends on auth/profile/org
         void queryClient.invalidateQueries({ queryKey: ['current-profile'] });
         // If you have other org-scoped keys, invalidate them here as well.

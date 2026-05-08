@@ -92,9 +92,7 @@ type MeetingTableColumnId =
   | 'note'
   | 'actions';
 
-const MEETING_COLUMNS: TableColumnDef<
-  MeetingRow & { _colId?: MeetingTableColumnId }
->[] = [
+const MEETING_COLUMNS: TableColumnDef<MeetingRow>[] = [
   {
     id: 'at',
     label: 'Tarih',
@@ -255,7 +253,7 @@ export function MeetingsTable() {
 
     const accessor =
       col.accessor ??
-      ((row: MeetingRow) => (row as any)[col.id as keyof MeetingRow]);
+      ((row: MeetingRow) => (row as unknown as Record<string, unknown>)[col.id]);
 
     const result = [...filteredRows];
     result.sort((a, b) => {
@@ -287,8 +285,8 @@ export function MeetingsTable() {
         return 0;
       }
 
-      const av = va as any;
-      const bv = vb as any;
+      const av = va as number;
+      const bv = vb as number;
       if (av < bv) return prefsState.sortDir === 'asc' ? -1 : 1;
       if (av > bv) return prefsState.sortDir === 'asc' ? 1 : -1;
       return 0;
@@ -311,7 +309,7 @@ export function MeetingsTable() {
         const id = col.id as MeetingTableColumnId;
 
         if (col.exportAccessor) {
-          return col.exportAccessor(m as any);
+          return col.exportAccessor(m);
         }
 
         switch (id) {

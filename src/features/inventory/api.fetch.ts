@@ -22,7 +22,42 @@ type FetchInventoryOptions = {
   mode?: SoftDeleteMode;
 };
 
-function applySoftDeleteModeFilter(query: any, mode: SoftDeleteMode) {
+type SoftDeleteFilterQuery<TQuery> = {
+  is(column: string, value: null): TQuery;
+  not(column: string, operator: string, value: null): TQuery;
+};
+
+type InventoryItemDbRow = {
+  id: string;
+  org_id: string;
+  brand: string;
+  model: string;
+  item_type: InventoryItemType;
+  barcode: string | null;
+  serial_no: string | null;
+  ear_side: InventoryItemRow['ear_side'];
+  status: InventoryStatus;
+  purchase_price: unknown;
+  list_price: unknown;
+  device_price: unknown;
+  sold_patient_id: string | null;
+  sold_at: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  deleted_by: string | null;
+  delete_reason: string | null;
+};
+
+type PatientNameLookupRow = {
+  id: string | null;
+  full_name: string | null;
+};
+
+function applySoftDeleteModeFilter<TQuery extends SoftDeleteFilterQuery<TQuery>>(
+  query: TQuery,
+  mode: SoftDeleteMode,
+): TQuery {
   if (mode === 'active') {
     return query.is('deleted_at', null);
   }
@@ -77,8 +112,8 @@ export async function fetchInventoryItems(
     throw error;
   }
 
-  const baseRows = (data ?? []).map(
-    (row: any): InventoryItemRow => ({
+  const baseRows = ((data ?? []) as InventoryItemDbRow[]).map(
+    (row): InventoryItemRow => ({
       id: row.id as string,
       org_id: row.org_id as string,
       brand: row.brand as string,
@@ -131,7 +166,7 @@ export async function fetchInventoryItems(
     }
 
     const nameMap = new Map<string, string>();
-    (patients ?? []).forEach((p: any) => {
+    ((patients ?? []) as PatientNameLookupRow[]).forEach((p) => {
       if (p.id && p.full_name) nameMap.set(p.id, p.full_name);
     });
 

@@ -249,7 +249,7 @@ export async function importDeviceCatalogFromCsv(
 
       if (existingModels && existingModels.length > 0) {
         // Model already exists → just reuse id.
-        modelId = (existingModels[0] as any).id as string;
+        modelId = (existingModels[0] as { id: string }).id;
         updatedModelCount += 1;
       } else {
         // Create new model

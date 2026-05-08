@@ -117,9 +117,15 @@ type DeliveryRowView = {
   note: string | null;
 };
 
+type DeliveryRowSource = Record<string, unknown>;
+type ProfileSource = {
+  org_id?: unknown;
+  orgId?: unknown;
+};
+
 function toDeliveryRowView(r: BatteryPrescriptionDeliveryRow): DeliveryRowView {
   // Keep resilient against snake_case vs camelCase.
-  const anyRow = r as any;
+  const anyRow = r as DeliveryRowSource;
 
   const id = String(anyRow.id ?? '');
   const deliveredAt = (anyRow.delivered_at ?? anyRow.deliveredAt ?? null) as
@@ -156,7 +162,7 @@ function toDeliveryRowView(r: BatteryPrescriptionDeliveryRow): DeliveryRowView {
 }
 
 function readOrgId(profile: unknown): string | null {
-  const p = profile as any;
+  const p = profile as ProfileSource | null;
   const orgId = safeTrim(p?.org_id) || safeTrim(p?.orgId);
   return orgId || null;
 }
@@ -308,8 +314,6 @@ export function PatientDetailBatteryPrescriptionsTab({
     },
   });
 
-  if (!open) return null;
-
   const deliveries = (deliveriesQuery.data ?? []).map(toDeliveryRowView);
 
   const summary = useMemo(() => {
@@ -418,6 +422,8 @@ export function PatientDetailBatteryPrescriptionsTab({
       prescriptionRows,
     };
   }, [deliveries]);
+
+  if (!open) return null;
 
   const handleToggleNew = () => {
     setLocalError('');

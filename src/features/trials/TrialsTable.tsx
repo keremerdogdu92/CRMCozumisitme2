@@ -53,9 +53,7 @@ type TrialTableColumnId =
   | 'note'
   | 'actions';
 
-const TRIAL_COLUMNS: TableColumnDef<
-  TrialRow & { _colId?: TrialTableColumnId }
->[] = [
+const TRIAL_COLUMNS: TableColumnDef<TrialRow>[] = [
   {
     id: 'created_at',
     label: 'Kayıt',
@@ -221,7 +219,7 @@ export function TrialsTable({
 
     const accessor =
       col.accessor ??
-      ((row: TrialRow) => (row as any)[col.id as keyof TrialRow]);
+      ((row: TrialRow) => (row as Record<string, unknown>)[col.id]);
 
     const sorted = [...items];
     sorted.sort((a, b) => {
@@ -253,8 +251,8 @@ export function TrialsTable({
         return 0;
       }
 
-      const av = va as any;
-      const bv = vb as any;
+      const av = va as number;
+      const bv = vb as number;
       if (av < bv) return prefsState.sortDir === 'asc' ? -1 : 1;
       if (av > bv) return prefsState.sortDir === 'asc' ? 1 : -1;
       return 0;

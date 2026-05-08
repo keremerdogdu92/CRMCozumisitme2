@@ -212,12 +212,12 @@ export function PatientDetailDrawer({
     invoiceMutation.mutate(params);
   };
 
-  const handleSoftDeletePatient = (_row: PatientRow) => {
+  const handleSoftDeletePatient = () => {
     if (softDeleteMutation.isPending) return;
     softDeleteMutation.mutate();
   };
 
-  const handleRestorePatient = (_row: PatientRow) => {
+  const handleRestorePatient = () => {
     if (restoreMutation.isPending) return;
     restoreMutation.mutate();
   };

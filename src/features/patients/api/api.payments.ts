@@ -15,6 +15,8 @@ import {
   parseMoneyToNumber,
 } from './api.core';
 
+type PatientPaymentDbRow = Record<string, unknown>;
+
 // -----------------------------------------------------------------------------
 // Ödemeler (meeting_payments)
 // -----------------------------------------------------------------------------
@@ -51,7 +53,7 @@ export async function fetchPatientPaymentsByPatientId(
     throw error;
   }
 
-  return (data ?? []).map((row: any) => ({
+  return ((data ?? []) as PatientPaymentDbRow[]).map((row) => ({
     id: row.id as string,
     meeting_id: (row.meeting_id as string | null) ?? null,
     patient_id: row.patient_id as string,

@@ -23,6 +23,8 @@ import type {
 export const REFERENCES_QUERY_KEY = (mode: SoftDeleteMode) =>
   ['references', mode] as const;
 
+type ReferenceDbRow = Record<string, unknown>;
+
 export async function fetchReferences(
   mode: SoftDeleteMode,
 ): Promise<ReferenceRow[]> {
@@ -62,9 +64,9 @@ export async function fetchReferences(
   }
 
   return (
-    data?.map((row: any) => ({
+    (data as ReferenceDbRow[] | null | undefined)?.map((row) => ({
       id: row.id as string,
-      full_name: row.full_name ?? null,
+      full_name: (row.full_name as string | null) ?? null,
       group: (row.group ?? null) as ReferenceGroup | null,
       phone: (row.phone ?? null) as string | null,
       commission_scheme: (row.commission_scheme ?? null) as ReferenceCommissionScheme,
@@ -85,11 +87,11 @@ export async function fetchReferences(
         row.contact_interval_days !== null && row.contact_interval_days !== undefined
           ? Number(row.contact_interval_days)
           : null,
-      last_meet_at: row.last_meet_at ?? null,
-      next_meet_at: row.next_meet_at ?? null,
-      note: row.note ?? null,
+      last_meet_at: (row.last_meet_at as string | null) ?? null,
+      next_meet_at: (row.next_meet_at as string | null) ?? null,
+      note: (row.note as string | null) ?? null,
       created_at: row.created_at as string,
-      deleted_at: row.deleted_at ?? null,
+      deleted_at: (row.deleted_at as string | null) ?? null,
     })) ?? []
   );
 }

@@ -98,7 +98,7 @@ export function buildTrialOfferHtml(
     .map((d, index) => {
       const sideLabel = formatSideForPrint(d.side ?? null);
       const totalListPrice = getTotalListPriceForSide(
-        (d as any).list_price ?? null,
+        d.list_price ?? null,
         d.side ?? null,
       );
 
@@ -122,14 +122,14 @@ export function buildTrialOfferHtml(
       .map((d, idx) => {
         const sideLabel = formatSideForPrint(d.side ?? null);
         const totalListPrice = getTotalListPriceForSide(
-          (d as any).list_price ?? null,
+          d.list_price ?? null,
           d.side ?? null,
         );
         const listPriceText = formatPriceForPrint(totalListPrice);
         const quotePriceText = formatPriceForPrint(d.quote_price);
         const technicalDetails =
-          (d as any).details ?? (d as any).technical_details ?? null;
-        const batteryType = (d as any).battery_type ?? null;
+          d.details ?? (d as { technical_details?: unknown }).technical_details ?? null;
+        const batteryType = d.battery_type ?? null;
 
         return `
           <div class="device-detail-block">

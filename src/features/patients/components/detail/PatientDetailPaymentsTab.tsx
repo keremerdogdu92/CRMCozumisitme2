@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 import type {
   PatientInstallmentPlanRow,
   PatientPaymentRow,
-  UpsertPatientInstallmentPlanInput,
   UpsertPatientSaleBreakdownItem,
 } from '../../types';
 import {
@@ -96,7 +95,6 @@ export function PatientDetailPaymentsTab({
   // Derived info from plan + payments
   let remainingTotal = 0;
   let paidInstallments = 0;
-  let remainingInstallments = 0;
   let nextDueDate = '-';
 
   if (plan) {
@@ -108,10 +106,6 @@ export function PatientDetailPaymentsTab({
     paidInstallments = Math.min(
       p.installment_count,
       Math.floor(totalPaid / perInstallment),
-    );
-    remainingInstallments = Math.max(
-      0,
-      p.installment_count - paidInstallments,
     );
     nextDueDate = addMonths(p.first_due_date, paidInstallments);
   }
@@ -352,13 +346,13 @@ export function PatientDetailPaymentsTab({
           installmentCount={installmentCount}
           firstDueDate={firstDueDate}
           dayOfMonth={dayOfMonth}
-          setSaleTotal={isEditMode ? setSaleTotal : (_v: string) => {}}
-          setUpfrontPaid={isEditMode ? setUpfrontPaid : (_v: string) => {}}
+          setSaleTotal={isEditMode ? setSaleTotal : () => {}}
+          setUpfrontPaid={isEditMode ? setUpfrontPaid : () => {}}
           setInstallmentCount={
-            isEditMode ? setInstallmentCount : (_v: string) => {}
+            isEditMode ? setInstallmentCount : () => {}
           }
-          setFirstDueDate={isEditMode ? setFirstDueDate : (_v: string) => {}}
-          setDayOfMonth={isEditMode ? setDayOfMonth : (_v: string) => {}}
+          setFirstDueDate={isEditMode ? setFirstDueDate : () => {}}
+          setDayOfMonth={isEditMode ? setDayOfMonth : () => {}}
           isPlanSaveError={isPlanSaveError}
           planSaveError={planSaveError}
           isPlanError={isPlanError}
@@ -368,7 +362,7 @@ export function PatientDetailPaymentsTab({
           upsertPlan={
             isEditMode
               ? upsertPlan
-              : async (_input: UpsertPatientInstallmentPlanInput) => {}
+              : async () => {}
           }
           readOnly={!isEditMode}
         />
