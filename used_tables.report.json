@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-03T06:06:28.273Z",
+  "generatedAt": "2026-05-10T06:12:53.862Z",
   "scannedDirs": [
     "src",
     "api",
@@ -7,7 +7,7 @@
     "scripts",
     "DB/schema"
   ],
-  "filesScanned": 210,
+  "filesScanned": 211,
   "tables": [
     {
       "name": "patients",
@@ -25,13 +25,13 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.fetch.ts",
-          "line": 37,
+          "line": 72,
           "kind": "raw.sql",
           "snippet": "* Also resolves sold_patient_name from patients table (if sold_patient_id is set)."
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.fetch.ts",
-          "line": 124,
+          "line": 159,
           "kind": "supabase.from",
           "snippet": ".from('patients')"
         },
@@ -49,19 +49,19 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.core.ts",
-          "line": 51,
+          "line": 53,
           "kind": "supabase.from",
           "snippet": ".from('patients')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.core.ts",
-          "line": 246,
+          "line": 248,
           "kind": "supabase.from",
           "snippet": ".from('patients')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 516,
+          "line": 518,
           "kind": "supabase.from",
           "snippet": ".from('patients')"
         }
@@ -73,29 +73,35 @@
         "supabase.from",
         "raw.sql"
       ],
-      "hitCount": 39,
+      "hitCount": 40,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.create.ts",
-          "line": 135,
+          "line": 141,
           "kind": "supabase.from",
           "snippet": "const { error: insertError } = await supabaseClient.from('inventory_items').insert({"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.fetch.ts",
-          "line": 45,
+          "line": 80,
           "kind": "supabase.from",
           "snippet": ".from('inventory_items')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
-          "line": 46,
+          "line": 64,
           "kind": "raw.sql",
           "snippet": "* - Inserts valid rows into inventory_items."
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
-          "line": 265,
+          "line": 243,
+          "kind": "supabase.from",
+          "snippet": ".from('inventory_items')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
+          "line": 319,
           "kind": "supabase.from",
           "snippet": ".from('inventory_items')"
         },
@@ -107,19 +113,13 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.devices.ts",
-          "line": 16,
+          "line": 18,
           "kind": "raw.sql",
           "snippet": "* Fetch devices from inventory_items for a given patient."
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.devices.ts",
-          "line": 34,
-          "kind": "supabase.from",
-          "snippet": ".from('inventory_items')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.devices.ts",
-          "line": 161,
+          "line": 36,
           "kind": "supabase.from",
           "snippet": ".from('inventory_items')"
         }
@@ -147,13 +147,13 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.create.ts",
-          "line": 51,
+          "line": 56,
           "kind": "supabase.from",
           "snippet": ".from('profiles')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
-          "line": 99,
+          "line": 117,
           "kind": "supabase.from",
           "snippet": ".from('profiles')"
         },
@@ -177,7 +177,7 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 355,
+          "line": 357,
           "kind": "supabase.from",
           "snippet": ".from('profiles')"
         }
@@ -307,43 +307,43 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
-          "line": 118,
+          "line": 136,
           "kind": "supabase.from",
           "snippet": ".from('import_jobs')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
-          "line": 276,
+          "line": 330,
           "kind": "supabase.from",
           "snippet": ".from('import_jobs')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
-          "line": 290,
+          "line": 344,
           "kind": "raw.sql",
           "snippet": "console.error('Failed to update import_jobs after completion:', updateError);"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
-          "line": 296,
+          "line": 350,
           "kind": "supabase.from",
           "snippet": ".from('import_jobs')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/import/ImportFixCenterSection.tsx",
-          "line": 82,
+          "line": 97,
           "kind": "supabase.from",
           "snippet": ".from('import_jobs')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/import/api.jobs.ts",
-          "line": 68,
+          "line": 75,
           "kind": "supabase.from",
           "snippet": ".from('import_jobs')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/import/api.jobs.ts",
-          "line": 189,
+          "line": 197,
           "kind": "supabase.from",
           "snippet": ".from('import_jobs')"
         },
@@ -394,13 +394,13 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 335,
+          "line": 337,
           "kind": "raw.sql",
           "snippet": "* Create a new patient row with org_id taken from the current profile."
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 599,
+          "line": 601,
           "kind": "raw.sql",
           "snippet": "// patient_sale_breakdown rows are edited/saved exclusively from the Payments tab."
         },
@@ -657,13 +657,13 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/import/api.jobs.ts",
-          "line": 228,
+          "line": 237,
           "kind": "supabase.from",
           "snippet": ".from('patients_legacy_devices_import_rows')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/import/api.jobs.ts",
-          "line": 306,
+          "line": 354,
           "kind": "supabase.from",
           "snippet": ".from('patients_legacy_devices_import_rows')"
         },
@@ -715,43 +715,43 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 130,
+          "line": 138,
           "kind": "supabase.from",
           "snippet": "let q = supabaseClient.from('trials').select("
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 176,
+          "line": 185,
           "kind": "supabase.from",
           "snippet": "let q = supabaseClient.from('trials').select("
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 231,
+          "line": 241,
           "kind": "supabase.from",
           "snippet": ".from('trials')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 401,
+          "line": 411,
           "kind": "supabase.from",
           "snippet": ".from('trials')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 536,
+          "line": 558,
           "kind": "supabase.from",
           "snippet": ".from('trials')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/trials/trials.sql",
-          "line": 93,
+          "line": 94,
           "kind": "raw.sql",
           "snippet": "UPDATE public.trials"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/trials/trials.sql",
-          "line": 113,
+          "line": 114,
           "kind": "raw.sql",
           "snippet": "UPDATE public.trials"
         }
@@ -773,13 +773,13 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.payments.ts",
-          "line": 23,
+          "line": 25,
           "kind": "raw.sql",
           "snippet": "* Fetch payments for a single patient from meeting_payments."
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.payments.ts",
-          "line": 33,
+          "line": 35,
           "kind": "supabase.from",
           "snippet": ".from('meeting_payments')"
         },
@@ -895,25 +895,25 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/references/api.ts",
-          "line": 30,
+          "line": 32,
           "kind": "supabase.from",
           "snippet": ".from('references')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/references/api.ts",
-          "line": 159,
+          "line": 161,
           "kind": "supabase.from",
           "snippet": ".from('references')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/references/api.ts",
-          "line": 217,
+          "line": 219,
           "kind": "supabase.from",
           "snippet": "const { error: insertError } = await supabaseClient.from('references').insert({"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/references/api.ts",
-          "line": 255,
+          "line": 257,
           "kind": "supabase.from",
           "snippet": ".from('references')"
         },
@@ -940,31 +940,31 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
-          "line": 80,
+          "line": 85,
           "kind": "raw.sql",
           "snippet": "'Failed to update patient SGK fields (STEP_UPDATE_SGK):',"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
-          "line": 144,
+          "line": 149,
           "kind": "raw.sql",
           "snippet": "'Failed to update patient SGK profile info (STEP_UPDATE_SGK_PROFILE):',"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
-          "line": 219,
+          "line": 224,
           "kind": "raw.sql",
           "snippet": "'Failed to update patient invoice status (STEP_UPDATE_INVOICE):',"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
-          "line": 235,
+          "line": 238,
           "kind": "raw.sql",
           "snippet": "* Update patient personal info (özlük bilgileri)."
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
-          "line": 311,
+          "line": 314,
           "kind": "raw.sql",
           "snippet": "'Failed to update patient personal info (STEP_UPDATE_PERSONAL_INFO):',"
         },
@@ -1111,13 +1111,13 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/inventoryImportUtils.ts",
-          "line": 83,
+          "line": 143,
           "kind": "raw.sql",
           "snippet": "* Normalize item_type from CSV."
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/inventoryImportUtils.ts",
-          "line": 108,
+          "line": 168,
           "kind": "raw.sql",
           "snippet": "* Normalize status from CSV."
         },
@@ -1144,31 +1144,31 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.devices.ts",
-          "line": 172,
+          "line": 174,
           "kind": "raw.sql",
           "snippet": "'attachDevicesToPatientFromDrafts update error:',"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.repairs.ts",
-          "line": 118,
+          "line": 119,
           "kind": "raw.sql",
           "snippet": "'createDeviceRepairForInventoryItem inventory update error:',"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.repairs.ts",
-          "line": 185,
+          "line": 186,
           "kind": "raw.sql",
           "snippet": "console.error('updateDeviceRepairStatus update error:', error);"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.repairs.ts",
-          "line": 197,
+          "line": 198,
           "kind": "raw.sql",
           "snippet": "console.error('updateDeviceRepairStatus inventory update error:', invErr);"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/references/api.gifts.ts",
-          "line": 206,
+          "line": 215,
           "kind": "raw.sql",
           "snippet": "console.error('Supabase reference_gifts update error (REFG_UPDATE):', error);"
         }
@@ -1183,7 +1183,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
-          "line": 319,
+          "line": 322,
           "kind": "raw.sql",
           "snippet": "* Update only patients.sale_total_amount in-place."
         },
@@ -1229,25 +1229,25 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.repairs.ts",
-          "line": 24,
+          "line": 25,
           "kind": "supabase.from",
           "snippet": ".from('device_repairs')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.repairs.ts",
-          "line": 91,
+          "line": 92,
           "kind": "supabase.from",
           "snippet": ".from('device_repairs')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.repairs.ts",
-          "line": 178,
+          "line": 179,
           "kind": "supabase.from",
           "snippet": ".from('device_repairs')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.repairs.ts",
-          "line": 238,
+          "line": 239,
           "kind": "supabase.from",
           "snippet": ".from('device_repairs')"
         },
@@ -1280,13 +1280,13 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/import/api.jobs.ts",
-          "line": 106,
+          "line": 114,
           "kind": "supabase.from",
           "snippet": ".from('patients_import_rows')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/import/api.jobs.ts",
-          "line": 285,
+          "line": 333,
           "kind": "supabase.from",
           "snippet": ".from('patients_import_rows')"
         },
@@ -1326,25 +1326,25 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.catalog.ts",
-          "line": 23,
+          "line": 28,
           "kind": "supabase.from",
           "snippet": ".from('current_device_model_prices_public')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.create.ts",
-          "line": 82,
+          "line": 87,
           "kind": "supabase.from",
           "snippet": ".from('current_device_model_prices_public')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
-          "line": 184,
+          "line": 204,
           "kind": "supabase.from",
           "snippet": ".from('current_device_model_prices_public')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/types.ts",
-          "line": 92,
+          "line": 96,
           "kind": "raw.sql",
           "snippet": "// From current_device_model_prices_public (via view)"
         }
@@ -1519,25 +1519,25 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.payments.ts",
-          "line": 95,
+          "line": 97,
           "kind": "supabase.from",
           "snippet": ".from('patient_installment_plans')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.payments.ts",
-          "line": 258,
+          "line": 260,
           "kind": "supabase.from",
           "snippet": ".from('patient_installment_plans')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.payments.ts",
-          "line": 277,
+          "line": 279,
           "kind": "supabase.from",
           "snippet": ".from('patient_installment_plans')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.payments.ts",
-          "line": 300,
+          "line": 302,
           "kind": "supabase.from",
           "snippet": ".from('patient_installment_plans')"
         },
@@ -1570,19 +1570,19 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/TrialDetailDrawer.tsx",
-          "line": 261,
+          "line": 264,
           "kind": "raw.sql",
           "snippet": "console.error('Failed to update trial info:', err);"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 489,
+          "line": 500,
           "kind": "raw.sql",
           "snippet": "* Update trial personal info."
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 541,
+          "line": 563,
           "kind": "raw.sql",
           "snippet": "console.error('Failed to update trial info (STEP_UPDATE_TRIAL_INFO):', error);"
         }
@@ -1597,7 +1597,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/dashboard/api.ts",
-          "line": 20,
+          "line": 29,
           "kind": "raw.sql",
           "snippet": "* Safely read a numeric field from an RPC row."
         },
@@ -1663,25 +1663,25 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/detail/PatientDetailPaymentsTab.tsx",
-          "line": 207,
+          "line": 201,
           "kind": "raw.sql",
           "snippet": "// Reload to normalize amounts from backend"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/detail/PatientDetailPaymentsTab.tsx",
-          "line": 241,
+          "line": 235,
           "kind": "raw.sql",
           "snippet": "// Cancel edits: reload latest plan + breakdown from backend and exit edit mode"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/detail/PatientDetailPaymentsTab.tsx",
-          "line": 245,
+          "line": 239,
           "kind": "raw.sql",
           "snippet": "// Refresh plan from backend and sync into form state"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/detail/PatientDetailPaymentsTab.tsx",
-          "line": 269,
+          "line": 263,
           "kind": "raw.sql",
           "snippet": "// Refresh breakdown from backend"
         }
@@ -1696,25 +1696,25 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/references/api.gifts.ts",
-          "line": 117,
+          "line": 126,
           "kind": "supabase.from",
           "snippet": ".from('reference_gifts')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/references/api.gifts.ts",
-          "line": 175,
+          "line": 184,
           "kind": "supabase.from",
           "snippet": "const { error } = await supabaseClient.from('reference_gifts').insert(payload);"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/references/api.gifts.ts",
-          "line": 201,
+          "line": 210,
           "kind": "supabase.from",
           "snippet": ".from('reference_gifts')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/references/api.gifts.ts",
-          "line": 216,
+          "line": 225,
           "kind": "supabase.from",
           "snippet": ".from('reference_gifts')"
         }
@@ -1817,7 +1817,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 117,
+          "line": 119,
           "kind": "raw.sql",
           "snippet": "// Side is optional and may be empty string from UI."
         },
@@ -1871,13 +1871,13 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
-          "line": 46,
+          "line": 51,
           "kind": "raw.sql",
           "snippet": "* Update SGK-related fields for a given patient."
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
-          "line": 88,
+          "line": 93,
           "kind": "raw.sql",
           "snippet": "* Update SGK profile-based expected reimbursement info."
         },
@@ -1898,19 +1898,19 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.saleBreakdown.ts",
-          "line": 24,
+          "line": 26,
           "kind": "supabase.from",
           "snippet": ".from('patient_sale_breakdown')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.saleBreakdown.ts",
-          "line": 169,
+          "line": 171,
           "kind": "supabase.from",
           "snippet": ".from('patient_sale_breakdown')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.saleBreakdown.ts",
-          "line": 190,
+          "line": 192,
           "kind": "supabase.from",
           "snippet": ".from('patient_sale_breakdown')"
         }
@@ -2025,6 +2025,27 @@
       ]
     },
     {
+      "name": "inventory_import_rows",
+      "kinds": [
+        "supabase.from"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
+          "line": 307,
+          "kind": "supabase.from",
+          "snippet": ".from('inventory_import_rows')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/import/api.jobs.ts",
+          "line": 375,
+          "kind": "supabase.from",
+          "snippet": ".from('inventory_import_rows')"
+        }
+      ]
+    },
+    {
       "name": "catalog",
       "kinds": [
         "raw.sql"
@@ -2039,7 +2060,7 @@
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/types.ts",
-          "line": 48,
+          "line": 49,
           "kind": "raw.sql",
           "snippet": "listPrice: string; // suggested list price (auto from catalog view, toplam)"
         }
@@ -2117,13 +2138,13 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/detail/PatientDetailPaymentsTab.tsx",
-          "line": 71,
+          "line": 70,
           "kind": "raw.sql",
           "snippet": "// Sync plan into form when it loads/changes"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/detail/PatientDetailPaymentsTab.tsx",
-          "line": 245,
+          "line": 239,
           "kind": "raw.sql",
           "snippet": "// Refresh plan from backend and sync into form state"
         }
@@ -2201,13 +2222,13 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 255,
+          "line": 265,
           "kind": "supabase.from",
           "snippet": ".from('current_device_catalog_prices_public')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 285,
+          "line": 295,
           "kind": "supabase.from",
           "snippet": ".from('current_device_catalog_prices_public')"
         }
@@ -2223,7 +2244,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 445,
+          "line": 456,
           "kind": "supabase.from",
           "snippet": ".from('trial_devices')"
         },
@@ -2440,21 +2461,6 @@
       ]
     },
     {
-      "name": "inventory_import_rows",
-      "kinds": [
-        "supabase.from"
-      ],
-      "hitCount": 1,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
-          "line": 253,
-          "kind": "supabase.from",
-          "snippet": ".from('inventory_import_rows')"
-        }
-      ]
-    },
-    {
       "name": "import",
       "kinds": [
         "raw.sql"
@@ -2463,7 +2469,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
-          "line": 269,
+          "line": 323,
           "kind": "raw.sql",
           "snippet": "console.error('Failed to insert inventory_items from import:', itemsError);"
         }
@@ -2523,7 +2529,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/MeetingsTable.tsx",
-          "line": 233,
+          "line": 231,
           "kind": "raw.sql",
           "snippet": "// Defense-in-depth: hide reference meetings from non-admin users."
         }
@@ -2538,7 +2544,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/MeetingsTable.tsx",
-          "line": 303,
+          "line": 301,
           "kind": "raw.sql",
           "snippet": "// Exclude the \"actions\" column from exports."
         }
@@ -2598,7 +2604,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.core.ts",
-          "line": 264,
+          "line": 266,
           "kind": "raw.sql",
           "snippet": "* Parse a money-like string (\"20 000\", \"20.000\", \"20000,50\") into number."
         }
@@ -2613,7 +2619,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.devices.ts",
-          "line": 119,
+          "line": 121,
           "kind": "raw.sql",
           "snippet": "* - Cihaz sayısı tipik olarak az olacağı için her satır ayrı UPDATE ile gider."
         }
@@ -2628,7 +2634,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.devices.ts",
-          "line": 188,
+          "line": 190,
           "kind": "raw.sql",
           "snippet": "* Update editable fields on an inventory_items row."
         }
@@ -2643,7 +2649,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.devices.ts",
-          "line": 189,
+          "line": 191,
           "kind": "raw.sql",
           "snippet": "* Used from PatientDetail → Cihazlar tab edit modal."
         }
@@ -2673,7 +2679,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 94,
+          "line": 96,
           "kind": "raw.sql",
           "snippet": "*   update ONLY that row with guards: org_id + status=in_stock + deleted_at IS NULL."
         }
@@ -2688,7 +2694,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 505,
+          "line": 507,
           "kind": "raw.sql",
           "snippet": "// Custom creation date: from purchaseDate (manual entry) or legacy import"
         }
@@ -2718,7 +2724,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
-          "line": 188,
+          "line": 193,
           "kind": "raw.sql",
           "snippet": "* Update invoice status for a given patient."
         }
@@ -2733,7 +2739,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.update.ts",
-          "line": 332,
+          "line": 335,
           "kind": "raw.sql",
           "snippet": "console.error('Failed to update sale_total_amount:', error);"
         }
@@ -2748,7 +2754,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.payments.ts",
-          "line": 314,
+          "line": 316,
           "kind": "raw.sql",
           "snippet": "'PLAN_STEP_UPDATE: Failed to update installment plan',"
         }
@@ -2793,7 +2799,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/components/detail/PatientDetailPaymentsTab.tsx",
-          "line": 96,
+          "line": 95,
           "kind": "raw.sql",
           "snippet": "// Derived info from plan + payments"
         }
@@ -2943,7 +2949,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 319,
+          "line": 329,
           "kind": "supabase.from",
           "snippet": ".from('trial_devices_with_catalog_public')"
         }
@@ -3431,7 +3437,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/dashboard/api.ts",
-          "line": 45,
+          "line": 54,
           "kind": "supabase.rpc",
           "snippet": "const { data, error } = await supabaseClient.rpc('dashboard_kpis', {"
         }
@@ -3491,7 +3497,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/references/api.ts",
-          "line": 112,
+          "line": 114,
           "kind": "supabase.rpc",
           "snippet": "const { error } = await supabaseClient.rpc('soft_delete_references', {"
         }
@@ -3503,7 +3509,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/references/api.ts",
-          "line": 132,
+          "line": 134,
           "kind": "supabase.rpc",
           "snippet": "const { error } = await supabaseClient.rpc('restore_references', {"
         }
@@ -3527,7 +3533,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 91,
+          "line": 99,
           "kind": "supabase.rpc",
           "snippet": "const { error } = await supabaseClient.rpc('soft_delete_trials', {"
         }
@@ -3539,7 +3545,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 112,
+          "line": 120,
           "kind": "supabase.rpc",
           "snippet": "const { error } = await supabaseClient.rpc('restore_trials', {"
         }
@@ -3551,7 +3557,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/trials/api.ts",
-          "line": 475,
+          "line": 486,
           "kind": "supabase.rpc",
           "snippet": "const { error } = await supabaseClient.rpc('link_trial_to_patient_and_delete', {"
         }
