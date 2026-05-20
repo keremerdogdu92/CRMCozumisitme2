@@ -60,7 +60,7 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.attach_patient_inventory_item(uuid, uuid, text, timestamptz, numeric) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.attach_patient_inventory_item(uuid, uuid, text, timestamptz, numeric) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.attach_patient_inventory_item(uuid, uuid, text, timestamptz, numeric) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.replace_patient_inventory_item(
@@ -140,5 +140,5 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.replace_patient_inventory_item(uuid, uuid, uuid, text, timestamptz, numeric) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.replace_patient_inventory_item(uuid, uuid, uuid, text, timestamptz, numeric) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.replace_patient_inventory_item(uuid, uuid, uuid, text, timestamptz, numeric) TO authenticated;

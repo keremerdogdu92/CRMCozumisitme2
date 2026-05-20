@@ -31,6 +31,7 @@ create or replace function public.reports_kpis_v1(
   "devicesPie"             jsonb
 )
 language sql stable
+set search_path = ''
 as $$
 with org_ctx as (
   select case

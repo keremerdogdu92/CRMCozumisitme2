@@ -401,7 +401,7 @@ END;
 $function$;
 
 REVOKE ALL ON FUNCTION public.upsert_sgk_reimbursement_period(date, numeric, jsonb)
-FROM PUBLIC;
+FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.upsert_sgk_reimbursement_period(date, numeric, jsonb)
 TO authenticated;
 
@@ -466,5 +466,5 @@ WHERE o.org_id IS NOT NULL
 ORDER BY pt.sgk_expected_reimbursement_month ASC, pt.full_name ASC;
 $function$;
 
-REVOKE ALL ON FUNCTION public.sgk_payment_tracking(date) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.sgk_payment_tracking(date) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.sgk_payment_tracking(date) TO authenticated;
