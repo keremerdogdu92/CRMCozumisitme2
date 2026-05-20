@@ -64,16 +64,16 @@ SELECT
   p.sgk_expected_reimbursement_month,
   p.is_battery_patient,
   p.sgk_recorded_to_system_at,
+  p.deleted_at,
+  p.deleted_by,
+  p.delete_reason,
   p.sgk_rate_period_id,
   p.sgk_profile_rate_id,
   p.sgk_rate_effective_date,
   p.sgk_device_count,
   p.sgk_pill_prescription,
   p.sgk_base_reimbursement,
-  p.sgk_pill_extra_amount,
-  p.deleted_at,
-  p.deleted_by,
-  p.delete_reason
+  p.sgk_pill_extra_amount
 FROM public.patients AS p
 LEFT JOIN public."references" AS r ON r.id = p.reference_id
 LEFT JOIN device_agg AS da ON da.patient_id = p.id AND da.org_id = p.org_id;
