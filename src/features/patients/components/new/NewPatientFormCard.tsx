@@ -424,6 +424,17 @@ export function NewPatientFormCard({
                     sgkPrescriptionNo: value ? s.sgkPrescriptionNo ?? '' : '',
                     sgkDeviceCount: value ? s.sgkDeviceCount ?? '1' : '1',
                     sgkPillPrescription: value ? !!s.sgkPillPrescription : false,
+                    sgkRatePeriodId: value ? s.sgkRatePeriodId ?? null : null,
+                    sgkProfileRateId: value ? s.sgkProfileRateId ?? null : null,
+                    sgkRateEffectiveDate: value
+                      ? s.sgkRateEffectiveDate ?? null
+                      : null,
+                    sgkBaseReimbursement: value
+                      ? s.sgkBaseReimbursement ?? null
+                      : null,
+                    sgkPillExtraAmount: value
+                      ? s.sgkPillExtraAmount ?? null
+                      : null,
                   }))
                 }
                 onChangeSgkPrescriptionReceived={(value: boolean) =>
@@ -466,6 +477,12 @@ export function NewPatientFormCard({
                   setFormState((s) => ({
                     ...s,
                     sgkDeviceCount: value,
+                  }))
+                }
+                onChangeSgkSnapshot={(patch) =>
+                  setFormState((s) => ({
+                    ...s,
+                    ...patch,
                   }))
                 }
               />

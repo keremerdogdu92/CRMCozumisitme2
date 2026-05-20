@@ -91,6 +91,13 @@ export type PatientRow = {
   sgk_profile?: string | null;
   sgk_expected_reimbursement?: number | null;
   sgk_expected_reimbursement_month?: string | null;
+  sgk_rate_period_id?: string | null;
+  sgk_profile_rate_id?: string | null;
+  sgk_rate_effective_date?: string | null;
+  sgk_device_count?: number | null;
+  sgk_pill_prescription?: boolean | null;
+  sgk_base_reimbursement?: number | null;
+  sgk_pill_extra_amount?: number | null;
 
   /**
    * Extra identity / contact info.
@@ -165,6 +172,41 @@ export type PatientSgkUpdateInput = {
    *   - DB will usually be set to NULL (clear).
    */
   sgkRecordedToSystemAt?: string | null;
+};
+
+export type SgkProfileRate = {
+  id: string;
+  period_id: string;
+  profile_id: string;
+  label: string;
+  gross: number;
+  net_to_firm: number;
+  employee_share: number | null;
+  retiree_share: number | null;
+  retiree_net_after_share: number | null;
+};
+
+export type SgkReimbursementPeriod = {
+  id: string;
+  org_id: string;
+  valid_from: string;
+  pill_extra_per_device: number;
+  created_at: string | null;
+  rates: SgkProfileRate[];
+};
+
+export type SgkPaymentTrackingRow = {
+  patient_id: string;
+  patient_name: string;
+  sgk_profile: string | null;
+  sgk_profile_label: string | null;
+  sgk_recorded_to_system: boolean;
+  sgk_recorded_to_system_at: string | null;
+  sgk_rate_valid_from: string | null;
+  sgk_expected_reimbursement_month: string | null;
+  sgk_expected_reimbursement: number;
+  invoice_issued: boolean | null;
+  invoice_issued_at: string | null;
 };
 
 export type PatientPaymentRow = {
@@ -341,6 +383,11 @@ export type NewPatientForm = {
   sgkExpectedMonth?: string; // "yyyy-MM" (input type="month")
   sgkPrescriptionNo?: string;
   sgkDeviceCount?: '1' | '2';
+  sgkRatePeriodId?: string | null;
+  sgkProfileRateId?: string | null;
+  sgkRateEffectiveDate?: string | null;
+  sgkBaseReimbursement?: number | null;
+  sgkPillExtraAmount?: number | null;
 
   /**
    * Extra SGK checkbox for batteries (pilli cihaz / sadece pil).

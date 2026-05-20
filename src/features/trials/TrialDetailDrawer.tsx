@@ -259,6 +259,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
       await queryClient.invalidateQueries({ queryKey: TRIALS_QUERY_KEY });
 
       // Close drawer so user sees updated data in the list
+      setIsSaving(false);
       onClose();
     } catch (err) {
       console.error('Failed to update trial info:', err);
@@ -277,6 +278,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
       setSelectedDeviceIds([]);
       setPendingAction(null);
       setIsEditing(false);
+      setIsSaving(false);
       setEditError(null);
       // Reset form state
       setFullName(trial.full_name || '');

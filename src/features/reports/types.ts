@@ -1,6 +1,8 @@
 // src/features/reports/types.ts
 // Summary: Types for CRM reporting dashboard (financial + inventory + SGK).
 
+import type { SgkPaymentTrackingRow } from '../patients/types';
+
 export type ReportsMonthFilter = {
   /** Selected month, ISO 'YYYY-MM' – e.g. '2025-12' */
   month: string;
@@ -62,8 +64,17 @@ export type ReportsKpis = {
   /** Bu ay SGK’dan yatması beklenen tutar (3 ay önce işlenenler) */
   sgkDueThisMonth: number;
 
+  /** Seçili ayda SGK profili/tutarı olan tüm SGK hastaları toplamı */
+  sgkEstimatedThisMonth: number;
+
+  /** Seçili ayda sisteme işlenmiş SGK kayıtları toplamı */
+  sgkRecordedThisMonth: number;
+
   /** Önümüzdeki 3 ay içinde SGK’dan yatması beklenen toplam tutar */
   sgkDueNextThreeMonths: number;
+
+  /** Seçili ay için hasta bazlı SGK takip satırları */
+  sgkPaymentRows: SgkPaymentTrackingRow[];
 
   /** 12 aylık ciro grafiği (bar chart) */
   revenueByMonth: MonthlyRevenuePoint[];

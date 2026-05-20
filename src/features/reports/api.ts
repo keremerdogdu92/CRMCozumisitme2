@@ -52,7 +52,10 @@ async function fetchReportsKpis(filter: ReportsMonthFilter): Promise<ReportsKpis
     monthDevicesSoldCost: 0,
     monthlyTurnover: 0,
     sgkDueThisMonth: 0,
+    sgkEstimatedThisMonth: 0,
+    sgkRecordedThisMonth: 0,
     sgkDueNextThreeMonths: 0,
+    sgkPaymentRows: [],
     revenueByMonth: [],
     devicesPie: [],
   };
@@ -60,8 +63,12 @@ async function fetchReportsKpis(filter: ReportsMonthFilter): Promise<ReportsKpis
   // Ensure jsonb array fields are always real JS arrays (not strings).
   const raw: ReportsKpis = {
     ...base,
+    sgkEstimatedThisMonth:
+      Number(base.sgkEstimatedThisMonth ?? base.sgkDueThisMonth ?? 0) || 0,
+    sgkRecordedThisMonth: Number(base.sgkRecordedThisMonth ?? 0) || 0,
     revenueByMonth: parseJsonbArray(base.revenueByMonth) as ReportsKpis['revenueByMonth'],
     devicesPie: parseJsonbArray(base.devicesPie) as ReportsKpis['devicesPie'],
+    sgkPaymentRows: parseJsonbArray(base.sgkPaymentRows) as ReportsKpis['sgkPaymentRows'],
   };
 
   return raw;

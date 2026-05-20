@@ -98,12 +98,36 @@ export async function updatePatientSgkProfileInfo(params: {
   sgkProfileId: string | null;
   sgkExpectedReimbursement: string | null;
   sgkExpectedMonth: string | null; // "yyyy-MM" veya null
+  sgkFlag?: boolean;
+  sgkPrescriptionReceived?: boolean;
+  sgkRecordedToSystem?: boolean;
+  sgkPrescriptionNo?: string;
+  sgkRecordedToSystemAt?: string | null;
+  sgkRatePeriodId?: string | null;
+  sgkProfileRateId?: string | null;
+  sgkRateEffectiveDate?: string | null;
+  sgkDeviceCount?: number | null;
+  sgkPillPrescription?: boolean;
+  sgkBaseReimbursement?: number | null;
+  sgkPillExtraAmount?: number | null;
 }): Promise<void> {
   const {
     id,
     sgkProfileId,
     sgkExpectedReimbursement,
     sgkExpectedMonth,
+    sgkFlag,
+    sgkPrescriptionReceived,
+    sgkRecordedToSystem,
+    sgkPrescriptionNo,
+    sgkRecordedToSystemAt,
+    sgkRatePeriodId,
+    sgkProfileRateId,
+    sgkRateEffectiveDate,
+    sgkDeviceCount,
+    sgkPillPrescription,
+    sgkBaseReimbursement,
+    sgkPillExtraAmount,
   } = params;
 
   // Beklenen tutarı TR formatlı string'ten number'a çevir.
@@ -135,13 +159,37 @@ export async function updatePatientSgkProfileInfo(params: {
     }
   }
 
+  const payload: Record<string, unknown> = {
+    sgk_profile: sgkProfileId,
+    sgk_expected_reimbursement: expectedAmount,
+    sgk_expected_reimbursement_month: expectedMonthDate,
+    sgk_rate_period_id: sgkRatePeriodId ?? null,
+    sgk_profile_rate_id: sgkProfileRateId ?? null,
+    sgk_rate_effective_date: sgkRateEffectiveDate ?? null,
+    sgk_device_count: sgkDeviceCount ?? null,
+    sgk_pill_prescription: !!sgkPillPrescription,
+    sgk_base_reimbursement: sgkBaseReimbursement ?? null,
+    sgk_pill_extra_amount: sgkPillExtraAmount ?? null,
+  };
+
+  if (sgkFlag !== undefined) {
+    const effectiveRecordedAt = normalizeRecordedAt(
+      sgkFlag,
+      !!sgkRecordedToSystem,
+      sgkRecordedToSystemAt,
+    );
+    Object.assign(payload, {
+      sgk_flag: sgkFlag,
+      sgk_prescription_received: sgkFlag ? !!sgkPrescriptionReceived : false,
+      sgk_recorded_to_system: sgkFlag ? !!sgkRecordedToSystem : false,
+      sgk_recorded_to_system_at: effectiveRecordedAt,
+      sgk_prescription_no: sgkPrescriptionNo?.trim() || null,
+    });
+  }
+
   const { error } = await supabaseClient
     .from('patients')
-    .update({
-      sgk_profile: sgkProfileId,
-      sgk_expected_reimbursement: expectedAmount,
-      sgk_expected_reimbursement_month: expectedMonthDate,
-    })
+    .update(payload)
     .eq('id', id);
 
   if (error) {

@@ -6,9 +6,14 @@ import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { PatientRow } from '../../types';
 import { formatDate } from '../../patientFormatUtils';
-import { SGK_PROFILES, getSgkProfileLabel } from '../../sgkProfiles';
 import { updatePatientSgkProfileInfo } from '../../api/api.patients.update';
 import { PATIENTS_QUERY_KEY } from '../../api/api.core';
+import {
+  computeSgkSnapshot,
+  getSgkProfileLabelFromPeriods,
+  monthInputToIsoDate,
+  useSgkReimbursementPeriods,
+} from '../../api/api.sgkReimbursements';
 
 type PatientDetailSgkInvoiceTabProps = {
   patient: PatientRow;
@@ -39,56 +44,10 @@ type PatientDetailSgkInvoiceTabProps = {
 
 type SgkDeviceCount = '1' | '2';
 
-type SgkProfileInternal = {
-  id: string;
-  label: string;
-  netToFirm: number;
-};
-
-// Fixed extra reimbursement for pill prescriptions (incl. VAT).
-// Same iş kuralı: 624 TL / cihaz.
-const SGK_PILL_EXTRA_PER_DEVICE_TL = 624;
-
 // Money helpers (TR format support).
 function formatMoneyLikeTR(value: number): string {
   const fixed = Number.isInteger(value) ? value.toString() : value.toFixed(2);
   return fixed.replace('.', ',');
-}
-
-function toCountMultiplier(count: SgkDeviceCount): number {
-  return count === '2' ? 2 : 1;
-}
-
-function computeTotal(
-  profileNetToFirm: number | null,
-  count: SgkDeviceCount,
-  pillPrescription: boolean,
-): string {
-  const mult = toCountMultiplier(count);
-  const base = profileNetToFirm != null ? profileNetToFirm * mult : 0;
-  const pillExtra = pillPrescription ? SGK_PILL_EXTRA_PER_DEVICE_TL * mult : 0;
-  const total = Number((base + pillExtra).toFixed(2));
-  return total > 0 ? formatMoneyLikeTR(total) : '';
-}
-
-function computeDefaultExpectedMonth(): string {
-  const base = new Date();
-  base.setMonth(base.getMonth() + 3);
-  const yyyy = base.getFullYear();
-  const mm = String(base.getMonth() + 1).padStart(2, '0');
-  return `${yyyy}-${mm}`; // type="month" format
-}
-
-function monthInputToIsoDate(monthValue: string): string | null {
-  if (!monthValue) return null;
-  const [yearStr, monthStr] = monthValue.split('-');
-  const year = Number(yearStr);
-  const month = Number(monthStr);
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
-    return null;
-  }
-  const date = new Date(Date.UTC(year, month - 1, 15));
-  return date.toISOString();
 }
 
 // For <input type="date"> value from ISO-like strings.
@@ -129,6 +88,7 @@ export function PatientDetailSgkInvoiceTab({
   onSaveInvoice,
 }: PatientDetailSgkInvoiceTabProps) {
   const queryClient = useQueryClient();
+  const { data: sgkPeriods } = useSgkReimbursementPeriods();
 
   // --- Local SGK profile-edit state (only for this tab) ---
 
@@ -145,9 +105,7 @@ export function PatientDetailSgkInvoiceTab({
   // Sisteme işlendiği tarih için lokal input state.
   const [sgkRecordedAtInput, setSgkRecordedAtInput] = useState<string>(
     toDateInputValue(
-      sgkRecordedToSystemAt ??
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (((patient as any).sgk_recorded_to_system_at as string | null) ?? null),
+      sgkRecordedToSystemAt ?? patient.sgk_recorded_to_system_at ?? null,
     ),
   );
 
@@ -189,15 +147,12 @@ export function PatientDetailSgkInvoiceTab({
       setSgkExpectedMonth('');
     }
 
-    // Device count & pill bayrakları DB'de tutulmuyor, sadece hesaplama amaçlı.
-    setSgkDeviceCount('1');
-    setSgkPillPrescription(false);
+    setSgkDeviceCount(patient.sgk_device_count === 2 ? '2' : '1');
+    setSgkPillPrescription(!!patient.sgk_pill_prescription);
 
     setSgkRecordedAtInput(
       toDateInputValue(
-        sgkRecordedToSystemAt ??
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (((patient as any).sgk_recorded_to_system_at as string | null) ?? null),
+        sgkRecordedToSystemAt ?? patient.sgk_recorded_to_system_at ?? null,
       ),
     );
 
@@ -209,18 +164,21 @@ export function PatientDetailSgkInvoiceTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patient.id, sgkRecordedToSystemAt, invoiceIssued, invoiceIssuedAt]);
 
-  const findProfileNetToFirm = (profileId: string): number | null => {
-    const profile = (SGK_PROFILES as SgkProfileInternal[]).find(
-      (p) => p.id === profileId,
-    );
-    return profile ? profile.netToFirm : null;
-  };
+  const previewSnapshot = computeSgkSnapshot({
+    periods: sgkPeriods,
+    effectiveDate: sgkRecordedAtInput || null,
+    profileId: sgkProfileId || null,
+    deviceCount: sgkDeviceCount,
+    pillPrescription: sgkPillPrescription,
+  });
+  const profileOptions = previewSnapshot.period.rates;
 
-  const recomputeExpected = (
+  const applySgkSnapshot = (
     enabled: boolean,
     profileId: string,
     count: SgkDeviceCount,
     pill: boolean,
+    recordedAtInput = sgkRecordedAtInput,
   ) => {
     if (!enabled) {
       setSgkExpectedReimbursement('');
@@ -228,10 +186,15 @@ export function PatientDetailSgkInvoiceTab({
       return;
     }
 
-    const netToFirm = profileId ? findProfileNetToFirm(profileId) : null;
-    const total = computeTotal(netToFirm, count, pill);
-    setSgkExpectedReimbursement(total);
-    setSgkExpectedMonth(total ? computeDefaultExpectedMonth() : '');
+    const snapshot = computeSgkSnapshot({
+      periods: sgkPeriods,
+      effectiveDate: recordedAtInput || null,
+      profileId: profileId || null,
+      deviceCount: count,
+      pillPrescription: pill,
+    });
+    setSgkExpectedReimbursement(snapshot.totalInput);
+    setSgkExpectedMonth(snapshot.expectedMonth);
   };
 
   const handleToggleSgkFlag = (checked: boolean) => {
@@ -256,7 +219,7 @@ export function PatientDetailSgkInvoiceTab({
       onChangeSgkRecordedToSystem(false);
       onChangeSgkPrescriptionReceived(false);
     } else {
-      recomputeExpected(true, sgkProfileId, sgkDeviceCount, sgkPillPrescription);
+      applySgkSnapshot(true, sgkProfileId, sgkDeviceCount, sgkPillPrescription);
       onChangeSgkFlag(true);
     }
 
@@ -267,17 +230,17 @@ export function PatientDetailSgkInvoiceTab({
 
   const handleChangeProfile = (value: string) => {
     setSgkProfileId(value);
-    recomputeExpected(sgkFlag, value, sgkDeviceCount, sgkPillPrescription);
+    applySgkSnapshot(sgkFlag, value, sgkDeviceCount, sgkPillPrescription);
   };
 
   const handleChangeDeviceCount = (value: SgkDeviceCount) => {
     setSgkDeviceCount(value);
-    recomputeExpected(sgkFlag, sgkProfileId, value, sgkPillPrescription);
+    applySgkSnapshot(sgkFlag, sgkProfileId, value, sgkPillPrescription);
   };
 
   const handleTogglePillPrescription = (checked: boolean) => {
     setSgkPillPrescription(checked);
-    recomputeExpected(sgkFlag, sgkProfileId, sgkDeviceCount, checked);
+    applySgkSnapshot(sgkFlag, sgkProfileId, sgkDeviceCount, checked);
   };
 
   const handleToggleRecordedToSystem = (checked: boolean) => {
@@ -297,6 +260,7 @@ export function PatientDetailSgkInvoiceTab({
       setSgkRecordedAtInput('');
       onChangeSgkRecordedToSystemAt?.(null);
       onChangeSgkRecordedToSystem(false);
+      applySgkSnapshot(sgkFlag, sgkProfileId, sgkDeviceCount, sgkPillPrescription, '');
       return;
     }
 
@@ -304,6 +268,15 @@ export function PatientDetailSgkInvoiceTab({
       const today = todayAsDateInput();
       setSgkRecordedAtInput(today);
       onChangeSgkRecordedToSystemAt?.(today);
+      applySgkSnapshot(sgkFlag, sgkProfileId, sgkDeviceCount, sgkPillPrescription, today);
+    } else {
+      applySgkSnapshot(
+        sgkFlag,
+        sgkProfileId,
+        sgkDeviceCount,
+        sgkPillPrescription,
+        sgkRecordedAtInput,
+      );
     }
 
     onChangeSgkRecordedToSystem(true);
@@ -312,6 +285,7 @@ export function PatientDetailSgkInvoiceTab({
   const handleRecordedDateChange = (value: string) => {
     setSgkRecordedAtInput(value);
     onChangeSgkRecordedToSystemAt?.(value || null);
+    applySgkSnapshot(sgkFlag, sgkProfileId, sgkDeviceCount, sgkPillPrescription, value);
   };
 
   const handleSaveSgkProfile = async () => {
@@ -323,11 +297,40 @@ export function PatientDetailSgkInvoiceTab({
     setProfileError(null);
     setIsSavingProfile(true);
     try {
+      const snapshot = computeSgkSnapshot({
+        periods: sgkPeriods,
+        effectiveDate: sgkRecordedAtInput || null,
+        profileId: sgkProfileId || null,
+        deviceCount: sgkDeviceCount,
+        pillPrescription: sgkPillPrescription,
+      });
+      setSgkExpectedReimbursement(snapshot.totalInput);
+      setSgkExpectedMonth(snapshot.expectedMonth);
+
       await updatePatientSgkProfileInfo({
         id: patient.id,
         sgkProfileId: sgkProfileId || null,
-        sgkExpectedReimbursement: sgkExpectedReimbursement || null,
-        sgkExpectedMonth: sgkExpectedMonth || null,
+        sgkExpectedReimbursement: snapshot.totalInput || null,
+        sgkExpectedMonth: snapshot.expectedMonth || null,
+        sgkFlag,
+        sgkPrescriptionReceived,
+        sgkRecordedToSystem,
+        sgkPrescriptionNo,
+        sgkRecordedToSystemAt: sgkRecordedAtInput || null,
+        sgkRatePeriodId: snapshot.period.id.startsWith('fallback-')
+          ? null
+          : snapshot.period.id,
+        sgkProfileRateId: snapshot.rate?.id.startsWith('fallback-')
+          ? null
+          : snapshot.rate?.id ?? null,
+        sgkRateEffectiveDate:
+          snapshot.totalAmount > 0 ? snapshot.effectiveDate : null,
+        sgkDeviceCount: snapshot.deviceCount,
+        sgkPillPrescription,
+        sgkBaseReimbursement:
+          snapshot.totalAmount > 0 ? snapshot.baseAmount : null,
+        sgkPillExtraAmount:
+          snapshot.totalAmount > 0 ? snapshot.pillExtraAmount : null,
       });
 
       setIsEditingSgk(false);
@@ -422,7 +425,8 @@ export function PatientDetailSgkInvoiceTab({
 
   const invoiceDateDisplay = invoiceIssuedAt ? formatDate(invoiceIssuedAt) : '-';
 
-  const sgkProfileLabel = getSgkProfileLabel(
+  const sgkProfileLabel = getSgkProfileLabelFromPeriods(
+    sgkPeriods,
     (sgkProfileId || patient.sgk_profile) ?? null,
   );
 
@@ -442,6 +446,24 @@ export function PatientDetailSgkInvoiceTab({
     sgkRecordedAtInput && sgkRecordedAtInput.trim().length > 0
       ? formatDate(sgkRecordedAtInput)
       : '-';
+
+  const savedRatePeriod =
+    (sgkPeriods ?? []).find((period) => period.id === patient.sgk_rate_period_id) ??
+    previewSnapshot.period;
+  const sgkRatePeriodDisplay = savedRatePeriod?.valid_from
+    ? formatDate(savedRatePeriod.valid_from)
+    : '-';
+  const sgkDeviceCountDisplay = `${patient.sgk_device_count ?? Number(sgkDeviceCount)} cihaz`;
+  const baseReimbursementValue =
+    patient.sgk_base_reimbursement ?? previewSnapshot.baseAmount;
+  const pillExtraValue =
+    patient.sgk_pill_extra_amount ?? previewSnapshot.pillExtraAmount;
+  const sgkBaseReimbursementDisplay =
+    baseReimbursementValue > 0
+      ? `${formatMoneyLikeTR(baseReimbursementValue)} TL`
+      : '-';
+  const sgkPillExtraDisplay =
+    pillExtraValue > 0 ? `${formatMoneyLikeTR(pillExtraValue)} TL` : '-';
 
   return (
     <section className="space-y-2">
@@ -469,9 +491,33 @@ export function PatientDetailSgkInvoiceTab({
             </span>
           </div>
           <div className="flex justify-between gap-2">
+            <span className="text-slate-500">Kullanılan SGK Dönemi</span>
+            <span className="text-right text-slate-900">
+              {sgkRatePeriodDisplay}
+            </span>
+          </div>
+          <div className="flex justify-between gap-2">
             <span className="text-slate-500">Sisteme İşlendiği Tarih</span>
             <span className="text-right text-slate-900">
               {sgkRecordedDateDisplay}
+            </span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-slate-500">SGK Cihaz Adedi</span>
+            <span className="text-right text-slate-900">
+              {sgkDeviceCountDisplay}
+            </span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-slate-500">Profil Baz Tutarı</span>
+            <span className="text-right text-slate-900">
+              {sgkBaseReimbursementDisplay}
+            </span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-slate-500">Pil Ek Tutarı</span>
+            <span className="text-right text-slate-900">
+              {sgkPillExtraDisplay}
             </span>
           </div>
           <div className="flex justify-between gap-2">
@@ -594,8 +640,8 @@ export function PatientDetailSgkInvoiceTab({
                   className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   <option value="">Profil seçin...</option>
-                  {(SGK_PROFILES as SgkProfileInternal[]).map((p) => (
-                    <option key={p.id} value={p.id}>
+                  {profileOptions.map((p) => (
+                    <option key={p.profile_id} value={p.profile_id}>
                       {p.label}
                     </option>
                   ))}

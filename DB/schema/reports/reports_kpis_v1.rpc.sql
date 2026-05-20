@@ -23,7 +23,10 @@ create or replace function public.reports_kpis_v1(
   "monthDevicesSoldCost"   numeric,
   "monthlyTurnover"        numeric,
   "sgkDueThisMonth"        numeric,
+  "sgkEstimatedThisMonth"  numeric,
+  "sgkRecordedThisMonth"   numeric,
   "sgkDueNextThreeMonths"  numeric,
+  "sgkPaymentRows"         jsonb,
   "revenueByMonth"         jsonb,
   "devicesPie"             jsonb
 )
@@ -206,9 +209,73 @@ select
     where o.org_id is not null
       and pt.org_id = o.org_id
       and pt.deleted_at is null
+      and pt.sgk_flag is true
+      and pt.sgk_expected_reimbursement is not null
+      and pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
+      and pt.sgk_expected_reimbursement_month < w.month_end_ist_date
+  ), 0) as "sgkEstimatedThisMonth",
+
+  coalesce((
+    select sum(coalesce(pt.sgk_expected_reimbursement, 0))
+    from public.patients pt
+    cross join window_bounds w
+    cross join org_ctx o
+    where o.org_id is not null
+      and pt.org_id = o.org_id
+      and pt.deleted_at is null
+      and pt.sgk_flag is true
+      and pt.sgk_recorded_to_system is true
+      and pt.sgk_recorded_to_system_at is not null
+      and pt.sgk_expected_reimbursement is not null
+      and pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
+      and pt.sgk_expected_reimbursement_month < w.month_end_ist_date
+  ), 0) as "sgkRecordedThisMonth",
+
+  coalesce((
+    select sum(coalesce(pt.sgk_expected_reimbursement, 0))
+    from public.patients pt
+    cross join window_bounds w
+    cross join org_ctx o
+    where o.org_id is not null
+      and pt.org_id = o.org_id
+      and pt.deleted_at is null
       and pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
       and pt.sgk_expected_reimbursement_month < (w.month_start_ist_date + interval '3 months')::date
   ), 0) as "sgkDueNextThreeMonths",
+
+  coalesce((
+    select jsonb_agg(
+      jsonb_build_object(
+        'patient_id', pt.id,
+        'patient_name', pt.full_name,
+        'sgk_profile', pt.sgk_profile,
+        'sgk_profile_label', coalesce(rate.label, pt.sgk_profile),
+        'sgk_recorded_to_system', coalesce(pt.sgk_recorded_to_system, false),
+        'sgk_recorded_to_system_at', pt.sgk_recorded_to_system_at,
+        'sgk_rate_valid_from', coalesce(period.valid_from, pt.sgk_rate_effective_date),
+        'sgk_expected_reimbursement_month', pt.sgk_expected_reimbursement_month,
+        'sgk_expected_reimbursement', coalesce(pt.sgk_expected_reimbursement, 0),
+        'invoice_issued', coalesce(pt.invoice_issued, false),
+        'invoice_issued_at', pt.invoice_issued_at
+      )
+      order by pt.sgk_expected_reimbursement_month asc, pt.full_name asc
+    )
+    from public.patients pt
+    cross join window_bounds w
+    cross join org_ctx o
+    left join public.sgk_reimbursement_periods period
+      on period.id = pt.sgk_rate_period_id
+      and period.org_id = pt.org_id
+    left join public.sgk_reimbursement_profile_rates rate
+      on rate.id = pt.sgk_profile_rate_id
+    where o.org_id is not null
+      and pt.org_id = o.org_id
+      and pt.deleted_at is null
+      and pt.sgk_flag is true
+      and pt.sgk_expected_reimbursement is not null
+      and pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
+      and pt.sgk_expected_reimbursement_month < w.month_end_ist_date
+  ), '[]'::jsonb) as "sgkPaymentRows",
 
   coalesce((
     select jsonb_agg(

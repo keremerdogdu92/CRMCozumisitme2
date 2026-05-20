@@ -6,8 +6,11 @@
 // - Computes sgkExpectedReimbursement as TOTAL (profile * count) + (pillExtra * count if enabled).
 // - For battery_only: hides profile selection; reimbursement is pill-only when enabled.
 
-import { SGK_PROFILES } from '../../sgkProfiles';
 import type { NewPatientDeviceFlowType } from '../../types';
+import {
+  computeSgkSnapshot,
+  useSgkReimbursementPeriods,
+} from '../../api/api.sgkReimbursements';
 
 type NewPatientSgkSectionProps = {
   deviceFlowType: NewPatientDeviceFlowType;
@@ -37,47 +40,14 @@ type NewPatientSgkSectionProps = {
   onChangeSgkExpectedMonth: (value: string) => void; // "yyyy-MM"
   onChangeSgkPrescriptionNo: (value: string) => void;
   onChangeSgkDeviceCount: (value: '1' | '2') => void;
+  onChangeSgkSnapshot: (patch: {
+    sgkRatePeriodId: string | null;
+    sgkProfileRateId: string | null;
+    sgkRateEffectiveDate: string | null;
+    sgkBaseReimbursement: number | null;
+    sgkPillExtraAmount: number | null;
+  }) => void;
 };
-
-type SgkProfile = {
-  id: string;
-  label: string;
-  netToFirm: number;
-};
-
-// Fixed extra reimbursement for pill prescriptions (incl. VAT).
-// NOTE: This is intentionally hardcoded for now (business rule).
-const SGK_PILL_EXTRA_PER_DEVICE_TL = 624;
-
-// Money helpers (TR format support).
-function formatMoneyLikeTR(value: number): string {
-  const fixed = Number.isInteger(value) ? value.toString() : value.toFixed(2);
-  return fixed.replace('.', ',');
-}
-
-function toCountMultiplier(count: '1' | '2'): number {
-  return count === '2' ? 2 : 1;
-}
-
-function computeTotal(
-  profileNetToFirm: number | null,
-  count: '1' | '2',
-  pillPrescription: boolean,
-): string {
-  const mult = toCountMultiplier(count);
-  const base = profileNetToFirm != null ? profileNetToFirm * mult : 0;
-  const pillExtra = pillPrescription ? SGK_PILL_EXTRA_PER_DEVICE_TL * mult : 0;
-  const total = Number((base + pillExtra).toFixed(2));
-  return total > 0 ? formatMoneyLikeTR(total) : '';
-}
-
-function computeDefaultExpectedMonth(): string {
-  const base = new Date();
-  base.setMonth(base.getMonth() + 3);
-  const yyyy = base.getFullYear();
-  const mm = String(base.getMonth() + 1).padStart(2, '0');
-  return `${yyyy}-${mm}`; // type="month" format
-}
 
 export function NewPatientSgkSection({
   deviceFlowType,
@@ -99,9 +69,67 @@ export function NewPatientSgkSection({
   onChangeSgkExpectedMonth,
   onChangeSgkPrescriptionNo,
   onChangeSgkDeviceCount,
+  onChangeSgkSnapshot,
 }: NewPatientSgkSectionProps) {
+  const { data: sgkPeriods } = useSgkReimbursementPeriods();
   const isBatteryFlow = deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
   const isBatteryOnly = deviceFlowType === 'battery_only';
+  const previewSnapshot = computeSgkSnapshot({
+    periods: sgkPeriods,
+    effectiveDate: null,
+    profileId: isBatteryOnly ? null : sgkProfileId || null,
+    deviceCount: sgkDeviceCount,
+    pillPrescription: sgkPillPrescription,
+  });
+  const profileOptions = previewSnapshot.period.rates;
+
+  const clearSnapshot = () => {
+    onChangeSgkSnapshot({
+      sgkRatePeriodId: null,
+      sgkProfileRateId: null,
+      sgkRateEffectiveDate: null,
+      sgkBaseReimbursement: null,
+      sgkPillExtraAmount: null,
+    });
+  };
+
+  const applySnapshot = (
+    enabled: boolean,
+    profileId: string,
+    count: '1' | '2',
+    pill: boolean,
+  ) => {
+    if (!enabled) {
+      onChangeSgkExpectedReimbursement('');
+      onChangeSgkExpectedMonth('');
+      clearSnapshot();
+      return;
+    }
+
+    const snapshot = computeSgkSnapshot({
+      periods: sgkPeriods,
+      effectiveDate: null,
+      profileId: isBatteryOnly ? null : profileId || null,
+      deviceCount: count,
+      pillPrescription: pill,
+    });
+    onChangeSgkExpectedReimbursement(snapshot.totalInput);
+    onChangeSgkExpectedMonth(snapshot.expectedMonth);
+    onChangeSgkSnapshot({
+      sgkRatePeriodId: snapshot.period.id.startsWith('fallback-')
+        ? null
+        : snapshot.period.id,
+      sgkProfileRateId: snapshot.rate?.id.startsWith('fallback-')
+        ? null
+        : snapshot.rate?.id ?? null,
+      sgkRateEffectiveDate:
+        snapshot.totalAmount > 0 ? snapshot.effectiveDate : null,
+      sgkBaseReimbursement:
+        snapshot.totalAmount > 0 ? snapshot.baseAmount : null,
+      sgkPillExtraAmount:
+        snapshot.totalAmount > 0 ? snapshot.pillExtraAmount : null,
+    });
+  };
 
   const resetSgkDerivedFields = () => {
     onChangeSgkPrescriptionReceived(false);
@@ -112,6 +140,7 @@ export function NewPatientSgkSection({
     onChangeSgkPrescriptionNo('');
     onChangeSgkDeviceCount('1');
     onChangeSgkPillPrescription(false);
+    clearSnapshot();
   };
 
   const handleToggleSgkFlag = (checked: boolean) => {
@@ -119,57 +148,23 @@ export function NewPatientSgkSection({
     if (!checked) {
       resetSgkDerivedFields();
     } else {
-      // When SGK is enabled, recompute based on current selections.
-      recomputeExpected(checked, sgkProfileId, sgkDeviceCount, sgkPillPrescription);
+      applySnapshot(checked, sgkProfileId, sgkDeviceCount, sgkPillPrescription);
     }
-  };
-
-  const findProfileNetToFirm = (profileId: string): number | null => {
-    const profile = (SGK_PROFILES as SgkProfile[]).find((p) => p.id === profileId);
-    return profile ? profile.netToFirm : null;
-  };
-
-  const recomputeExpected = (
-    enabled: boolean,
-    profileId: string,
-    count: '1' | '2',
-    pill: boolean,
-  ) => {
-    if (!enabled) {
-      onChangeSgkExpectedReimbursement('');
-      onChangeSgkExpectedMonth('');
-      return;
-    }
-
-    // battery_only: ignore profile and compute only from pill prescription
-    if (isBatteryOnly) {
-      const total = computeTotal(null, count, pill);
-      onChangeSgkExpectedReimbursement(total);
-      onChangeSgkExpectedMonth(total ? computeDefaultExpectedMonth() : '');
-      return;
-    }
-
-    // rechargeable/battery_device: profile is optional; pill adds extra if enabled.
-    const netToFirm = profileId ? findProfileNetToFirm(profileId) : null;
-    const total = computeTotal(netToFirm, count, pill);
-    onChangeSgkExpectedReimbursement(total);
-    onChangeSgkExpectedMonth(total ? computeDefaultExpectedMonth() : '');
   };
 
   const handleChangeProfile = (value: string) => {
     onChangeSgkProfileId(value);
-    recomputeExpected(sgkFlag, value, sgkDeviceCount, sgkPillPrescription);
+    applySnapshot(sgkFlag, value, sgkDeviceCount, sgkPillPrescription);
   };
 
   const handleChangeDeviceCount = (value: '1' | '2') => {
     onChangeSgkDeviceCount(value);
-    recomputeExpected(sgkFlag, sgkProfileId, value, sgkPillPrescription);
+    applySnapshot(sgkFlag, sgkProfileId, value, sgkPillPrescription);
   };
 
   const handleTogglePillPrescription = (checked: boolean) => {
     onChangeSgkPillPrescription(checked);
-    // pill checkbox impacts total reimbursement
-    recomputeExpected(sgkFlag, sgkProfileId, sgkDeviceCount, checked);
+    applySnapshot(sgkFlag, sgkProfileId, sgkDeviceCount, checked);
   };
 
   return (
@@ -253,8 +248,8 @@ export function NewPatientSgkSection({
                   className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   <option value="">Profil seçin...</option>
-                  {(SGK_PROFILES as SgkProfile[]).map((p) => (
-                    <option key={p.id} value={p.id}>
+                  {profileOptions.map((p) => (
+                    <option key={p.profile_id} value={p.profile_id}>
                       {p.label}
                     </option>
                   ))}

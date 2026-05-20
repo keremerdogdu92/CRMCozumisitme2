@@ -12,6 +12,7 @@ import { ImportFixCenterSection } from '../features/patients/import/ImportFixCen
 import { InventoryImportCard } from '../features/inventory/InventoryImportCard';
 import { DeviceCatalogImportCard } from '../features/inventory/deviceCatalog/DeviceCatalogImportCard';
 import { OrgSettingsCard } from '../features/settings/OrgSettingsCard';
+import { SgkReimbursementSettingsCard } from '../features/settings/SgkReimbursementSettingsCard';
 import { MeetingSatisfactionSettingsCard } from '../features/meetings/MeetingSatisfactionSettingsCard';
 
 export default function SettingsPage() {
@@ -37,6 +38,9 @@ export default function SettingsPage() {
 
         {/* Meeting satisfaction survey settings */}
         <MeetingSatisfactionSettingsCard />
+
+        {/* SGK reimbursement periods */}
+        <SgkReimbursementSettingsCard />
 
         {/* Patients import (v2) */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

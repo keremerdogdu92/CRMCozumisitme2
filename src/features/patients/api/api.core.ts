@@ -120,6 +120,13 @@ export async function fetchPatients(params?: {
     'sgk_profile',
     'sgk_expected_reimbursement',
     'sgk_expected_reimbursement_month',
+    'sgk_rate_period_id',
+    'sgk_profile_rate_id',
+    'sgk_rate_effective_date',
+    'sgk_device_count',
+    'sgk_pill_prescription',
+    'sgk_base_reimbursement',
+    'sgk_pill_extra_amount',
     'is_battery_patient',
   ];
 
@@ -178,6 +185,24 @@ export async function fetchPatients(params?: {
           | string
           | null
           | undefined) ?? null,
+      sgk_rate_period_id:
+        (row.sgk_rate_period_id as string | null | undefined) ?? null,
+      sgk_profile_rate_id:
+        (row.sgk_profile_rate_id as string | null | undefined) ?? null,
+      sgk_rate_effective_date:
+        (row.sgk_rate_effective_date as string | null | undefined) ?? null,
+      sgk_device_count:
+        row.sgk_device_count != null ? Number(row.sgk_device_count) : null,
+      sgk_pill_prescription:
+        (row.sgk_pill_prescription as boolean | null | undefined) ?? null,
+      sgk_base_reimbursement:
+        row.sgk_base_reimbursement != null
+          ? Number(row.sgk_base_reimbursement)
+          : null,
+      sgk_pill_extra_amount:
+        row.sgk_pill_extra_amount != null
+          ? Number(row.sgk_pill_extra_amount)
+          : null,
 
       national_id: (row.national_id as string | null | undefined) ?? null,
       address: (row.address as string | null | undefined) ?? null,

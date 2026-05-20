@@ -54,6 +54,13 @@ CREATE TABLE IF NOT EXISTS public.patients (
   sgk_profile text NULL,
   sgk_expected_reimbursement numeric(10, 2) NULL,
   sgk_expected_reimbursement_month date NULL,
+  sgk_rate_period_id uuid NULL,
+  sgk_profile_rate_id uuid NULL,
+  sgk_rate_effective_date date NULL,
+  sgk_device_count integer NULL,
+  sgk_pill_prescription boolean NOT NULL DEFAULT false,
+  sgk_base_reimbursement numeric(12, 2) NULL,
+  sgk_pill_extra_amount numeric(12, 2) NULL,
 
   -- Soft delete columns
   deleted_at timestamptz NULL,
@@ -90,6 +97,10 @@ CREATE TABLE IF NOT EXISTS public.patients (
 
   CONSTRAINT patients_satisfaction_10_check CHECK (
     satisfaction_10 >= 1 AND satisfaction_10 <= 10
+  ),
+
+  CONSTRAINT patients_sgk_device_count_check CHECK (
+    sgk_device_count IS NULL OR sgk_device_count IN (1, 2)
   ),
 
   CONSTRAINT patients_sgk_flow CHECK (

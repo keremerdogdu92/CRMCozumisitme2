@@ -96,6 +96,11 @@ export function useNewPatientForm({
     sgkExpectedMonth: '',
     sgkPrescriptionNo: '',
     sgkDeviceCount: '1',
+    sgkRatePeriodId: null,
+    sgkProfileRateId: null,
+    sgkRateEffectiveDate: null,
+    sgkBaseReimbursement: null,
+    sgkPillExtraAmount: null,
 
     // Battery-specific SGK flag (only meaningful for battery flows).
     sgkPillPrescription: false,
@@ -163,6 +168,11 @@ export function useNewPatientForm({
       sgkExpectedMonth: '',
       sgkPrescriptionNo: '',
       sgkDeviceCount: '1',
+      sgkRatePeriodId: null,
+      sgkProfileRateId: null,
+      sgkRateEffectiveDate: null,
+      sgkBaseReimbursement: null,
+      sgkPillExtraAmount: null,
       sgkPillPrescription: false,
 
       paymentMethod: '',
@@ -369,6 +379,21 @@ export function useNewPatientForm({
         sgkDeviceCount: formState.sgkFlag
           ? formState.sgkDeviceCount ?? '1'
           : '1',
+        sgkRatePeriodId: formState.sgkFlag
+          ? formState.sgkRatePeriodId ?? null
+          : null,
+        sgkProfileRateId: formState.sgkFlag
+          ? formState.sgkProfileRateId ?? null
+          : null,
+        sgkRateEffectiveDate: formState.sgkFlag
+          ? formState.sgkRateEffectiveDate ?? null
+          : null,
+        sgkBaseReimbursement: formState.sgkFlag
+          ? formState.sgkBaseReimbursement ?? null
+          : null,
+        sgkPillExtraAmount: formState.sgkFlag
+          ? formState.sgkPillExtraAmount ?? null
+          : null,
 
         // Payment fields:
         // - battery_only: keep empty (SGK-only).

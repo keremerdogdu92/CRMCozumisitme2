@@ -211,3 +211,50 @@ export async function updateInventoryItem(
     throw error;
   }
 }
+
+export type PatientInventoryItemAttachInput = {
+  patientId: string;
+  inventoryItemId: string;
+  earSide: 'right' | 'left' | 'bilateral';
+  soldAt?: string | null;
+  devicePrice?: number | null;
+};
+
+export async function attachPatientInventoryItem(
+  input: PatientInventoryItemAttachInput,
+): Promise<void> {
+  const { error } = await supabaseClient.rpc('attach_patient_inventory_item', {
+    p_patient_id: input.patientId,
+    p_inventory_item_id: input.inventoryItemId,
+    p_ear_side: input.earSide,
+    p_sold_at: input.soldAt ?? null,
+    p_device_price: input.devicePrice ?? null,
+  });
+
+  if (error) {
+    console.error('attachPatientInventoryItem RPC error:', error);
+    throw new Error('Cihaz hastaya bağlanamadı: ' + error.message);
+  }
+}
+
+export type PatientInventoryItemReplaceInput = PatientInventoryItemAttachInput & {
+  oldInventoryItemId: string;
+};
+
+export async function replacePatientInventoryItem(
+  input: PatientInventoryItemReplaceInput,
+): Promise<void> {
+  const { error } = await supabaseClient.rpc('replace_patient_inventory_item', {
+    p_patient_id: input.patientId,
+    p_old_inventory_item_id: input.oldInventoryItemId,
+    p_new_inventory_item_id: input.inventoryItemId,
+    p_ear_side: input.earSide,
+    p_sold_at: input.soldAt ?? null,
+    p_device_price: input.devicePrice ?? null,
+  });
+
+  if (error) {
+    console.error('replacePatientInventoryItem RPC error:', error);
+    throw new Error('Cihaz değiştirilemedi: ' + error.message);
+  }
+}
