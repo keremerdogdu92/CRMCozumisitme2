@@ -62,6 +62,8 @@ SELECT
   p.sgk_profile,
   p.sgk_expected_reimbursement,
   p.sgk_expected_reimbursement_month,
+  p.is_battery_patient,
+  p.sgk_recorded_to_system_at,
   p.sgk_rate_period_id,
   p.sgk_profile_rate_id,
   p.sgk_rate_effective_date,
@@ -69,8 +71,6 @@ SELECT
   p.sgk_pill_prescription,
   p.sgk_base_reimbursement,
   p.sgk_pill_extra_amount,
-  p.is_battery_patient,
-  p.sgk_recorded_to_system_at,
   p.deleted_at,
   p.deleted_by,
   p.delete_reason
