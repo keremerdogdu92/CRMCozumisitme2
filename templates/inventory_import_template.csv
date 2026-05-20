@@ -1,1 +1,10 @@
-brand,model,item_type,serial_no,barcode,purchase_price,list_price,notes,purchase_date
+# Stok import template
+# Zorunlu alanlar: brand, model, item_type, serial_no
+# item_type: hearing_aid veya charger
+# status bos birakilirsa in_stock kabul edilir. Diger degerler: in_stock, repair, sold
+# purchase_price ve list_price bos birakilirsa fiyat katalog listesinden eslestirilir.
+# Katalog eslesmezse sadece ilgili satir hata olur; Import Fix Center'da duzeltilebilir.
+# Duplicate serial_no olan satirlar iceri alinmaz.
+brand,model,item_type,serial_no,barcode,purchase_price,list_price,status,purchase_date,notes
+# REXTON,REACH R LI 80,hearing_aid,ORNEK-SERI-001,5714880226362,,,in_stock,2026-05-20,"Fiyat katalogdan dolacak ornek cihaz"
+# REXTON,TRAVEL CHARGER,charger,ORNEK-SARJ-001,5714880116946,,,in_stock,2026-05-20,"Sarj aleti ornegi"

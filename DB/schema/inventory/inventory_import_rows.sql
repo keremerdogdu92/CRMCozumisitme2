@@ -29,11 +29,20 @@ CREATE TABLE public.inventory_import_rows (
   raw_notes text NULL,
   valid boolean NULL DEFAULT false,
   validation_error text NULL,
+  resolved_at timestamp with time zone NULL,
+  resolved_by uuid NULL,
+  resolved_inventory_item_id uuid NULL,
+  resolution_note text NULL,
 
   CONSTRAINT inventory_import_rows_pkey PRIMARY KEY (id),
 
   CONSTRAINT inventory_import_rows_job_id_fkey
-    FOREIGN KEY (job_id) REFERENCES public.import_jobs (id) ON DELETE CASCADE
+    FOREIGN KEY (job_id) REFERENCES public.import_jobs (id) ON DELETE CASCADE,
+  CONSTRAINT inventory_import_rows_resolved_by_fkey
+    FOREIGN KEY (resolved_by) REFERENCES auth.users (id) ON DELETE SET NULL,
+
+  CONSTRAINT inventory_import_rows_resolved_inventory_item_id_fkey
+    FOREIGN KEY (resolved_inventory_item_id) REFERENCES public.inventory_items (id) ON DELETE SET NULL
 ) TABLESPACE pg_default;
 
 -- ============================================================

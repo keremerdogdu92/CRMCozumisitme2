@@ -13,11 +13,7 @@ import { supabaseClient } from '../../utils/supabaseClient';
 import type { InventoryItemType, NewInventoryItemForm } from './types';
 import { INVENTORY_QUERY_KEY } from './api.keys';
 import { parsePriceOrNull } from './inventoryPriceUtils';
-
-type CatalogPriceRow = {
-  purchase_price: unknown;
-  list_price: unknown;
-};
+import { fetchCatalogPriceForInventory } from './api.catalog';
 
 /**
  * Create a new inventory item using NewInventoryItemForm.
@@ -83,22 +79,12 @@ export async function createInventoryItem(input: NewInventoryItemForm): Promise<
 
   if (!hasPurchasePrice && !hasListPrice) {
     // Katalogtan fiyatları çek
-    const { data: catalogRow, error: catalogError } = await supabaseClient
-      .from('current_device_model_prices_public')
-      .select('purchase_price, list_price')
-      .eq('org_id', orgId)
-      .eq('brand', brand.trim())
-      .eq('model', model.trim())
-      .eq('item_type', itemType as InventoryItemType)
-      .maybeSingle();
-
-    if (catalogError) {
-      console.error(
-        'Failed to load catalog prices for inventory create:',
-        catalogError,
-      );
-      throw new Error('INVENTORY_CATALOG: ' + catalogError.message);
-    }
+    const catalogRow = await fetchCatalogPriceForInventory({
+      orgId,
+      brand: brand.trim(),
+      model: model.trim(),
+      itemType: itemType as InventoryItemType,
+    });
 
     if (!catalogRow) {
       throw new Error(
@@ -107,16 +93,8 @@ export async function createInventoryItem(input: NewInventoryItemForm): Promise<
       );
     }
 
-    const toNumberOrNull = (v: unknown): number | null => {
-      if (v === null || v === undefined || v === '') return null;
-      const num = Number(v);
-      if (!Number.isFinite(num)) return null;
-      return Number(num.toFixed(2));
-    };
-
-    const catalogPriceRow = catalogRow as CatalogPriceRow;
-    purchase_price = toNumberOrNull(catalogPriceRow.purchase_price);
-    list_price = toNumberOrNull(catalogPriceRow.list_price);
+    purchase_price = catalogRow.purchase_price;
+    list_price = catalogRow.list_price;
 
     if (purchase_price === null && list_price === null) {
       throw new Error(

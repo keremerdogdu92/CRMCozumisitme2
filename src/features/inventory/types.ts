@@ -82,4 +82,6 @@ export type InventoryImportSummary = {
   totalRows: number;
   importedCount: number;
   errorCount: number;
+  warningCount: number;
+  duplicateCount: number;
 };

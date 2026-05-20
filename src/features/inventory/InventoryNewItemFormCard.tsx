@@ -16,7 +16,11 @@
 import { useMemo, useState, FormEvent } from 'react';
 import { InlineCreateCard } from '../../components/layout/InlineCreateCard';
 import { supabaseClient } from '../../utils/supabaseClient';
-import { fetchCatalogPriceForInventory } from './api.catalog';
+import {
+  fetchCatalogPriceForInventory,
+  searchCatalogPricesForInventory,
+  type InventoryCatalogSearchRow,
+} from './api.catalog';
 import type { EarSide, InventoryItemType, NewInventoryItemForm } from './types';
 
 type Props = {
@@ -67,6 +71,10 @@ export function InventoryNewItemFormCard({
   const [catalogHint, setCatalogHint] = useState<string | null>(null);
   const [isCatalogLoading, setIsCatalogLoading] = useState(false);
   const [cachedOrgId, setCachedOrgId] = useState<string | null>(null);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogResults, setCatalogResults] = useState<
+    InventoryCatalogSearchRow[]
+  >([]);
 
   const isCharger = formState.itemType === 'charger';
 
@@ -194,6 +202,47 @@ export function InventoryNewItemFormCard({
     }
   };
 
+  const handleSearchCatalog = async () => {
+    setCatalogHint(null);
+    setIsCatalogLoading(true);
+    setCatalogResults([]);
+
+    try {
+      const orgId = await resolveOrgId();
+      const query =
+        catalogSearch.trim() ||
+        `${formState.brand.trim()} ${formState.model.trim()}`.trim();
+      const rows = await searchCatalogPricesForInventory({
+        orgId,
+        query,
+        itemType: formState.itemType,
+        limit: 8,
+      });
+      setCatalogResults(rows);
+      if (rows.length === 0) {
+        setCatalogHint('Katalogta bu arama icin sonuc bulunamadi.');
+      }
+    } catch (e) {
+      setCatalogHint((e as Error).message);
+    } finally {
+      setIsCatalogLoading(false);
+    }
+  };
+
+  const handleSelectCatalog = (row: InventoryCatalogSearchRow) => {
+    setFormState((s) => ({
+      ...s,
+      brand: row.brand,
+      model: row.model,
+      itemType: row.itemType,
+      earSide: row.itemType === 'charger' ? 'none' : s.earSide,
+      purchasePrice: row.purchase_price != null ? formatMoneyTr(row.purchase_price) : '',
+      listPrice: row.list_price != null ? formatMoneyTr(row.list_price) : '',
+    }));
+    setCatalogHint('Katalog modeli secildi ve fiyatlar dolduruldu.');
+    setCatalogResults([]);
+  };
+
   return (
     <InlineCreateCard
       title="Yeni Cihaz / Aksesuar Ekle"
@@ -300,6 +349,57 @@ export function InventoryNewItemFormCard({
               placeholder="Opsiyonel"
             />
           </div>
+        </div>
+
+        <div className="sm:col-span-2 lg:col-span-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                Katalogdan model sec
+              </label>
+              <input
+                type="text"
+                value={catalogSearch}
+                onChange={(e) => setCatalogSearch(e.target.value)}
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                placeholder="Marka veya model ara"
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={handleSearchCatalog}
+                disabled={isCatalogLoading}
+                className="rounded-md bg-slate-800 px-3 py-2 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isCatalogLoading ? 'Araniyor...' : 'Katalog ara'}
+              </button>
+            </div>
+          </div>
+          {catalogResults.length > 0 && (
+            <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-slate-200 bg-white">
+              {catalogResults.map((row) => (
+                <button
+                  type="button"
+                  key={`${row.catalogModelId}-${row.valid_from}`}
+                  onClick={() => handleSelectCatalog(row)}
+                  className="block w-full border-b border-slate-100 px-2 py-2 text-left text-[11px] hover:bg-primary-50"
+                >
+                  <span className="font-semibold text-slate-900">
+                    {row.brand} {row.model}
+                  </span>
+                  <span className="ml-2 text-slate-500">
+                    {row.itemType} | Gelis:{' '}
+                    {row.purchase_price != null
+                      ? formatMoneyTr(row.purchase_price)
+                      : '-'}{' '}
+                    | Liste:{' '}
+                    {row.list_price != null ? formatMoneyTr(row.list_price) : '-'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Fiyatlar */}

@@ -374,10 +374,11 @@ export async function fetchInventoryImportErrorRows(
   const { data, error } = await supabaseClient
     .from('inventory_import_rows')
     .select(
-      'id, job_id, row_index, raw_brand, raw_model, raw_item_type, raw_barcode, raw_serial_no, raw_status, raw_purchase_price, raw_list_price, raw_purchase_date, raw_notes, valid, validation_error',
+      'id, job_id, row_index, raw_brand, raw_model, raw_item_type, raw_barcode, raw_serial_no, raw_status, raw_purchase_price, raw_list_price, raw_purchase_date, raw_notes, valid, validation_error, resolved_at, resolved_by, resolved_inventory_item_id, resolution_note',
     )
     .eq('job_id', jobId)
     .eq('valid', false)
+    .is('resolved_at', null)
     .order('row_index', { ascending: true });
 
   if (error) {

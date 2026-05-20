@@ -98,6 +98,10 @@ export type InventoryImportRow = {
   raw_notes: string | null;
   valid: boolean | null;
   validation_error: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolved_inventory_item_id: string | null;
+  resolution_note: string | null;
 };
 
 export type InventoryImportStatusSummary = {

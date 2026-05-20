@@ -16,6 +16,10 @@
 
 import type { InventoryItemType, InventoryStatus } from './types';
 import { parsePriceOrNull } from './inventoryPriceUtils';
+import {
+  makeCatalogPriceLookupKeys as makeSharedCatalogPriceLookupKeys,
+  normalizeBarcodeForLookup as normalizeSharedBarcodeForLookup,
+} from './catalogMatching';
 
 export type CsvRowObj = {
   [key: string]: string;
@@ -65,6 +69,8 @@ export type InventoryImportBuildResult = {
   totalRows: number;
   importedCount: number;
   errorCount: number;
+  warningCount: number;
+  duplicateCount: number;
 };
 
 /**
@@ -79,6 +85,15 @@ export type CatalogPriceMapEntry = {
 
 export type CatalogPriceMap = Record<string, CatalogPriceMapEntry>;
 export type BarcodeCatalogKeyMap = Record<string, string>;
+export type ExistingInventorySerialMatch = {
+  brand: string | null;
+  model: string | null;
+  status: string | null;
+};
+export type ExistingInventorySerialMap = Record<
+  string,
+  ExistingInventorySerialMatch
+>;
 
 export function normalizeCatalogMatchText(raw: string): string {
   return raw
@@ -271,16 +286,26 @@ export function buildInventoryImportPayload(args: {
   csvObjects: CsvRowObj[];
   catalogPriceMap?: CatalogPriceMap;
   barcodeCatalogKeyMap?: BarcodeCatalogKeyMap;
+  existingSerialMap?: ExistingInventorySerialMap;
 }): InventoryImportBuildResult {
-  const { orgId, jobId, csvObjects, catalogPriceMap, barcodeCatalogKeyMap } =
-    args;
+  const {
+    orgId,
+    jobId,
+    csvObjects,
+    catalogPriceMap,
+    barcodeCatalogKeyMap,
+    existingSerialMap,
+  } = args;
 
   const totalRows = csvObjects.length;
   let importedCount = 0;
   let errorCount = 0;
+  let warningCount = 0;
+  let duplicateCount = 0;
 
   const importRowsPayload: ImportRowPayload[] = [];
   const inventoryItemsPayload: InventoryItemImportPayload[] = [];
+  const seenSerials = new Set<string>();
 
   csvObjects.forEach((row, idx) => {
     const rowIndex = idx + 2; // 1 = header, so rows start at 2
@@ -324,6 +349,23 @@ export function buildInventoryImportPayload(args: {
     let status: InventoryStatus = 'in_stock';
     let purchasePrice: number | null = null;
     let listPrice: number | null = null;
+
+    if (valid) {
+      const serialKey = rawSerialNo.trim().toUpperCase();
+      const existingMatch = existingSerialMap?.[serialKey];
+
+      if (existingMatch) {
+        valid = false;
+        duplicateCount += 1;
+        blockingError = `DUPLICATE_SERIAL: serial_no "${rawSerialNo}" zaten aktif stokta var (${existingMatch.brand ?? '-'} ${existingMatch.model ?? '-'}, durum: ${existingMatch.status ?? '-'}).`;
+      } else if (seenSerials.has(serialKey)) {
+        valid = false;
+        duplicateCount += 1;
+        blockingError = `DUPLICATE_SERIAL: serial_no "${rawSerialNo}" bu CSV icinde daha once kullanilmis.`;
+      } else {
+        seenSerials.add(serialKey);
+      }
+    }
 
     // 2) item_type → kritik, hatalıysa blocking error
     if (valid) {
@@ -384,9 +426,13 @@ export function buildInventoryImportPayload(args: {
 
     // 7) Hem CSV'de hem de hesaplanan değerlerde fiyat boşsa → katalogtan doldurmayı dene
     if (valid && purchasePrice == null && listPrice == null && catalogPriceMap) {
-      const lookupKeys = makeCatalogPriceLookupKeys(rawBrand, rawModel, itemType);
+      const lookupKeys = makeSharedCatalogPriceLookupKeys(
+        rawBrand,
+        rawModel,
+        itemType,
+      );
       const barcodeCatalogKey = rawBarcode
-        ? barcodeCatalogKeyMap?.[normalizeBarcodeForLookup(rawBarcode)]
+        ? barcodeCatalogKeyMap?.[normalizeSharedBarcodeForLookup(rawBarcode)]
         : undefined;
       const candidateKeys = barcodeCatalogKey
         ? [
@@ -454,6 +500,9 @@ export function buildInventoryImportPayload(args: {
 
     if (valid) {
       importedCount += 1;
+      if (warnings.length > 0) {
+        warningCount += 1;
+      }
 
       inventoryItemsPayload.push({
         org_id: orgId,
@@ -482,5 +531,7 @@ export function buildInventoryImportPayload(args: {
     totalRows,
     importedCount,
     errorCount,
+    warningCount,
+    duplicateCount,
   };
 }

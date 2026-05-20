@@ -18,7 +18,7 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { supabaseClient } from '../../../utils/supabaseClient';
-import { parseSimpleCsv } from '../../../utils/csvUtils';
+import { parseRobustCsv } from '../../../utils/csvUtils';
 import type { DeviceCatalogImportSummary } from './types';
 
 // Supabase base tables for the catalog
@@ -140,7 +140,7 @@ export async function importDeviceCatalogFromCsv(
   file: File,
 ): Promise<DeviceCatalogImportSummary> {
   const text = await file.text();
-  const { headers, rows } = parseSimpleCsv(text);
+  const { headers, rows } = parseRobustCsv(text);
 
   if (headers.length === 0 || rows.length === 0) {
     throw new Error('CSV dosyası boş görünüyor.');

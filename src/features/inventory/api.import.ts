@@ -14,7 +14,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
-import { parseSimpleCsv } from '../../utils/csvUtils';
+import { parseRobustCsv } from '../../utils/csvUtils';
 import type { InventoryImportSummary, InventoryItemType } from './types';
 import { INVENTORY_QUERY_KEY } from './api.keys';
 import {
@@ -22,11 +22,14 @@ import {
   type CsvRowObj,
   type BarcodeCatalogKeyMap,
   type CatalogPriceMap,
+  type ExistingInventorySerialMap,
+  normalizeItemType,
+} from './inventoryImportUtils';
+import {
   makeCatalogPriceKey,
   makeCatalogPriceLookupKeys,
   normalizeBarcodeForLookup,
-  normalizeItemType,
-} from './inventoryImportUtils';
+} from './catalogMatching';
 
 type CatalogPriceRow = {
   brand: string | null;
@@ -41,6 +44,13 @@ type InventoryBarcodeLookupRow = {
   brand: string | null;
   model: string | null;
   item_type: InventoryItemType | null;
+};
+
+type ExistingInventorySerialLookupRow = {
+  serial_no: string | null;
+  brand: string | null;
+  model: string | null;
+  status: string | null;
 };
 
 /**
@@ -70,7 +80,7 @@ export async function importInventoryFromCsv(
   file: File,
 ): Promise<InventoryImportSummary> {
   const text = await file.text();
-  const { headers, rows } = parseSimpleCsv(text);
+  const { headers, rows } = parseRobustCsv(text);
 
   if (headers.length === 0 || rows.length === 0) {
     throw new Error('CSV dosyası boş görünüyor.');
@@ -130,6 +140,42 @@ export async function importInventoryFromCsv(
 
   const orgId: string = profile.org_id as string;
   const createdBy: string = profile.id as string;
+
+  const serialsForDuplicateLookup = Array.from(
+    new Set(
+      csvObjects
+        .map((row) => (row['serial_no'] ?? '').trim())
+        .filter((serialNo) => serialNo.length > 0),
+    ),
+  );
+  const existingSerialMap: ExistingInventorySerialMap = {};
+
+  if (serialsForDuplicateLookup.length > 0) {
+    const { data: existingRows, error: existingRowsError } = await supabaseClient
+      .from('inventory_items')
+      .select('serial_no, brand, model, status')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .in('serial_no', serialsForDuplicateLookup);
+
+    if (existingRowsError) {
+      console.error(
+        'Failed to load duplicate serial numbers for inventory import:',
+        existingRowsError,
+      );
+      throw new Error('IMPORT_DUPLICATE_LOOKUP: ' + existingRowsError.message);
+    }
+
+    for (const row of (existingRows ?? []) as ExistingInventorySerialLookupRow[]) {
+      const serialKey = (row.serial_no ?? '').trim().toUpperCase();
+      if (!serialKey) continue;
+      existingSerialMap[serialKey] = {
+        brand: row.brand,
+        model: row.model,
+        status: row.status,
+      };
+    }
+  }
 
   // 1) Create import_jobs row (status = processing)
   const { data: jobData, error: jobError } = await supabaseClient
@@ -292,12 +338,15 @@ export async function importInventoryFromCsv(
     totalRows,
     importedCount,
     errorCount,
+    warningCount,
+    duplicateCount,
   } = buildInventoryImportPayload({
     orgId,
     jobId,
     csvObjects,
     catalogPriceMap,
     barcodeCatalogKeyMap,
+    existingSerialMap,
   });
 
   try {
@@ -365,6 +414,8 @@ export async function importInventoryFromCsv(
     totalRows,
     importedCount,
     errorCount,
+    warningCount,
+    duplicateCount,
   };
 }
 

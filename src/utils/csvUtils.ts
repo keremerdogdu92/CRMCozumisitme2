@@ -12,6 +12,7 @@
 //    (requires "xlsx" package on the client bundle)
 
 import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 
 export type ParsedCsv = {
   headers: string[];
@@ -57,6 +58,41 @@ export function parseSimpleCsv(text: string): ParsedCsv {
   }
 
   return { headers, rows };
+}
+
+/**
+ * RFC-aware CSV parser for import flows that need quoted values, delimiters,
+ * and comment rows handled correctly. Lines starting with "#" are ignored.
+ */
+export function parseRobustCsv(text: string): ParsedCsv {
+  const result = Papa.parse<string[]>(text, {
+    comments: '#',
+    delimiter: '',
+    dynamicTyping: false,
+    skipEmptyLines: 'greedy',
+  });
+
+  if (result.errors.length > 0) {
+    const firstError = result.errors[0];
+    const rowInfo =
+      typeof firstError.row === 'number' ? ` satir ${firstError.row + 1}` : '';
+    throw new Error(`CSV okunamadi${rowInfo}: ${firstError.message}`);
+  }
+
+  const parsedRows = result.data
+    .map((row) => row.map((cell) => String(cell ?? '').trim()))
+    .filter((row) => row.some((cell) => cell.length > 0));
+
+  if (parsedRows.length === 0) {
+    return { headers: [], rows: [] };
+  }
+
+  const [headers, ...rows] = parsedRows;
+
+  return {
+    headers: headers.map((h) => h.trim().toLowerCase()),
+    rows,
+  };
 }
 
 function toCsvCell(value: unknown): string {

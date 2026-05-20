@@ -23,6 +23,7 @@ import {
 } from './api.jobs';
 import { LegacyDeviceRowFixModal } from './LegacyDeviceRowFixModal';
 import { PatientRowFixModal } from './PatientRowFixModal';
+import { InventoryImportRowFixModal } from './InventoryImportRowFixModal';
 
 type ImportJobRow = {
   id: string;
@@ -72,6 +73,8 @@ export function ImportFixCenterSection() {
   );
   const [fixLegacyRow, setFixLegacyRow] =
     useState<LegacyDevicesImportRow | null>(null);
+  const [fixInventoryRow, setFixInventoryRow] =
+    useState<InventoryImportRow | null>(null);
 
   // Load jobs when tab changes
   useEffect(() => {
@@ -84,6 +87,9 @@ export function ImportFixCenterSection() {
       setLegacyErrorRows([]);
       setInventoryErrorRows([]);
       setRowsError(null);
+      setFixInventoryRow(null);
+      setFixPatientRow(null);
+      setFixLegacyRow(null);
 
       const target =
         activeTab === 'inventory'
@@ -394,6 +400,9 @@ export function ImportFixCenterSection() {
                           <th className="px-2 py-1 text-left font-semibold">
                             Hata
                           </th>
+                          <th className="px-2 py-1 text-left font-semibold">
+                            Islem
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -428,6 +437,15 @@ export function ImportFixCenterSection() {
                               <div className="line-clamp-3 text-[10px] text-slate-700">
                                 {r.validation_error ?? '(detay yok)'}
                               </div>
+                            </td>
+                            <td className="px-2 py-1">
+                              <button
+                                type="button"
+                                className="rounded-md bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-slate-900"
+                                onClick={() => setFixInventoryRow(r)}
+                              >
+                                Duzelt
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -556,6 +574,16 @@ export function ImportFixCenterSection() {
         <LegacyDeviceRowFixModal
           row={fixLegacyRow}
           onClose={() => setFixLegacyRow(null)}
+          onFixed={() => {
+            if (selectedJob) void refreshSelectedJob(selectedJob);
+          }}
+        />
+      )}
+
+      {fixInventoryRow && (
+        <InventoryImportRowFixModal
+          row={fixInventoryRow}
+          onClose={() => setFixInventoryRow(null)}
           onFixed={() => {
             if (selectedJob) void refreshSelectedJob(selectedJob);
           }}

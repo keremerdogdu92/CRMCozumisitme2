@@ -28,6 +28,16 @@ export {
 } from './api.import';
 
 export {
+  findActiveInventoryItemBySerial,
+  resolveInventoryImportRow,
+  type InventoryDuplicateLookupRow,
+  type InventoryImportRowResolveInput,
+} from './api.importFix';
+
+export {
   fetchCatalogPriceForInventory,
+  searchCatalogPricesForInventory,
+  fetchCatalogRowsForInventory,
   type InventoryCatalogPriceResult,
+  type InventoryCatalogSearchRow,
 } from './api.catalog';
