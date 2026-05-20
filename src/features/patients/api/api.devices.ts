@@ -215,7 +215,7 @@ export async function updateInventoryItem(
 export type PatientInventoryItemAttachInput = {
   patientId: string;
   inventoryItemId: string;
-  earSide: 'right' | 'left' | 'bilateral';
+  earSide: 'right' | 'left' | 'bilateral' | null;
   soldAt?: string | null;
   devicePrice?: number | null;
 };

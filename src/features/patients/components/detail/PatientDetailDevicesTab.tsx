@@ -99,7 +99,21 @@ function parseOptionalMoney(value: string): number | null {
 
 function formatInventoryOption(row: InventoryItemRow): string {
   const identity = row.serial_no || row.barcode || 'Seri yok';
-  return `${identity} - ${row.brand} ${row.model}`;
+  return `${formatItemTypeLabel(row.item_type)} - ${identity} - ${row.brand} ${row.model}`;
+}
+
+function formatItemTypeLabel(itemType: string): string {
+  if (itemType === 'charger') return 'Şarj aleti';
+  if (itemType === 'hearing_aid') return 'İşitme cihazı';
+  return itemType || '-';
+}
+
+function isAssignableInventoryItem(row: InventoryItemRow): boolean {
+  return row.item_type === 'hearing_aid' || row.item_type === 'charger';
+}
+
+function isChargerItem(item: { item_type: string }): boolean {
+  return item.item_type === 'charger';
 }
 
 export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProps) {
@@ -126,9 +140,9 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
 
   const { data: inventoryRows, isLoading: isInventoryLoading } =
     useInventoryItems();
-  const availableInventoryRows: InventoryItemRow[] = (inventoryRows ?? []).filter(
+  const baseAvailableInventoryRows: InventoryItemRow[] = (inventoryRows ?? []).filter(
     (row) =>
-      row.item_type === 'hearing_aid' &&
+      isAssignableInventoryItem(row) &&
       row.status === 'in_stock' &&
       !row.sold_patient_id &&
       !row.deleted_at,
@@ -165,6 +179,7 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
   });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const editDeviceIsCharger = editDevice != null && isChargerItem(editDevice);
 
   const [assignModal, setAssignModal] = useState<DeviceAssignModalState | null>(
     null,
@@ -177,6 +192,20 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
   });
   const [isSavingAssign, setIsSavingAssign] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+
+  const availableInventoryRows: InventoryItemRow[] =
+    baseAvailableInventoryRows.filter((row) => {
+      if (assignModal?.mode !== 'replace') return true;
+      return row.item_type === assignModal.oldDevice.item_type;
+    });
+
+  const selectedAssignInventoryItem =
+    availableInventoryRows.find(
+      (row) => row.id === assignFields.inventoryItemId,
+    ) ?? null;
+  const selectedAssignIsCharger =
+    selectedAssignInventoryItem != null &&
+    isChargerItem(selectedAssignInventoryItem);
 
   // Sale amount inline edit state
   const [isEditingSale, setIsEditingSale] = useState(false);
@@ -234,7 +263,7 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
     setAssignModal({ mode: 'replace', oldDevice: device });
     setAssignFields({
       inventoryItemId: '',
-      earSide: device.ear_side ?? '',
+      earSide: isChargerItem(device) ? '' : device.ear_side ?? '',
       soldAt: todayDateInput(),
       devicePrice: device.device_price != null ? String(device.device_price) : '',
     });
@@ -251,6 +280,7 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
     setAssignFields((fields) => ({
       ...fields,
       inventoryItemId,
+      earSide: selected && isChargerItem(selected) ? '' : fields.earSide,
       devicePrice:
         selected?.list_price != null ? String(selected.list_price) : fields.devicePrice,
     }));
@@ -264,9 +294,11 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
     try {
       const earVal = editFields.ear_side;
       const ear: 'right' | 'left' | 'bilateral' | null =
-        earVal === 'right' || earVal === 'left' || earVal === 'bilateral'
-          ? earVal
-          : null;
+        editDeviceIsCharger
+          ? null
+          : earVal === 'right' || earVal === 'left' || earVal === 'bilateral'
+            ? earVal
+            : null;
 
       await updateInventoryItem(editDevice.id, {
         barcode: editFields.barcode || null,
@@ -301,10 +333,22 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
     if (!assignModal) return;
 
     if (!assignFields.inventoryItemId) {
-      setAssignError('Stoktan bağlanacak cihazı seçin.');
+      setAssignError('Stoktan bağlanacak ürünü seçin.');
       return;
     }
+
+    const selectedInventoryItem = availableInventoryRows.find(
+      (row) => row.id === assignFields.inventoryItemId,
+    );
+
+    if (!selectedInventoryItem) {
+      setAssignError('Seçilen ürün stokta bağlanabilir durumda değil.');
+      return;
+    }
+
+    const requiresEarSide = selectedInventoryItem.item_type === 'hearing_aid';
     if (
+      requiresEarSide &&
       assignFields.earSide !== 'right' &&
       assignFields.earSide !== 'left' &&
       assignFields.earSide !== 'bilateral'
@@ -313,9 +357,14 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
       return;
     }
 
+    const assignEarSide: 'right' | 'left' | 'bilateral' | null =
+      requiresEarSide
+        ? (assignFields.earSide as 'right' | 'left' | 'bilateral')
+        : null;
+
     const devicePrice = parseOptionalMoney(assignFields.devicePrice);
     if (assignFields.devicePrice.trim() && devicePrice == null) {
-      setAssignError('Cihaz fiyatı geçersiz. Örnek: 12500 veya 12.500,50');
+      setAssignError('Satış fiyatı geçersiz. Örnek: 12500 veya 12.500,50');
       return;
     }
 
@@ -334,7 +383,7 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
           patientId: patient.id,
           oldInventoryItemId: assignModal.oldDevice.id,
           inventoryItemId: assignFields.inventoryItemId,
-          earSide: assignFields.earSide,
+          earSide: assignEarSide,
           soldAt,
           devicePrice,
         });
@@ -342,7 +391,7 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
         await attachPatientInventoryItem({
           patientId: patient.id,
           inventoryItemId: assignFields.inventoryItemId,
-          earSide: assignFields.earSide,
+          earSide: assignEarSide,
           soldAt,
           devicePrice,
         });
@@ -523,7 +572,7 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
         <h4 className="text-xs font-semibold uppercase text-slate-500">
-          Kulak Bazında Cihazlar
+          Cihazlar ve Şarj Aletleri
         </h4>
           <button
             type="button"
@@ -531,7 +580,7 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
             onClick={openAddDeviceModal}
             disabled={isInventoryLoading || isSavingAssign}
           >
-            Cihaz ekle
+            Cihaz / şarj aleti ekle
           </button>
         </div>
 
@@ -541,7 +590,7 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
 
         {!isLoading && deviceRows.length === 0 && (
           <p className="text-[11px] text-slate-500">
-            Bu hastaya bağlı stok cihazı bulunamadı. Satışı yapılan cihazları stok
+            Bu hastaya bağlı stok ürünü bulunamadı. Satışı yapılan cihazları stok
             modülünden bu hastaya bağladığınızda burada görünecek.
           </p>
         )}
@@ -555,9 +604,13 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
               {/* Ear + model header */}
               <div className="flex justify-between gap-2">
                 <div className="flex flex-col">
-                  <span className="text-[11px] uppercase text-slate-500">Kulak</span>
+                  <span className="text-[11px] uppercase text-slate-500">
+                    {isChargerItem(d) ? 'Tür' : 'Kulak'}
+                  </span>
                   <span className="text-xs font-semibold text-slate-900">
-                    {formatEarSide(d.ear_side)}
+                    {isChargerItem(d)
+                      ? formatItemTypeLabel(d.item_type)
+                      : formatEarSide(d.ear_side)}
                   </span>
                 </div>
                 <div className="flex flex-col text-right">
@@ -615,7 +668,7 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
                         className="text-[11px] text-primary-700 underline"
                         onClick={() => openReplaceDeviceModal(d)}
                       >
-                        Cihaz değiştir
+                        {isChargerItem(d) ? 'Şarj aleti değiştir' : 'Cihaz değiştir'}
                       </button>
                       <button
                         type="button"
@@ -637,12 +690,14 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
           <div className="w-full max-w-lg rounded-lg bg-white p-4 shadow-lg">
             <h5 className="text-sm font-semibold text-slate-900">
               {assignModal.mode === 'replace'
-                ? 'Cihaz değiştir'
-                : 'Stoktan cihaz ekle'}
+                ? isChargerItem(assignModal.oldDevice)
+                  ? 'Şarj aleti değiştir'
+                  : 'Cihaz değiştir'
+                : 'Stoktan ürün ekle'}
             </h5>
             {assignModal.mode === 'replace' && (
               <p className="mt-1 text-[11px] text-slate-500">
-                Eski cihaz stoka döner; seçtiğiniz yeni cihaz bu hastaya satıldı
+                Eski ürün stoka döner; seçtiğiniz yeni ürün bu hastaya satıldı
                 olarak bağlanır.
               </p>
             )}
@@ -650,7 +705,7 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
             <div className="mt-3 space-y-3">
               <div>
                 <label className="mb-1 block text-[11px] text-slate-600">
-                  Stoktaki cihaz
+                  Stoktaki ürün
                 </label>
                 <select
                   className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
@@ -660,8 +715,8 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
                 >
                   <option value="">
                     {availableInventoryRows.length > 0
-                      ? 'Cihaz seçin'
-                      : 'Stokta bağlanabilir cihaz yok'}
+                      ? 'Ürün seçin'
+                      : 'Stokta bağlanabilir ürün yok'}
                   </option>
                   {availableInventoryRows.map((row) => (
                     <option key={row.id} value={row.id}>
@@ -685,9 +740,11 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
                         earSide: e.target.value as DeviceAssignFields['earSide'],
                       }))
                     }
-                    disabled={isSavingAssign}
+                    disabled={isSavingAssign || selectedAssignIsCharger}
                   >
-                    <option value="">Seçiniz</option>
+                    <option value="">
+                      {selectedAssignIsCharger ? 'Şarj aletinde yok' : 'Seçiniz'}
+                    </option>
                     <option value="right">Sağ</option>
                     <option value="left">Sol</option>
                     <option value="bilateral">Çift</option>
@@ -714,7 +771,7 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
 
                 <div>
                   <label className="mb-1 block text-[11px] text-slate-600">
-                    Cihaz fiyatı
+                    Satış fiyatı
                   </label>
                   <input
                     type="text"
@@ -898,8 +955,11 @@ export function PatientDetailDevicesTab({ patient }: PatientDetailDevicesTabProp
                   onChange={(e) =>
                     setEditFields((f) => ({ ...f, ear_side: e.target.value }))
                   }
+                  disabled={editDeviceIsCharger}
                 >
-                  <option value="">Seçiniz</option>
+                  <option value="">
+                    {editDeviceIsCharger ? 'Şarj aletinde yok' : 'Seçiniz'}
+                  </option>
                   <option value="right">Sağ</option>
                   <option value="left">Sol</option>
                   <option value="bilateral">Çift</option>
