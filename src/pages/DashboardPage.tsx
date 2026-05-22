@@ -1,10 +1,14 @@
-// src/pages/DashboardPage.tsx
 import { useMemo } from 'react';
+import { useCurrentProfile } from '../features/auth/useCurrentProfile';
 import { useDashboard } from '../features/dashboard/api';
 
+type MetricRow = {
+  label: string;
+  value: number | undefined;
+  hint?: string;
+};
+
 function getIstanbulMonthStartIso(d: Date): string {
-  // Turkey is UTC+03:00 year-round (no DST). We still derive year/month in Europe/Istanbul
-  // to avoid edge cases around local vs UTC month boundaries.
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Istanbul',
     year: 'numeric',
@@ -14,7 +18,6 @@ function getIstanbulMonthStartIso(d: Date): string {
   const year = parts.find((p) => p.type === 'year')?.value ?? '1970';
   const month = parts.find((p) => p.type === 'month')?.value ?? '01';
 
-  // Month window start: 1st day 00:00 in Europe/Istanbul.
   return `${year}-${month}-01T00:00:00+03:00`;
 }
 
@@ -22,23 +25,31 @@ export default function DashboardPage() {
   const monthStartIso = useMemo(() => getIstanbulMonthStartIso(new Date()), []);
 
   const { data, isLoading, isError, error } = useDashboard(monthStartIso);
+  const { data: profile } = useCurrentProfile();
+  const isAdmin = profile?.role === 'admin';
   const kpis = data?.kpis;
   const upcoming = data?.upcomingMeetings ?? [];
 
-  const rows = [
-    { label: 'Aylık Gelir', value: kpis?.revenueTotal },
-    { label: 'Kart Komisyonu', value: kpis?.cardFeeTotal },
-    { label: 'Referans Komisyonu', value: kpis?.referenceCommissionTotal },
+  const operationalRows: MetricRow[] = [
     { label: 'SGK Sisteme Girilen', value: kpis?.sgkEnteredThisMonthTotal },
     { label: 'SGK Beklenen', value: kpis?.sgkDueThisMonthTotal },
+    { label: 'Pil SGK Beklenen', value: kpis?.batterySgkDueThisMonthTotal },
     { label: 'Satılan Cihaz', value: kpis?.devicesSoldCount },
     { label: 'Cihaz Alan Hasta', value: kpis?.devicePatientsCount },
     {
       label: 'Bekleyen Taksit',
       value: kpis?.unpaidInstallmentsDueThisMonth,
-      hint: 'Sprint-0: senet taksit tahsilatı yaklaşık hesap.',
+      hint: 'Senet taksit tahsilatı plan bazlı yaklaşık hesaplanır.',
     },
   ];
+
+  const adminRows: MetricRow[] = [
+    { label: 'Aylık Gelir', value: kpis?.revenueTotal },
+    { label: 'Kart Komisyonu', value: kpis?.cardFeeTotal },
+    { label: 'Referans Komisyonu', value: kpis?.referenceCommissionTotal },
+  ];
+
+  const rows = isAdmin ? [...adminRows, ...operationalRows] : operationalRows;
 
   return (
     <div className="space-y-6">
@@ -91,13 +102,16 @@ export default function DashboardPage() {
                     })
                   : 'Tarih bekleniyor';
                 return (
-                  <li key={item.id} className="flex items-start justify-between gap-3">
+                  <li
+                    key={item.id}
+                    className="flex items-start justify-between gap-3"
+                  >
                     <div>
                       <p className="font-medium text-slate-900">
                         {item.subjectName || item.subject || 'Başlık yok'}
                       </p>
                       <p className="text-xs text-slate-500">
-                        Tip: {item.meetingType} • {displayDate}
+                        Tip: {item.meetingType} - {displayDate}
                       </p>
                     </div>
                   </li>

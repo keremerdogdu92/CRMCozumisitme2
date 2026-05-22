@@ -23,11 +23,17 @@
 //   body: { job_id: "<import_jobs.id>" }
 
 import { createClient } from '@supabase/supabase-js';
+import {
+  assertImportJobOrg,
+  requireImportApiUser,
+  sendApiError,
+} from './_auth';
 
 type ApiRequest = {
   method?: string;
   body?: any;
   query: Record<string, string | string[] | undefined>;
+  headers?: Record<string, string | string[] | undefined>;
 };
 
 type ApiResponse = {
@@ -545,6 +551,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           err as Error,
         ),
       });
+      return;
+    }
+
+    try {
+      const apiUser = await requireImportApiUser(req, supabase);
+      await assertImportJobOrg(supabase, jobId, apiUser);
+    } catch (err) {
+      sendApiError(res, err);
       return;
     }
 

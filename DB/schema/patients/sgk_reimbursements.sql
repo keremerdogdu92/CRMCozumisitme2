@@ -316,6 +316,11 @@ DECLARE
   v_rate jsonb;
   v_rate_count integer := 0;
 BEGIN
+  IF public.current_user_role() <> 'admin' THEN
+    RAISE EXCEPTION 'FORBIDDEN_ADMIN_ONLY'
+      USING ERRCODE = '42501';
+  END IF;
+
   v_org_id := public.current_user_org_id();
 
   IF v_org_id IS NULL THEN
@@ -430,6 +435,7 @@ SET search_path = ''
 AS $function$
 WITH org_ctx AS (
   SELECT public.current_user_org_id() AS org_id
+  WHERE public.require_current_user_admin()
 ),
 month_bounds AS (
   SELECT
@@ -463,7 +469,37 @@ WHERE o.org_id IS NOT NULL
   AND pt.sgk_expected_reimbursement IS NOT NULL
   AND pt.sgk_expected_reimbursement_month >= m.month_start
   AND pt.sgk_expected_reimbursement_month < m.month_end
-ORDER BY pt.sgk_expected_reimbursement_month ASC, pt.full_name ASC;
+
+UNION ALL
+
+SELECT
+  pt.id AS patient_id,
+  pt.full_name AS patient_name,
+  NULL::text AS sgk_profile,
+  'Pil SGK'::text AS sgk_profile_label,
+  (b.sgk_rate_effective_date IS NOT NULL) AS sgk_recorded_to_system,
+  b.sgk_rate_effective_date::timestamptz AS sgk_recorded_to_system_at,
+  COALESCE(period.valid_from, b.sgk_rate_effective_date) AS sgk_rate_valid_from,
+  b.sgk_expected_reimbursement_month,
+  COALESCE(b.sgk_expected_amount, 0) AS sgk_expected_reimbursement,
+  COALESCE(pt.invoice_issued, false) AS invoice_issued,
+  pt.invoice_issued_at
+FROM public.battery_prescription_deliveries AS b
+JOIN public.patients AS pt
+  ON pt.id = b.patient_id
+  AND pt.deleted_at IS NULL
+CROSS JOIN org_ctx AS o
+CROSS JOIN month_bounds AS m
+LEFT JOIN public.sgk_reimbursement_periods AS period
+  ON period.id = b.sgk_rate_period_id
+  AND period.org_id = b.org_id
+WHERE o.org_id IS NOT NULL
+  AND b.org_id = o.org_id
+  AND b.deleted_at IS NULL
+  AND b.sgk_expected_amount IS NOT NULL
+  AND b.sgk_expected_reimbursement_month >= m.month_start
+  AND b.sgk_expected_reimbursement_month < m.month_end
+ORDER BY sgk_expected_reimbursement_month ASC, patient_name ASC;
 $function$;
 
 REVOKE ALL ON FUNCTION public.sgk_payment_tracking(date) FROM PUBLIC, anon;

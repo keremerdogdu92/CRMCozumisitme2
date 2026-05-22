@@ -13,11 +13,14 @@ import { CatalogPriceListCard } from '../features/inventory/deviceCatalog/Catalo
 import { OrgSettingsCard } from '../features/settings/OrgSettingsCard';
 import { SgkReimbursementSettingsCard } from '../features/settings/SgkReimbursementSettingsCard';
 import { MeetingSatisfactionSettingsCard } from '../features/meetings/MeetingSatisfactionSettingsCard';
+import { useCurrentProfile } from '../features/auth/useCurrentProfile';
 
 export default function SettingsPage() {
   const [inventoryImportOpen, setInventoryImportOpen] = useState(true);
   const [deviceCatalogImportOpen, setDeviceCatalogImportOpen] =
     useState(false);
+  const { data: profile } = useCurrentProfile();
+  const isAdmin = profile?.role === 'admin';
 
   return (
     <PageLayout
@@ -30,41 +33,47 @@ export default function SettingsPage() {
       maxWidth="xl"
     >
       <div className="space-y-4">
-        <OrgSettingsCard />
-        <MeetingSatisfactionSettingsCard />
-        <SgkReimbursementSettingsCard />
+        {isAdmin && (
+          <>
+            <OrgSettingsCard />
+            <MeetingSatisfactionSettingsCard />
+            <SgkReimbursementSettingsCard />
+          </>
+        )}
 
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">
-                Cihaz Katalog Fiyat Import
-              </h3>
-              <p className="mt-1 text-xs text-slate-600">
-                Marka, model, urun tipi ve fiyatlari katalog tablosuna yukler.
-                Stok kaydi olusturmaz; stok import ve manuel stok ekleme bu
-                katalogdan fiyat eslestirir.
-              </p>
+        {isAdmin && (
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Cihaz Katalog Fiyat Import
+                </h3>
+                <p className="mt-1 text-xs text-slate-600">
+                  Marka, model, urun tipi ve fiyatlari katalog tablosuna
+                  yukler. Stok kaydi olusturmaz; stok import ve manuel stok
+                  ekleme bu katalogdan fiyat eslestirir.
+                </p>
+              </div>
             </div>
-          </div>
 
-          {deviceCatalogImportOpen ? (
-            <DeviceCatalogImportCard
-              open={deviceCatalogImportOpen}
-              onToggle={() => setDeviceCatalogImportOpen(false)}
-            />
-          ) : (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setDeviceCatalogImportOpen(true)}
-                className="inline-flex items-center justify-center rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-              >
-                Formu Ac
-              </button>
-            </div>
-          )}
-        </section>
+            {deviceCatalogImportOpen ? (
+              <DeviceCatalogImportCard
+                open={deviceCatalogImportOpen}
+                onToggle={() => setDeviceCatalogImportOpen(false)}
+              />
+            ) : (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDeviceCatalogImportOpen(true)}
+                  className="inline-flex items-center justify-center rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                >
+                  Formu Ac
+                </button>
+              </div>
+            )}
+          </section>
+        )}
 
         <CatalogPriceListCard />
 

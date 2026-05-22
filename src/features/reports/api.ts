@@ -29,9 +29,6 @@ async function fetchReportsKpis(filter: ReportsMonthFilter): Promise<ReportsKpis
   // Take the first row directly.
   const payload = Array.isArray(data) && data.length > 0 ? data[0] : data;
 
-  // eslint-disable-next-line no-console
-  console.log('[Reports] raw payload', payload);
-
   // Supabase may return jsonb columns as JSON strings — parse defensively.
   const parseJsonbArray = (val: unknown): unknown[] => {
     if (Array.isArray(val)) return val;
@@ -52,8 +49,12 @@ async function fetchReportsKpis(filter: ReportsMonthFilter): Promise<ReportsKpis
     monthDevicesSoldCost: 0,
     monthlyTurnover: 0,
     sgkDueThisMonth: 0,
+    sgkDeviceDueThisMonth: 0,
+    sgkBatteryDueThisMonth: 0,
     sgkEstimatedThisMonth: 0,
     sgkRecordedThisMonth: 0,
+    sgkDeviceRecordedThisMonth: 0,
+    sgkBatteryRecordedThisMonth: 0,
     sgkDueNextThreeMonths: 0,
     sgkPaymentRows: [],
     revenueByMonth: [],
@@ -63,9 +64,16 @@ async function fetchReportsKpis(filter: ReportsMonthFilter): Promise<ReportsKpis
   // Ensure jsonb array fields are always real JS arrays (not strings).
   const raw: ReportsKpis = {
     ...base,
+    sgkDueThisMonth: Number(base.sgkDueThisMonth ?? 0) || 0,
+    sgkDeviceDueThisMonth: Number(base.sgkDeviceDueThisMonth ?? 0) || 0,
+    sgkBatteryDueThisMonth: Number(base.sgkBatteryDueThisMonth ?? 0) || 0,
     sgkEstimatedThisMonth:
       Number(base.sgkEstimatedThisMonth ?? base.sgkDueThisMonth ?? 0) || 0,
     sgkRecordedThisMonth: Number(base.sgkRecordedThisMonth ?? 0) || 0,
+    sgkDeviceRecordedThisMonth:
+      Number(base.sgkDeviceRecordedThisMonth ?? 0) || 0,
+    sgkBatteryRecordedThisMonth:
+      Number(base.sgkBatteryRecordedThisMonth ?? 0) || 0,
     revenueByMonth: parseJsonbArray(base.revenueByMonth) as ReportsKpis['revenueByMonth'],
     devicesPie: parseJsonbArray(base.devicesPie) as ReportsKpis['devicesPie'],
     sgkPaymentRows: parseJsonbArray(base.sgkPaymentRows) as ReportsKpis['sgkPaymentRows'],

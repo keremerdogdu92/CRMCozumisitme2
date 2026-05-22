@@ -5,6 +5,7 @@
 
 import { useState, FormEvent } from 'react';
 import { supabaseClient } from '../../../utils/supabaseClient';
+import { getAuthenticatedJsonHeaders } from '../../../utils/apiAuthHeaders';
 import type { PatientsImportRow } from './types';
 
 type PatientRowFixModalProps = {
@@ -88,7 +89,7 @@ export function PatientRowFixModal({
       // 2) Re-run the import processor for this job
       const response = await fetch('/api/patients-import-processor', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthenticatedJsonHeaders(),
         body: JSON.stringify({ job_id: jobId }),
       });
 

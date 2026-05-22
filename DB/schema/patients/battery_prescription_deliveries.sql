@@ -38,6 +38,9 @@ CREATE TABLE IF NOT EXISTS public.battery_prescription_deliveries (
   qty_units integer NULL,
 
   sgk_expected_amount numeric(10, 2) NULL,
+  sgk_rate_period_id uuid NULL,
+  sgk_rate_effective_date date NULL,
+  sgk_expected_reimbursement_month date NULL,
 
   note text NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -58,6 +61,11 @@ CREATE TABLE IF NOT EXISTS public.battery_prescription_deliveries (
     FOREIGN KEY (patient_id)
     REFERENCES public.patients (id)
     ON DELETE CASCADE,
+
+  CONSTRAINT battery_prescription_deliveries_sgk_rate_period_id_fkey
+    FOREIGN KEY (sgk_rate_period_id)
+    REFERENCES public.sgk_reimbursement_periods (id)
+    ON DELETE SET NULL,
 
   CONSTRAINT battery_prescription_qty_non_negative CHECK (
     (qty_boxes IS NULL OR qty_boxes >= 0)
@@ -93,6 +101,10 @@ ON public.battery_prescription_deliveries (deleted_at);
 CREATE INDEX IF NOT EXISTS battery_prescription_deliveries_org_deleted_at_idx
 ON public.battery_prescription_deliveries (org_id, deleted_at);
 
+CREATE INDEX IF NOT EXISTS battery_prescription_deliveries_sgk_expected_month_idx
+ON public.battery_prescription_deliveries (org_id, sgk_expected_reimbursement_month)
+WHERE deleted_at IS NULL;
+
 -- ============================================================
 -- SOFT DELETE / RESTORE RPCs (UI must call these)
 -- ============================================================
@@ -126,6 +138,11 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  IF public.current_user_role() <> 'admin' THEN
+    RAISE EXCEPTION 'FORBIDDEN_ADMIN_ONLY'
+      USING ERRCODE = '42501';
+  END IF;
+
   UPDATE public.battery_prescription_deliveries
   SET deleted_at = NULL,
       deleted_by = NULL,

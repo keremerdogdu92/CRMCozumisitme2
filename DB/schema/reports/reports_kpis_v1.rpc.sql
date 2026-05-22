@@ -1,43 +1,42 @@
 -- DB/schema/reports/reports_kpis_v1.rpc.sql
--- Purpose: Supabase RPC to aggregate reports KPIs (org-scoped, Europe/Istanbul month window).
--- Pattern: Same as dashboard_kpis — returns table(...) so Supabase JS client gives data[0] directly.
--- Notes:
---  - Month window: [monthStart 00:00, nextMonthStart 00:00) in Europe/Istanbul.
---  - Excludes soft-deleted rows where deleted_at IS NOT NULL.
---  - Org resolution: authenticated users → profiles.org_id; service_role → null (returns zeros).
---  - revenueByMonth: last 12 months ending with p_month, based on patients.created_at.
---  - totalReceivables: sum of ALL meeting_payments across all time (all methods).
+-- Purpose: Admin-only reporting KPIs with device SGK + battery SGK breakdowns.
 
 drop function if exists public.reports_kpis_v1(date);
 
 create or replace function public.reports_kpis_v1(
   p_month date default current_date
 ) returns table (
-  "totalReceivables"       numeric,
-  "monthlyTaxAmount"       numeric,
-  "yearlyTaxAmount"        numeric,
-  "firmTotals"             jsonb,
-  "totalStockQuantity"     bigint,
-  "totalStockCost"         numeric,
-  "monthDevicesSoldCount"  bigint,
-  "monthDevicesSoldCost"   numeric,
-  "monthlyTurnover"        numeric,
-  "sgkDueThisMonth"        numeric,
-  "sgkEstimatedThisMonth"  numeric,
-  "sgkRecordedThisMonth"   numeric,
-  "sgkDueNextThreeMonths"  numeric,
-  "sgkPaymentRows"         jsonb,
-  "revenueByMonth"         jsonb,
-  "devicesPie"             jsonb
+  "totalReceivables" numeric,
+  "monthlyTaxAmount" numeric,
+  "yearlyTaxAmount" numeric,
+  "firmTotals" jsonb,
+  "totalStockQuantity" bigint,
+  "totalStockCost" numeric,
+  "monthDevicesSoldCount" bigint,
+  "monthDevicesSoldCost" numeric,
+  "monthlyTurnover" numeric,
+  "sgkDueThisMonth" numeric,
+  "sgkDeviceDueThisMonth" numeric,
+  "sgkBatteryDueThisMonth" numeric,
+  "sgkEstimatedThisMonth" numeric,
+  "sgkRecordedThisMonth" numeric,
+  "sgkDeviceRecordedThisMonth" numeric,
+  "sgkBatteryRecordedThisMonth" numeric,
+  "sgkDueNextThreeMonths" numeric,
+  "sgkPaymentRows" jsonb,
+  "revenueByMonth" jsonb,
+  "devicesPie" jsonb
 )
 language sql stable
 set search_path = ''
 as $$
 with org_ctx as (
-  select case
-    when auth.role() = 'service_role'::text then null::uuid
-    else (select pr.org_id from public.profiles pr where pr.id = auth.uid())
-  end as org_id
+  select
+    case
+      when auth.role() = 'service_role'::text then null::uuid
+      else public.current_user_org_id()
+    end as org_id
+  where public.require_current_user_admin()
 ),
 window_bounds as (
   select
@@ -46,6 +45,51 @@ window_bounds as (
     (date_trunc('month', timezone('Europe/Istanbul', p_month::timestamptz)))::date as month_start_ist_date,
     (date_trunc('month', timezone('Europe/Istanbul', p_month::timestamptz)) + interval '1 month')::date as month_end_ist_date,
     (date_trunc('month', timezone('Europe/Istanbul', p_month::timestamptz)) - interval '11 months') at time zone 'Europe/Istanbul' as year_start_utc
+),
+device_sgk as (
+  select
+    coalesce(sum(coalesce(pt.sgk_expected_reimbursement, 0)) filter (
+      where pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
+        and pt.sgk_expected_reimbursement_month < w.month_end_ist_date
+    ), 0) as due_total,
+    coalesce(sum(coalesce(pt.sgk_expected_reimbursement, 0)) filter (
+      where pt.sgk_recorded_to_system is true
+        and pt.sgk_recorded_to_system_at >= w.month_start_utc
+        and pt.sgk_recorded_to_system_at < w.month_end_utc
+    ), 0) as recorded_total,
+    coalesce(sum(coalesce(pt.sgk_expected_reimbursement, 0)) filter (
+      where pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
+        and pt.sgk_expected_reimbursement_month < (w.month_start_ist_date + interval '3 months')::date
+    ), 0) as due_next_three_total
+  from public.patients pt
+  cross join window_bounds w
+  cross join org_ctx o
+  where o.org_id is not null
+    and pt.org_id = o.org_id
+    and pt.deleted_at is null
+    and pt.sgk_flag is true
+),
+battery_sgk as (
+  select
+    coalesce(sum(coalesce(b.sgk_expected_amount, 0)) filter (
+      where b.sgk_expected_reimbursement_month >= w.month_start_ist_date
+        and b.sgk_expected_reimbursement_month < w.month_end_ist_date
+    ), 0) as due_total,
+    coalesce(sum(coalesce(b.sgk_expected_amount, 0)) filter (
+      where b.sgk_rate_effective_date >= w.month_start_ist_date
+        and b.sgk_rate_effective_date < w.month_end_ist_date
+    ), 0) as recorded_total,
+    coalesce(sum(coalesce(b.sgk_expected_amount, 0)) filter (
+      where b.sgk_expected_reimbursement_month >= w.month_start_ist_date
+        and b.sgk_expected_reimbursement_month < (w.month_start_ist_date + interval '3 months')::date
+    ), 0) as due_next_three_total
+  from public.battery_prescription_deliveries b
+  join public.patients pt on pt.id = b.patient_id and pt.deleted_at is null
+  cross join window_bounds w
+  cross join org_ctx o
+  where o.org_id is not null
+    and b.org_id = o.org_id
+    and b.deleted_at is null
 ),
 monthly_revenue as (
   select
@@ -79,6 +123,69 @@ device_pie as (
     and i.sold_at < w.month_end_utc
   group by label
   order by value desc
+),
+sgk_rows as (
+  select
+    'device:' || pt.id::text as row_id,
+    'device'::text as source,
+    null::uuid as battery_delivery_id,
+    pt.id as patient_id,
+    pt.full_name as patient_name,
+    pt.sgk_profile,
+    coalesce(rate.label, pt.sgk_profile) as sgk_profile_label,
+    coalesce(pt.sgk_recorded_to_system, false) as sgk_recorded_to_system,
+    pt.sgk_recorded_to_system_at,
+    coalesce(period.valid_from, pt.sgk_rate_effective_date) as sgk_rate_valid_from,
+    pt.sgk_expected_reimbursement_month,
+    coalesce(pt.sgk_expected_reimbursement, 0) as sgk_expected_reimbursement,
+    coalesce(pt.invoice_issued, false) as invoice_issued,
+    pt.invoice_issued_at
+  from public.patients pt
+  cross join window_bounds w
+  cross join org_ctx o
+  left join public.sgk_reimbursement_periods period
+    on period.id = pt.sgk_rate_period_id
+    and period.org_id = pt.org_id
+  left join public.sgk_reimbursement_profile_rates rate
+    on rate.id = pt.sgk_profile_rate_id
+  where o.org_id is not null
+    and pt.org_id = o.org_id
+    and pt.deleted_at is null
+    and pt.sgk_flag is true
+    and pt.sgk_expected_reimbursement is not null
+    and pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
+    and pt.sgk_expected_reimbursement_month < w.month_end_ist_date
+
+  union all
+
+  select
+    'battery:' || b.id::text as row_id,
+    'battery'::text as source,
+    b.id as battery_delivery_id,
+    pt.id as patient_id,
+    pt.full_name as patient_name,
+    null::text as sgk_profile,
+    'Pil SGK'::text as sgk_profile_label,
+    (b.sgk_rate_effective_date is not null) as sgk_recorded_to_system,
+    b.sgk_rate_effective_date::timestamptz as sgk_recorded_to_system_at,
+    coalesce(period.valid_from, b.sgk_rate_effective_date) as sgk_rate_valid_from,
+    b.sgk_expected_reimbursement_month,
+    coalesce(b.sgk_expected_amount, 0) as sgk_expected_reimbursement,
+    coalesce(pt.invoice_issued, false) as invoice_issued,
+    pt.invoice_issued_at
+  from public.battery_prescription_deliveries b
+  join public.patients pt on pt.id = b.patient_id and pt.deleted_at is null
+  cross join window_bounds w
+  cross join org_ctx o
+  left join public.sgk_reimbursement_periods period
+    on period.id = b.sgk_rate_period_id
+    and period.org_id = b.org_id
+  where o.org_id is not null
+    and b.org_id = o.org_id
+    and b.deleted_at is null
+    and b.sgk_expected_amount is not null
+    and b.sgk_expected_reimbursement_month >= w.month_start_ist_date
+    and b.sgk_expected_reimbursement_month < w.month_end_ist_date
 )
 select
   coalesce((
@@ -117,7 +224,7 @@ select
   (
     select jsonb_build_object(
       'siventosTotal', coalesce(sum(mp.amount) filter (where lower(mp.method) = 'sivantos'), 0),
-      'timeTotal',     coalesce(sum(mp.amount) filter (where lower(mp.method) = 'tim'), 0),
+      'timeTotal', coalesce(sum(mp.amount) filter (where lower(mp.method) = 'tim'), 0),
       'combinedTotal', coalesce(sum(mp.amount) filter (where lower(mp.method) in ('sivantos', 'tim')), 0)
     )
     from public.meeting_payments mp
@@ -190,92 +297,36 @@ select
       and pt.created_at < w.month_end_utc
   ), 0) as "monthlyTurnover",
 
-  coalesce((
-    select sum(coalesce(pt.sgk_expected_reimbursement, 0))
-    from public.patients pt
-    cross join window_bounds w
-    cross join org_ctx o
-    where o.org_id is not null
-      and pt.org_id = o.org_id
-      and pt.deleted_at is null
-      and pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
-      and pt.sgk_expected_reimbursement_month < w.month_end_ist_date
-  ), 0) as "sgkDueThisMonth",
-
-  coalesce((
-    select sum(coalesce(pt.sgk_expected_reimbursement, 0))
-    from public.patients pt
-    cross join window_bounds w
-    cross join org_ctx o
-    where o.org_id is not null
-      and pt.org_id = o.org_id
-      and pt.deleted_at is null
-      and pt.sgk_flag is true
-      and pt.sgk_expected_reimbursement is not null
-      and pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
-      and pt.sgk_expected_reimbursement_month < w.month_end_ist_date
-  ), 0) as "sgkEstimatedThisMonth",
-
-  coalesce((
-    select sum(coalesce(pt.sgk_expected_reimbursement, 0))
-    from public.patients pt
-    cross join window_bounds w
-    cross join org_ctx o
-    where o.org_id is not null
-      and pt.org_id = o.org_id
-      and pt.deleted_at is null
-      and pt.sgk_flag is true
-      and pt.sgk_recorded_to_system is true
-      and pt.sgk_recorded_to_system_at is not null
-      and pt.sgk_expected_reimbursement is not null
-      and pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
-      and pt.sgk_expected_reimbursement_month < w.month_end_ist_date
-  ), 0) as "sgkRecordedThisMonth",
-
-  coalesce((
-    select sum(coalesce(pt.sgk_expected_reimbursement, 0))
-    from public.patients pt
-    cross join window_bounds w
-    cross join org_ctx o
-    where o.org_id is not null
-      and pt.org_id = o.org_id
-      and pt.deleted_at is null
-      and pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
-      and pt.sgk_expected_reimbursement_month < (w.month_start_ist_date + interval '3 months')::date
-  ), 0) as "sgkDueNextThreeMonths",
+  (select due_total from device_sgk) + (select due_total from battery_sgk) as "sgkDueThisMonth",
+  (select due_total from device_sgk) as "sgkDeviceDueThisMonth",
+  (select due_total from battery_sgk) as "sgkBatteryDueThisMonth",
+  (select due_total from device_sgk) + (select due_total from battery_sgk) as "sgkEstimatedThisMonth",
+  (select recorded_total from device_sgk) + (select recorded_total from battery_sgk) as "sgkRecordedThisMonth",
+  (select recorded_total from device_sgk) as "sgkDeviceRecordedThisMonth",
+  (select recorded_total from battery_sgk) as "sgkBatteryRecordedThisMonth",
+  (select due_next_three_total from device_sgk) + (select due_next_three_total from battery_sgk) as "sgkDueNextThreeMonths",
 
   coalesce((
     select jsonb_agg(
       jsonb_build_object(
-        'patient_id', pt.id,
-        'patient_name', pt.full_name,
-        'sgk_profile', pt.sgk_profile,
-        'sgk_profile_label', coalesce(rate.label, pt.sgk_profile),
-        'sgk_recorded_to_system', coalesce(pt.sgk_recorded_to_system, false),
-        'sgk_recorded_to_system_at', pt.sgk_recorded_to_system_at,
-        'sgk_rate_valid_from', coalesce(period.valid_from, pt.sgk_rate_effective_date),
-        'sgk_expected_reimbursement_month', pt.sgk_expected_reimbursement_month,
-        'sgk_expected_reimbursement', coalesce(pt.sgk_expected_reimbursement, 0),
-        'invoice_issued', coalesce(pt.invoice_issued, false),
-        'invoice_issued_at', pt.invoice_issued_at
+        'row_id', r.row_id,
+        'source', r.source,
+        'battery_delivery_id', r.battery_delivery_id,
+        'patient_id', r.patient_id,
+        'patient_name', r.patient_name,
+        'sgk_profile', r.sgk_profile,
+        'sgk_profile_label', r.sgk_profile_label,
+        'sgk_recorded_to_system', r.sgk_recorded_to_system,
+        'sgk_recorded_to_system_at', r.sgk_recorded_to_system_at,
+        'sgk_rate_valid_from', r.sgk_rate_valid_from,
+        'sgk_expected_reimbursement_month', r.sgk_expected_reimbursement_month,
+        'sgk_expected_reimbursement', r.sgk_expected_reimbursement,
+        'invoice_issued', r.invoice_issued,
+        'invoice_issued_at', r.invoice_issued_at
       )
-      order by pt.sgk_expected_reimbursement_month asc, pt.full_name asc
+      order by r.sgk_expected_reimbursement_month asc, r.patient_name asc, r.source asc
     )
-    from public.patients pt
-    cross join window_bounds w
-    cross join org_ctx o
-    left join public.sgk_reimbursement_periods period
-      on period.id = pt.sgk_rate_period_id
-      and period.org_id = pt.org_id
-    left join public.sgk_reimbursement_profile_rates rate
-      on rate.id = pt.sgk_profile_rate_id
-    where o.org_id is not null
-      and pt.org_id = o.org_id
-      and pt.deleted_at is null
-      and pt.sgk_flag is true
-      and pt.sgk_expected_reimbursement is not null
-      and pt.sgk_expected_reimbursement_month >= w.month_start_ist_date
-      and pt.sgk_expected_reimbursement_month < w.month_end_ist_date
+    from sgk_rows r
   ), '[]'::jsonb) as "sgkPaymentRows",
 
   coalesce((
@@ -295,9 +346,5 @@ select
   ), '[]'::jsonb) as "devicesPie";
 $$;
 
--- Example usage:
--- select * from public.reports_kpis_v1('2026-02-01');
-
--- Permissions: allow authenticated users and service_role; revoke public/anon.
 revoke all on function public.reports_kpis_v1(date) from public, anon;
 grant execute on function public.reports_kpis_v1(date) to authenticated, service_role;

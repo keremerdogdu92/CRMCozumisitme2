@@ -214,6 +214,19 @@ export function ReportsDashboard() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <KpiCard
+              title="Cihaz SGK beklenen"
+              value={kpis.sgkDeviceDueThisMonth}
+              suffix="â‚º"
+            />
+            <KpiCard
+              title="Pil SGK beklenen"
+              value={kpis.sgkBatteryDueThisMonth}
+              suffix="â‚º"
+            />
+          </div>
+
           <SgkPaymentTrackingTable rows={kpis.sgkPaymentRows ?? []} />
 
           {/* Charts */}
@@ -312,7 +325,7 @@ function SgkPaymentTrackingTable({ rows }: SgkPaymentTrackingTableProps) {
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {rows.map((row) => (
-                <tr key={row.patient_id}>
+                <tr key={row.row_id ?? row.patient_id}>
                   <td className="whitespace-nowrap px-2 py-2 font-medium text-slate-800">
                     {row.patient_name}
                   </td>

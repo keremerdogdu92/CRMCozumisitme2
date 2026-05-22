@@ -196,6 +196,9 @@ export type SgkReimbursementPeriod = {
 };
 
 export type SgkPaymentTrackingRow = {
+  row_id?: string;
+  source?: 'device' | 'battery';
+  battery_delivery_id?: string | null;
   patient_id: string;
   patient_name: string;
   sgk_profile: string | null;
@@ -450,6 +453,9 @@ export type BatteryPrescriptionDeliveryRow = {
 
   // Expected SGK reimbursement for this delivery (TRY)
   sgk_expected_amount: number | null;
+  sgk_rate_period_id: string | null;
+  sgk_rate_effective_date: string | null;
+  sgk_expected_reimbursement_month: string | null;
 
   note: string | null;
   created_at: string;
@@ -487,6 +493,9 @@ export type CreateBatteryPrescriptionDeliveryInput = {
    * If omitted, DB stores NULL. (You can compute this later if needed.)
    */
   sgkExpectedAmount?: number | null;
+  sgkRatePeriodId?: string | null;
+  sgkRateEffectiveDate?: string | null;
+  sgkExpectedReimbursementMonth?: string | null;
 
   /**
    * Lines from UI draft. Caller is responsible for filtering out empty lines.

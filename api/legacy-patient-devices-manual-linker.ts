@@ -5,11 +5,17 @@
 // Intended to be called from the Import Dashboard "Fix legacy device row" modal.
 
 import { createClient } from '@supabase/supabase-js';
+import {
+  assertSameOrg,
+  requireImportApiUser,
+  sendApiError,
+} from './_auth';
 
 type ApiRequest = {
   method?: string;
   body?: any;
   query: Record<string, string | string[] | undefined>;
+  headers?: Record<string, string | string[] | undefined>;
 };
 
 type ApiResponse = {
@@ -189,6 +195,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const supabase = createAdminSupabaseClient();
+    let apiUser;
+    try {
+      apiUser = await requireImportApiUser(req, supabase);
+    } catch (err) {
+      sendApiError(res, err);
+      return;
+    }
 
     // 1) Load staging row
     const { data: rows, error: rowError } = await supabase
@@ -213,6 +226,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const stagingRow = rows[0] as LegacyDeviceStagingRow;
+    try {
+      assertSameOrg(apiUser, stagingRow.org_id, 'Legacy device staging row');
+    } catch (err) {
+      sendApiError(res, err);
+      return;
+    }
 
     if (stagingRow.status === 'imported') {
       res.status(400).json({ error: 'This staging row is already imported.' });
@@ -266,6 +285,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const patient = patientRows[0] as PatientSaleDateInfo;
+    try {
+      assertSameOrg(apiUser, patient.org_id, 'Patient');
+    } catch (err) {
+      sendApiError(res, err);
+      return;
+    }
+
     if (patient.org_id !== stagingRow.org_id) {
       res.status(400).json({
         error: 'Patient and staging row belong to different orgs.',

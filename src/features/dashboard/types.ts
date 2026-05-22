@@ -36,6 +36,8 @@ export type DashboardKpis = {
    * - org-scoped
    */
   sgkEnteredThisMonthTotal: number;
+  deviceSgkEnteredThisMonthTotal: number;
+  batterySgkEnteredThisMonthTotal: number;
 
   /**
    * Sum of expected SGK reimbursement that is due/expected to be paid in the selected month.
@@ -50,6 +52,8 @@ export type DashboardKpis = {
    * - org-scoped
    */
   sgkDueThisMonthTotal: number;
+  deviceSgkDueThisMonthTotal: number;
+  batterySgkDueThisMonthTotal: number;
 
   /**
    * Count of hearing aids sold in the month window.

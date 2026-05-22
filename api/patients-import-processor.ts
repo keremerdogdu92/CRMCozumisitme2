@@ -3,6 +3,11 @@
 // insert patients, and update import_jobs.
 
 import { createClient } from '@supabase/supabase-js';
+import {
+  assertImportJobOrg,
+  requireImportApiUser,
+  sendApiError,
+} from './_auth';
 
 // ------------------------
 // Local types & validator
@@ -256,6 +261,7 @@ type ApiRequest = {
   method?: string;
   body?: any;
   query: Record<string, string | string[] | undefined>;
+  headers?: Record<string, string | string[] | undefined>;
 };
 
 type ApiResponse = {
@@ -451,6 +457,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     } catch (err) {
       console.error('Supabase admin client creation failed:', err);
       res.status(500).json({ error: (err as Error).message });
+      return;
+    }
+
+    try {
+      const apiUser = await requireImportApiUser(req, supabase);
+      await assertImportJobOrg(supabase, jobId, apiUser);
+    } catch (err) {
+      sendApiError(res, err);
       return;
     }
 

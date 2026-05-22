@@ -48,6 +48,10 @@ import type {
 import { parseMoneyToNumber } from './api.core';
 import { upsertPatientInstallmentPlan } from './api.payments';
 import { createBatteryPrescriptionDeliveries } from './api.batteryPrescriptionDeliveries';
+import {
+  computeBatterySgkSnapshot,
+  fetchSgkReimbursementPeriods,
+} from './api.sgkReimbursements';
 import { linkTrialToPatientAndDelete } from '../../trials/api';
 
 export type CreatePatientOptions = {
@@ -85,6 +89,17 @@ function qtyTotal(line: BatteryLineDraft): number {
   const pack = Number.isFinite(q.pack) ? q.pack : 0;
   const unit = Number.isFinite(q.unit) ? q.unit : 0;
   return box + pack + unit;
+}
+
+function isUuid(value: string | null | undefined): boolean {
+  return !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function monthInputToDateKey(value: string | null | undefined): string | null {
+  const raw = safeTrim(value);
+  const match = /^(\d{4})-(\d{2})$/.exec(raw);
+  if (!match) return null;
+  return `${match[1]}-${match[2]}-15`;
 }
 
 /**
@@ -309,8 +324,23 @@ async function recordBatteryPrescriptionDeliveries(params: {
   patientId: string;
   batteryLines: BatteryLineDraft[];
   prescriptionNo: string | null;
+  deliveredAt: string | null;
+  sgkExpectedAmount: number | null;
+  sgkRatePeriodId: string | null;
+  sgkRateEffectiveDate: string | null;
+  sgkExpectedReimbursementMonth: string | null;
 }): Promise<void> {
-  const { orgId, patientId, batteryLines, prescriptionNo } = params;
+  const {
+    orgId,
+    patientId,
+    batteryLines,
+    prescriptionNo,
+    deliveredAt,
+    sgkExpectedAmount,
+    sgkRatePeriodId,
+    sgkRateEffectiveDate,
+    sgkExpectedReimbursementMonth,
+  } = params;
   const lines = (batteryLines ?? []).filter((l) => qtyTotal(l) > 0);
   if (lines.length === 0) return;
 
@@ -321,8 +351,12 @@ async function recordBatteryPrescriptionDeliveries(params: {
         patientId,
         lines,
         prescriptionNo: prescriptionNo ? prescriptionNo.trim() : null,
-        deliveredAt: null, // default now
+        deliveredAt,
         note: null,
+        sgkExpectedAmount,
+        sgkRatePeriodId,
+        sgkRateEffectiveDate,
+        sgkExpectedReimbursementMonth,
       },
     });
   } catch (err) {
@@ -697,11 +731,45 @@ export async function createPatient(
     deviceFlowType === 'battery_device' || deviceFlowType === 'battery_only';
 
   if (input.sgkFlag && isBatteryFlow && (batteryLines ?? []).some((l) => qtyTotal(l) > 0)) {
+    const deliveredAtForBattery = input.purchaseDate
+      ? new Date(input.purchaseDate).toISOString()
+      : nowIso;
+    let batterySgkExpectedAmount: number | null = null;
+    let batterySgkRatePeriodId: string | null = null;
+    let batterySgkRateEffectiveDate: string | null = null;
+    let batterySgkExpectedMonth: string | null = null;
+
+    try {
+      const periods = await fetchSgkReimbursementPeriods();
+      const batterySnapshot = computeBatterySgkSnapshot({
+        periods,
+        effectiveDate: sgkRecordedToSystemAt ?? deliveredAtForBattery,
+      });
+      batterySgkExpectedAmount = batterySnapshot.expectedAmount;
+      batterySgkRatePeriodId = isUuid(batterySnapshot.period.id)
+        ? batterySnapshot.period.id
+        : null;
+      batterySgkRateEffectiveDate = batterySnapshot.effectiveDate;
+      batterySgkExpectedMonth = monthInputToDateKey(
+        batterySnapshot.expectedMonth,
+      );
+    } catch (err) {
+      console.error(
+        'STEP_BATTERY_SGK_SNAPSHOT_FAILED: Failed to calculate battery SGK snapshot (delivery will still be recorded)',
+        { patientId: inserted.id, err },
+      );
+    }
+
     await recordBatteryPrescriptionDeliveries({
       orgId,
       patientId: inserted.id,
       batteryLines,
       prescriptionNo: input.sgkPrescriptionNo ? input.sgkPrescriptionNo.trim() : null,
+      deliveredAt: deliveredAtForBattery,
+      sgkExpectedAmount: batterySgkExpectedAmount,
+      sgkRatePeriodId: batterySgkRatePeriodId,
+      sgkRateEffectiveDate: batterySgkRateEffectiveDate,
+      sgkExpectedReimbursementMonth: batterySgkExpectedMonth,
     });
   }
 

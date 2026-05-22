@@ -68,6 +68,13 @@ export type SgkSnapshotCalculation = {
   expectedMonth: string;
 };
 
+export type BatterySgkSnapshotCalculation = {
+  period: SgkReimbursementPeriod;
+  effectiveDate: string;
+  expectedAmount: number;
+  expectedMonth: string;
+};
+
 function toNumber(value: number | string | null | undefined): number | null {
   if (value == null) return null;
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -284,5 +291,22 @@ export function computeSgkSnapshot(params: {
     totalAmount,
     totalInput: totalAmount > 0 ? formatSgkMoneyInput(totalAmount) : '',
     expectedMonth: totalAmount > 0 ? addThreeMonthsMonthInput(effectiveDate) : '',
+  };
+}
+
+export function computeBatterySgkSnapshot(params: {
+  periods: SgkReimbursementPeriod[] | undefined;
+  effectiveDate: string | null | undefined;
+}): BatterySgkSnapshotCalculation {
+  const effectiveDate = toSgkDateKey(params.effectiveDate);
+  const period = findEffectiveSgkPeriod(params.periods, effectiveDate);
+  const expectedAmount = roundMoney(period.pill_extra_per_device);
+
+  return {
+    period,
+    effectiveDate,
+    expectedAmount,
+    expectedMonth:
+      expectedAmount > 0 ? addThreeMonthsMonthInput(effectiveDate) : '',
   };
 }

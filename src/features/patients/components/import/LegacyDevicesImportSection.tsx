@@ -21,6 +21,7 @@ import {
 } from '../../import/api.jobs';
 import type { LegacyDevicesImportStatusSummary } from '../../import/types';
 import { parseSimpleCsv } from '../../../../utils/csvUtils';
+import { getAuthenticatedJsonHeaders } from '../../../../utils/apiAuthHeaders';
 import { normalizeHeaderKey } from '../../import/legacyDevicesValidator';
 
 type ImportPhase = 'idle' | 'uploading' | 'processing';
@@ -100,7 +101,7 @@ export function LegacyDevicesImportSection() {
         '/api/legacy-patient-devices-import-processor',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await getAuthenticatedJsonHeaders(),
           body: JSON.stringify({ job_id: createdJobId }),
         },
       );

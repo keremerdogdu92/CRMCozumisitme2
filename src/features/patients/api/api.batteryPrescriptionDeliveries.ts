@@ -112,6 +112,10 @@ export async function createBatteryPrescriptionDeliveries(params: {
       delivered_at,
       prescription_no,
       sgk_expected_amount,
+      sgk_rate_period_id: input.sgkRatePeriodId ?? null,
+      sgk_rate_effective_date: input.sgkRateEffectiveDate ?? null,
+      sgk_expected_reimbursement_month:
+        input.sgkExpectedReimbursementMonth ?? null,
       note,
       // IMPORTANT: Do NOT send brand/created_by unless DB has those columns.
     };
@@ -156,6 +160,9 @@ export async function fetchBatteryPrescriptionDeliveriesByPatient(
         'delivered_at',
         'prescription_no',
         'sgk_expected_amount',
+        'sgk_rate_period_id',
+        'sgk_rate_effective_date',
+        'sgk_expected_reimbursement_month',
         'note',
         'created_at',
       ].join(', '),
@@ -199,6 +206,9 @@ export async function fetchBatteryPrescriptionDeliveriesByOrg(params: {
         'delivered_at',
         'prescription_no',
         'sgk_expected_amount',
+        'sgk_rate_period_id',
+        'sgk_rate_effective_date',
+        'sgk_expected_reimbursement_month',
         'note',
         'created_at',
       ].join(', '),

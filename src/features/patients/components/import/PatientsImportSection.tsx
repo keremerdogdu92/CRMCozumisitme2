@@ -8,6 +8,7 @@ import {
 } from '../../import/api.jobs';
 import type { PatientsImportStatusSummary } from '../../import/types';
 import { parseSimpleCsv } from '../../../../utils/csvUtils';
+import { getAuthenticatedJsonHeaders } from '../../../../utils/apiAuthHeaders';
 import { normalizeHeaderKey } from '../../patientsImportUtils';
 
 type ImportPhase = 'idle' | 'uploading' | 'processing';
@@ -65,7 +66,7 @@ export function PatientsImportSection() {
 
       const response = await fetch('/api/patients-import-processor', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthenticatedJsonHeaders(),
         body: JSON.stringify({ job_id: createdJobId }),
       });
 

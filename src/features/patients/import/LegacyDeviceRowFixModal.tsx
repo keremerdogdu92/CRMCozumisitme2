@@ -5,6 +5,7 @@
 
 import { useState, FormEvent } from 'react';
 import { supabaseClient } from '../../../utils/supabaseClient';
+import { getAuthenticatedJsonHeaders } from '../../../utils/apiAuthHeaders';
 import type { LegacyDevicesImportRow } from './types';
 import type { PatientRow } from '../types';
 
@@ -102,7 +103,7 @@ export function LegacyDeviceRowFixModal({
         '/api/legacy-patient-devices-manual-linker',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await getAuthenticatedJsonHeaders(),
           body: JSON.stringify({
             staging_row_id: row.id,
             patient_id: selectedPatient.id,

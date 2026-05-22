@@ -63,12 +63,16 @@ export type ReportsKpis = {
 
   /** Bu ay SGK’dan yatması beklenen tutar (3 ay önce işlenenler) */
   sgkDueThisMonth: number;
+  sgkDeviceDueThisMonth: number;
+  sgkBatteryDueThisMonth: number;
 
   /** Seçili ayda SGK profili/tutarı olan tüm SGK hastaları toplamı */
   sgkEstimatedThisMonth: number;
 
   /** Seçili ayda sisteme işlenmiş SGK kayıtları toplamı */
   sgkRecordedThisMonth: number;
+  sgkDeviceRecordedThisMonth: number;
+  sgkBatteryRecordedThisMonth: number;
 
   /** Önümüzdeki 3 ay içinde SGK’dan yatması beklenen toplam tutar */
   sgkDueNextThreeMonths: number;

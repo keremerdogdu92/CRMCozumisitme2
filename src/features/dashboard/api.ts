@@ -76,7 +76,23 @@ export async function fetchDashboardKpis(
       firstRow,
       'sgkEnteredThisMonthTotal',
     ),
+    deviceSgkEnteredThisMonthTotal: readNumberField(
+      firstRow,
+      'deviceSgkEnteredThisMonthTotal',
+    ),
+    batterySgkEnteredThisMonthTotal: readNumberField(
+      firstRow,
+      'batterySgkEnteredThisMonthTotal',
+    ),
     sgkDueThisMonthTotal: readNumberField(firstRow, 'sgkDueThisMonthTotal'),
+    deviceSgkDueThisMonthTotal: readNumberField(
+      firstRow,
+      'deviceSgkDueThisMonthTotal',
+    ),
+    batterySgkDueThisMonthTotal: readNumberField(
+      firstRow,
+      'batterySgkDueThisMonthTotal',
+    ),
     devicesSoldCount: readNumberField(firstRow, 'devicesSoldCount'),
     devicePatientsCount: readNumberField(firstRow, 'devicePatientsCount'),
     cardFeeTotal: readNumberField(firstRow, 'cardFeeTotal'),

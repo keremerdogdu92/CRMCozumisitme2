@@ -1,44 +1,76 @@
 -- db/schema/dashboard/dashboard_kpis.rpc.sql
--- Purpose: Supabase RPC to aggregate dashboard KPIs (org-scoped, Europe/Istanbul month window).
--- Scope: revenueTotal, sgkEnteredThisMonthTotal, sgkDueThisMonthTotal, devicesSoldCount,
---        devicePatientsCount, cardFeeTotal, referenceCommissionTotal, unpaidInstallmentsDueThisMonth.
--- Notes:
---  - Month window: [monthStart 00:00, nextMonthStart 00:00) in Europe/Istanbul.
---  - Excludes soft-deleted rows where deleted_at exists (patients, inventory_items).
---  - Uses explicit KPI sources per product spec; installment KPI is sprint-0 approximation (no full FIFO).
---  - Org resolution:
---      * service_role: may pass _org_id; if null, results are zeroed.
---      * authenticated users: org_id is derived from profiles.id = auth.uid(); _org_id param is ignored.
---      * if org cannot be resolved, the function returns zeros.
+-- Purpose: Org-scoped dashboard KPIs for staff/admin.
+-- Staff can read operational KPIs. Admin additionally receives finance KPIs.
+
+drop function if exists public.dashboard_kpis(timestamptz, uuid);
 
 create or replace function public.dashboard_kpis(
-  _month_start timestamptz default now(), -- evaluated in Europe/Istanbul below
-  _org_id uuid default null               -- only used when auth.role() = 'service_role'
+  _month_start timestamptz default now(),
+  _org_id uuid default null
 ) returns table (
-  revenueTotal numeric,
-  sgkEnteredThisMonthTotal numeric,
-  sgkDueThisMonthTotal numeric,
-  devicesSoldCount bigint,
-  devicePatientsCount bigint,
-  cardFeeTotal numeric,
-  referenceCommissionTotal numeric,
-  unpaidInstallmentsDueThisMonth numeric
+  "revenueTotal" numeric,
+  "sgkEnteredThisMonthTotal" numeric,
+  "deviceSgkEnteredThisMonthTotal" numeric,
+  "batterySgkEnteredThisMonthTotal" numeric,
+  "sgkDueThisMonthTotal" numeric,
+  "deviceSgkDueThisMonthTotal" numeric,
+  "batterySgkDueThisMonthTotal" numeric,
+  "devicesSoldCount" bigint,
+  "devicePatientsCount" bigint,
+  "cardFeeTotal" numeric,
+  "referenceCommissionTotal" numeric,
+  "unpaidInstallmentsDueThisMonth" numeric
 ) language sql stable as $$
 with org_ctx as (
-  select case
-    when auth.role() = 'service_role'::text then _org_id
-    else (select p.org_id from public.profiles p where p.id = auth.uid())
-  end as org_id
+  select
+    case
+      when auth.role() = 'service_role'::text then _org_id
+      else (select p.org_id from public.profiles p where p.id = auth.uid())
+    end as org_id,
+    case
+      when auth.role() = 'service_role'::text then true
+      else public.current_user_role() = 'admin'
+    end as is_admin
 ), window_bounds as (
   select
-    -- Align provided timestamp to Europe/Istanbul month start 00:00, then convert back to UTC for comparisons.
     (date_trunc('month', timezone('Europe/Istanbul', coalesce(_month_start, now()))) at time zone 'Europe/Istanbul') as month_start_utc,
     (date_trunc('month', timezone('Europe/Istanbul', coalesce(_month_start, now()))) + interval '1 month') at time zone 'Europe/Istanbul' as month_end_utc,
-    -- Date boundaries in Europe/Istanbul for date-only comparisons (e.g., sgk_expected_reimbursement_month).
     (date_trunc('month', timezone('Europe/Istanbul', coalesce(_month_start, now()))))::date as month_start_ist_date,
     (date_trunc('month', timezone('Europe/Istanbul', coalesce(_month_start, now())) + interval '1 month'))::date as month_end_ist_date
+), device_sgk as (
+  select
+    coalesce(sum(coalesce(p.sgk_expected_reimbursement, 0)) filter (
+      where p.sgk_recorded_to_system_at >= w.month_start_utc
+        and p.sgk_recorded_to_system_at < w.month_end_utc
+    ), 0) as entered_total,
+    coalesce(sum(coalesce(p.sgk_expected_reimbursement, 0)) filter (
+      where p.sgk_expected_reimbursement_month >= w.month_start_ist_date
+        and p.sgk_expected_reimbursement_month < w.month_end_ist_date
+    ), 0) as due_total
+  from public.patients p
+  cross join window_bounds w
+  cross join org_ctx o
+  where o.org_id is not null
+    and p.org_id = o.org_id
+    and p.deleted_at is null
+), battery_sgk as (
+  select
+    coalesce(sum(coalesce(b.sgk_expected_amount, 0)) filter (
+      where b.sgk_rate_effective_date >= w.month_start_ist_date
+        and b.sgk_rate_effective_date < w.month_end_ist_date
+    ), 0) as entered_total,
+    coalesce(sum(coalesce(b.sgk_expected_amount, 0)) filter (
+      where b.sgk_expected_reimbursement_month >= w.month_start_ist_date
+        and b.sgk_expected_reimbursement_month < w.month_end_ist_date
+    ), 0) as due_total
+  from public.battery_prescription_deliveries b
+  join public.patients p on p.id = b.patient_id and p.deleted_at is null
+  cross join window_bounds w
+  cross join org_ctx o
+  where o.org_id is not null
+    and b.org_id = o.org_id
+    and b.deleted_at is null
 ), plan_schedules as (
-  -- Expand active installment plans into monthly due dates.
   select
     pip.org_id,
     pip.patient_id,
@@ -46,11 +78,10 @@ with org_ctx as (
     gs.installment_index,
     case
       when gs.installment_index = 0 then pip.first_due_date
-      else
-        least(
-          (date_trunc('month', pip.first_due_date) + (gs.installment_index || ' month')::interval + ((pip.day_of_month - 1) || ' day')::interval)::date,
-          (date_trunc('month', pip.first_due_date) + (gs.installment_index || ' month')::interval + interval '1 month - 1 day')::date
-        )
+      else least(
+        (date_trunc('month', pip.first_due_date) + (gs.installment_index || ' month')::interval + ((pip.day_of_month - 1) || ' day')::interval)::date,
+        (date_trunc('month', pip.first_due_date) + (gs.installment_index || ' month')::interval + interval '1 month - 1 day')::date
+      )
     end as due_date
   from public.patient_installment_plans pip
   join org_ctx o on o.org_id is not null and o.org_id = pip.org_id
@@ -58,7 +89,6 @@ with org_ctx as (
   cross join generate_series(0, pip.installment_count - 1) as gs(installment_index)
   where pip.status = 'active'
 ), plan_due as (
-  -- Aggregate due amounts per patient and senet payments applied up to month end.
   select
     ps.org_id,
     ps.patient_id,
@@ -73,16 +103,14 @@ with org_ctx as (
       where mp.org_id = ps.org_id
         and mp.patient_id = ps.patient_id
         and mp.created_at < w.month_end_utc
-        -- IMPORTANT: Do NOT treat NULL method as "senet". Only count explicit senet payments.
         and lower(coalesce(mp.method, '')) = 'senet'
     ), 0) as paid_to_month_end
   from plan_schedules ps
   cross join window_bounds w
-  group by ps.org_id, ps.patient_id
+  group by ps.org_id, ps.patient_id, w.month_start_ist_date, w.month_end_ist_date, w.month_end_utc
 )
 select
-  -- revenueTotal: sum of patients.sale_total_amount for patients created in the month window.
-  coalesce((
+  case when (select is_admin from org_ctx) then coalesce((
     select sum(coalesce(p.sale_total_amount, 0))
     from public.patients p
     cross join window_bounds w
@@ -92,35 +120,15 @@ select
       and p.deleted_at is null
       and p.created_at >= w.month_start_utc
       and p.created_at < w.month_end_utc
-  ), 0) as "revenueTotal",
+  ), 0) else 0 end as "revenueTotal",
 
-  -- sgkEnteredThisMonthTotal: sum of expected SGK reimbursements for patients recorded this month.
-  coalesce((
-    select sum(coalesce(p.sgk_expected_reimbursement, 0))
-    from public.patients p
-    cross join window_bounds w
-    cross join org_ctx o
-    where o.org_id is not null
-      and p.org_id = o.org_id
-      and p.deleted_at is null
-      and p.sgk_recorded_to_system_at >= w.month_start_utc
-      and p.sgk_recorded_to_system_at < w.month_end_utc
-  ), 0) as "sgkEnteredThisMonthTotal",
+  (select entered_total from device_sgk) + (select entered_total from battery_sgk) as "sgkEnteredThisMonthTotal",
+  (select entered_total from device_sgk) as "deviceSgkEnteredThisMonthTotal",
+  (select entered_total from battery_sgk) as "batterySgkEnteredThisMonthTotal",
+  (select due_total from device_sgk) + (select due_total from battery_sgk) as "sgkDueThisMonthTotal",
+  (select due_total from device_sgk) as "deviceSgkDueThisMonthTotal",
+  (select due_total from battery_sgk) as "batterySgkDueThisMonthTotal",
 
-  -- sgkDueThisMonthTotal: sum of expected SGK reimbursements whose expected month falls in the window.
-  coalesce((
-    select sum(coalesce(p.sgk_expected_reimbursement, 0))
-    from public.patients p
-    cross join window_bounds w
-    cross join org_ctx o
-    where o.org_id is not null
-      and p.org_id = o.org_id
-      and p.deleted_at is null
-      and p.sgk_expected_reimbursement_month >= w.month_start_ist_date
-      and p.sgk_expected_reimbursement_month < w.month_end_ist_date
-  ), 0) as "sgkDueThisMonthTotal",
-
-  -- devicesSoldCount: hearing aid inventory items sold in the month window.
   coalesce((
     select count(1)
     from public.inventory_items i
@@ -135,7 +143,6 @@ select
       and i.sold_at < w.month_end_utc
   ), 0) as "devicesSoldCount",
 
-  -- devicePatientsCount: distinct patients who purchased devices in the month window.
   coalesce((
     select count(distinct i.sold_patient_id)
     from public.inventory_items i
@@ -151,8 +158,7 @@ select
       and i.sold_at < w.month_end_utc
   ), 0) as "devicePatientsCount",
 
-  -- cardFeeTotal: sum of card fee amounts for patients created in the month window.
-  coalesce((
+  case when (select is_admin from org_ctx) then coalesce((
     select sum(coalesce(p.card_fee_amount, 0))
     from public.patients p
     cross join window_bounds w
@@ -162,10 +168,9 @@ select
       and p.deleted_at is null
       and p.created_at >= w.month_start_utc
       and p.created_at < w.month_end_utc
-  ), 0) as "cardFeeTotal",
+  ), 0) else 0 end as "cardFeeTotal",
 
-  -- referenceCommissionTotal: commission owed for patients with a reference, using the sale month window.
-  coalesce((
+  case when (select is_admin from org_ctx) then coalesce((
     select sum(
       case
         when r.commission_scheme = 'percent' then coalesce(p.sale_total_amount, 0) * coalesce(r.commission_percent, 0) / 100
@@ -183,14 +188,13 @@ select
       and p.deleted_at is null
       and p.created_at >= w.month_start_utc
       and p.created_at < w.month_end_utc
-  ), 0) as "referenceCommissionTotal",
+  ), 0) else 0 end as "referenceCommissionTotal",
 
-  -- unpaidInstallmentsDueThisMonth: due this month minus payments allocated up to month end.
   coalesce((
     select sum(
       greatest(
         0,
-        pd.due_this_month
+        coalesce(pd.due_this_month, 0)
           - greatest(
               0,
               least(
@@ -204,9 +208,5 @@ select
   ), 0) as "unpaidInstallmentsDueThisMonth";
 $$;
 
--- Example usage:
--- select * from public.dashboard_kpis(_org_id := '<org-uuid>', _month_start := '2025-02-01T00:00:00+03');
-
--- Permissions: allow authenticated users; keep service_role; revoke public/anon.
 revoke all on function public.dashboard_kpis(timestamptz, uuid) from public, anon;
 grant execute on function public.dashboard_kpis(timestamptz, uuid) to authenticated, service_role;

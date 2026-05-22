@@ -73,14 +73,38 @@ AS $$
   LIMIT 1;
 $$;
 
+CREATE OR REPLACE FUNCTION public.require_current_user_admin()
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF auth.role() = 'service_role'::text THEN
+    RETURN TRUE;
+  END IF;
+
+  IF public.current_user_role() = 'admin' THEN
+    RETURN TRUE;
+  END IF;
+
+  RAISE EXCEPTION 'FORBIDDEN_ADMIN_ONLY'
+    USING ERRCODE = '42501';
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.current_user_org_id() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.current_user_role() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.require_current_user_admin() FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.current_user_org_id() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.current_user_role() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.require_current_user_admin() TO authenticated;
 
 GRANT EXECUTE ON FUNCTION public.current_user_org_id() TO service_role;
 GRANT EXECUTE ON FUNCTION public.current_user_role() TO service_role;
+GRANT EXECUTE ON FUNCTION public.require_current_user_admin() TO service_role;
 
 -- ============================================================
 -- ROW LEVEL SECURITY
