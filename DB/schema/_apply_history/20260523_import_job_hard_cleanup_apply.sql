@@ -1,0 +1,23 @@
+-- 2026-05-23
+-- Scope:
+-- - bulk_hard_delete_import_jobs RPC
+-- - one-time live cleanup of import_jobs and staging rows
+-- - Settings page import navigation cleanup
+--
+-- Notes:
+-- - Live cleanup hard-deleted active import_jobs.
+-- - Staging rows were removed by import_jobs FK cascade.
+-- - Imported business data in inventory_items, patients, trials, etc. was not deleted.
+-- - Applied to Supabase project sljxmsydtnnvimbslarp with:
+--   - add_bulk_hard_delete_import_jobs
+--
+-- Live post-check after cleanup:
+-- - public.import_jobs: 0 rows
+-- - public.inventory_import_rows: 0 rows
+-- - public.patients_import_rows: 0 rows
+-- - public.patients_legacy_devices_import_rows: 0 rows
+-- - dashboard_kpis importErrorJobCount: 0
+-- - dashboard_kpis inventoryImportErrorRowCount: 0
+--
+-- Canonical definitions live in:
+-- - DB/schema/inventory/bulk_hard_delete_import_jobs.rpc.sql

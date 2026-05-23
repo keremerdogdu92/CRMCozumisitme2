@@ -21,7 +21,7 @@ import {
   getPatientsImportJobSummary,
   getLegacyDevicesImportJobSummary,
   getInventoryImportJobSummary,
-  bulkSoftDeleteImportErrorJobs,
+  bulkHardDeleteImportJobs,
 } from './api.jobs';
 import { LegacyDeviceRowFixModal } from './LegacyDeviceRowFixModal';
 import { PatientRowFixModal } from './PatientRowFixModal';
@@ -193,7 +193,7 @@ export function ImportFixCenterSection() {
 
   async function handleBulkClearErrors() {
     const confirmed = window.confirm(
-      'Tum eski import hata joblarini gizlemek istiyor musunuz? Bu islem hard delete yapmaz; admin daha sonra restore edebilir.',
+      'Tum eski import job gecmisini ve staging satirlarini temizlemek istiyor musunuz? Import edilmis stok/hasta verisi silinmez.',
     );
     if (!confirmed) return;
 
@@ -202,9 +202,9 @@ export function ImportFixCenterSection() {
     setBulkClearMessage(null);
 
     try {
-      const deletedCount = await bulkSoftDeleteImportErrorJobs();
+      const deletedCount = await bulkHardDeleteImportJobs();
       setBulkClearMessage(
-        `${deletedCount} import hata job'u temizlendi. Yeni importlar etkilenmez.`,
+        `${deletedCount} import job temizlendi. Import edilmis veriler korunur.`,
       );
       setRefreshKey((value) => value + 1);
       queryClient.invalidateQueries({
@@ -272,7 +272,7 @@ export function ImportFixCenterSection() {
         >
           {bulkClearLoading
             ? 'Temizleniyor...'
-            : 'Tum eski import hatalarini temizle'}
+            : 'Tum eski import joblarini temizle'}
         </button>
       </div>
 

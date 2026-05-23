@@ -212,7 +212,7 @@ export default function DashboardPage() {
               </p>
             </div>
             <Link
-              to="/settings"
+              to="/settings?tab=imports&focus=fix-center"
               className="text-xs font-semibold text-amber-900 underline"
             >
               Import Fix Center
@@ -299,7 +299,7 @@ export default function DashboardPage() {
             Stok Uyarilari
           </h3>
           <Link
-            to="/settings"
+            to="/settings?tab=catalog-stock"
             className="text-xs font-medium text-primary-700 hover:text-primary-800"
           >
             Esikleri yonet

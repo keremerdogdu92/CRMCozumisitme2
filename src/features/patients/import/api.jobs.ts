@@ -406,3 +406,20 @@ export async function bulkSoftDeleteImportErrorJobs(): Promise<number> {
 
   return Number(data ?? 0);
 }
+
+export async function bulkHardDeleteImportJobs(): Promise<number> {
+  const { data, error } = await supabaseClient.rpc(
+    'bulk_hard_delete_import_jobs',
+    {
+      p_target_entity: null,
+      p_before: new Date().toISOString(),
+      p_reason: 'Import Fix Center hard cleanup',
+    },
+  );
+
+  if (error) {
+    throw new Error('Failed to clear import jobs: ' + error.message);
+  }
+
+  return Number(data ?? 0);
+}
