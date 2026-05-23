@@ -1,0 +1,23 @@
+-- 2026-05-23
+-- Scope:
+-- - meetings follow-up alert state columns
+-- - dashboard_upcoming_meetings now tracks only armed next_at alerts
+-- - create_dashboard_follow_up_meeting RPC
+-- - bulk_soft_delete_import_error_jobs RPC
+-- - dashboard_kpis import error job count includes all import targets
+--
+-- Notes:
+-- - Old meetings are not backfilled into follow-up alerts.
+-- - New meetings with next_at get follow_up_alert_armed_at when created from the app.
+-- - Follow-up alerts are cleared only by creating a new meeting through the dashboard RPC.
+-- - Import cleanup soft-deletes import_jobs; staging rows are preserved by FK history.
+-- - Applied to Supabase project sljxmsydtnnvimbslarp with:
+--   - dashboard_follow_up_alerts_import_cleanup
+--   - dashboard_import_error_counts_replace_block
+--
+-- Canonical definitions live in:
+-- - DB/schema/meetings/meetings.sql
+-- - DB/schema/meetings/create_dashboard_follow_up_meeting.rpc.sql
+-- - DB/schema/dashboard/dashboard_upcoming_meetings.rpc.sql
+-- - DB/schema/dashboard/dashboard_kpis.rpc.sql
+-- - DB/schema/inventory/bulk_soft_delete_import_error_jobs.rpc.sql

@@ -389,3 +389,20 @@ export async function fetchInventoryImportErrorRows(
 
   return (data ?? []) as InventoryImportRow[];
 }
+
+export async function bulkSoftDeleteImportErrorJobs(): Promise<number> {
+  const { data, error } = await supabaseClient.rpc(
+    'bulk_soft_delete_import_error_jobs',
+    {
+      p_target_entity: null,
+      p_before: new Date().toISOString(),
+      p_reason: 'Import Fix Center bulk cleanup',
+    },
+  );
+
+  if (error) {
+    throw new Error('Failed to clear import error jobs: ' + error.message);
+  }
+
+  return Number(data ?? 0);
+}

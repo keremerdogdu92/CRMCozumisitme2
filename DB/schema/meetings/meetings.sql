@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS public.meetings (
   meeting_type text NOT NULL DEFAULT 'patient'::text,
   subject_id uuid NULL,
   subject_name text NULL,
+  follow_up_alert_armed_at timestamptz NULL,
+  follow_up_alert_dismissed_at timestamptz NULL,
+  follow_up_alert_dismissed_by uuid NULL,
+  follow_up_alert_dismissed_next_at timestamptz NULL,
 
   -- Soft delete columns
   deleted_at timestamptz NULL,
@@ -69,6 +73,27 @@ CREATE TABLE IF NOT EXISTS public.meetings (
     ON DELETE SET NULL
 ) TABLESPACE pg_default;
 
+ALTER TABLE public.meetings
+  ADD COLUMN IF NOT EXISTS follow_up_alert_armed_at timestamptz NULL,
+  ADD COLUMN IF NOT EXISTS follow_up_alert_dismissed_at timestamptz NULL,
+  ADD COLUMN IF NOT EXISTS follow_up_alert_dismissed_by uuid NULL,
+  ADD COLUMN IF NOT EXISTS follow_up_alert_dismissed_next_at timestamptz NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'meetings_follow_up_alert_dismissed_by_fkey'
+  ) THEN
+    ALTER TABLE public.meetings
+      ADD CONSTRAINT meetings_follow_up_alert_dismissed_by_fkey
+      FOREIGN KEY (follow_up_alert_dismissed_by)
+      REFERENCES auth.users (id)
+      ON DELETE SET NULL;
+  END IF;
+END$$;
+
 -- Trigger (kept as-is; fires on soft delete updates too)
 DROP TRIGGER IF EXISTS meeting_after_write_trigger ON public.meetings;
 
@@ -84,6 +109,12 @@ EXECUTE FUNCTION meeting_after_write();
 -- Soft delete filtering performance
 CREATE INDEX IF NOT EXISTS meetings_org_deleted_at_idx
 ON public.meetings (org_id, deleted_at);
+
+CREATE INDEX IF NOT EXISTS meetings_org_follow_up_alert_idx
+ON public.meetings (org_id, next_at)
+WHERE deleted_at IS NULL
+  AND follow_up_alert_armed_at IS NOT NULL
+  AND next_at IS NOT NULL;
 
 -- ============================================================
 -- SOFT DELETE RPCs (UI must call RPC; hard delete is disabled)

@@ -325,6 +325,7 @@ export async function createMeeting(input: NewMeetingForm): Promise<string> {
       next_at: nextAtIso,
       satisfaction_10: satisfaction,
       created_by: user.id,
+      follow_up_alert_armed_at: nextAtIso ? new Date().toISOString() : null,
     })
     .select('id')
     .limit(1);

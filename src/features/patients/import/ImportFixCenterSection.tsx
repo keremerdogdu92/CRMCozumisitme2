@@ -4,6 +4,7 @@
 // opens per-row fix modals for quick corrections.
 
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabaseClient } from '../../../utils/supabaseClient';
 import type {
   PatientsImportStatusSummary,
@@ -20,6 +21,7 @@ import {
   getPatientsImportJobSummary,
   getLegacyDevicesImportJobSummary,
   getInventoryImportJobSummary,
+  bulkSoftDeleteImportErrorJobs,
 } from './api.jobs';
 import { LegacyDeviceRowFixModal } from './LegacyDeviceRowFixModal';
 import { PatientRowFixModal } from './PatientRowFixModal';
@@ -39,8 +41,16 @@ type ImportJobRow = {
 
 type ImportDashboardTab = 'inventory' | 'patients' | 'legacy';
 
+function getTargetEntityForTab(tab: ImportDashboardTab): string {
+  if (tab === 'inventory') return 'inventory';
+  if (tab === 'patients') return 'patients';
+  return 'legacy_patient_devices';
+}
+
 export function ImportFixCenterSection() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<ImportDashboardTab>('inventory');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const [jobs, setJobs] = useState<ImportJobRow[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
@@ -67,6 +77,9 @@ export function ImportFixCenterSection() {
   >([]);
   const [rowsLoading, setRowsLoading] = useState(false);
   const [rowsError, setRowsError] = useState<string | null>(null);
+  const [bulkClearLoading, setBulkClearLoading] = useState(false);
+  const [bulkClearMessage, setBulkClearMessage] = useState<string | null>(null);
+  const [bulkClearError, setBulkClearError] = useState<string | null>(null);
 
   const [fixPatientRow, setFixPatientRow] = useState<PatientsImportRow | null>(
     null,
@@ -91,12 +104,7 @@ export function ImportFixCenterSection() {
       setFixPatientRow(null);
       setFixLegacyRow(null);
 
-      const target =
-        activeTab === 'inventory'
-          ? 'inventory'
-          : activeTab === 'patients'
-            ? 'patients'
-            : 'legacy_patient_devices';
+      const target = getTargetEntityForTab(activeTab);
 
       try {
         const { data, error } = await supabaseClient
@@ -105,6 +113,7 @@ export function ImportFixCenterSection() {
             'id, org_id, target_entity, status, row_count, error_count, created_at, finished_at, source_filename',
           )
           .eq('target_entity', target)
+          .is('deleted_at', null)
           .order('created_at', { ascending: false })
           .limit(20);
 
@@ -121,7 +130,7 @@ export function ImportFixCenterSection() {
     };
 
     void loadJobs();
-  }, [activeTab]);
+  }, [activeTab, refreshKey]);
 
   async function refreshSelectedJob(job: ImportJobRow | null) {
     if (!job) return;
@@ -182,6 +191,35 @@ export function ImportFixCenterSection() {
     void refreshSelectedJob(job);
   }
 
+  async function handleBulkClearErrors() {
+    const confirmed = window.confirm(
+      'Tum eski import hata joblarini gizlemek istiyor musunuz? Bu islem hard delete yapmaz; admin daha sonra restore edebilir.',
+    );
+    if (!confirmed) return;
+
+    setBulkClearLoading(true);
+    setBulkClearError(null);
+    setBulkClearMessage(null);
+
+    try {
+      const deletedCount = await bulkSoftDeleteImportErrorJobs();
+      setBulkClearMessage(
+        `${deletedCount} import hata job'u temizlendi. Yeni importlar etkilenmez.`,
+      );
+      setRefreshKey((value) => value + 1);
+      queryClient.invalidateQueries({
+        predicate: (q) =>
+          Array.isArray(q.queryKey) && q.queryKey[0] === 'dashboard',
+      });
+    } catch (err) {
+      setBulkClearError(
+        (err as Error)?.message ?? 'Import hata temizleme basarisiz oldu.',
+      );
+    } finally {
+      setBulkClearLoading(false);
+    }
+  }
+
   const showInventoryErrors = selectedJob?.target_entity === 'inventory';
   const showPatientErrors = selectedJob?.target_entity === 'patients';
   const showLegacyErrors =
@@ -190,41 +228,65 @@ export function ImportFixCenterSection() {
   return (
     <div className="space-y-3 text-[11px]">
       {/* Tabs */}
-      <div className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5 text-xs">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={() => setActiveTab('inventory')}
+            className={`rounded px-3 py-1 font-medium ${
+              activeTab === 'inventory'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Stok import hatalari
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('patients')}
+            className={`rounded px-3 py-1 font-medium ${
+              activeTab === 'patients'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Hasta import jobs
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('legacy')}
+            className={`rounded px-3 py-1 font-medium ${
+              activeTab === 'legacy'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Legacy cihaz import jobs
+          </button>
+        </div>
         <button
           type="button"
-          onClick={() => setActiveTab('inventory')}
-          className={`rounded px-3 py-1 font-medium ${
-            activeTab === 'inventory'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
+          onClick={handleBulkClearErrors}
+          disabled={bulkClearLoading}
+          className="self-start rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Stok import hatalari
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('patients')}
-          className={`rounded px-3 py-1 font-medium ${
-            activeTab === 'patients'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          Hasta import jobs
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('legacy')}
-          className={`rounded px-3 py-1 font-medium ${
-            activeTab === 'legacy'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          Legacy cihaz import jobs
+          {bulkClearLoading
+            ? 'Temizleniyor...'
+            : 'Tum eski import hatalarini temizle'}
         </button>
       </div>
+
+      {bulkClearMessage && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800">
+          {bulkClearMessage}
+        </div>
+      )}
+
+      {bulkClearError && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
+          {bulkClearError}
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)]">
         {/* Jobs list */}

@@ -1,12 +1,26 @@
-import { useMemo } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { CalendarPlus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCurrentProfile } from '../features/auth/useCurrentProfile';
-import { useDashboard } from '../features/dashboard/api';
+import {
+  createDashboardFollowUpMeeting,
+  type CreateDashboardFollowUpMeetingInput,
+  useDashboard,
+} from '../features/dashboard/api';
+import type { UpcomingMeetingItem } from '../features/dashboard/types';
 
 type MetricRow = {
   label: string;
   value: number | undefined;
   hint?: string;
+};
+
+type FollowUpFormState = {
+  subject: string;
+  note: string;
+  at: string;
+  nextAt: string;
 };
 
 function getIstanbulMonthStartIso(d: Date): string {
@@ -22,8 +36,31 @@ function getIstanbulMonthStartIso(d: Date): string {
   return `${year}-${month}-01T00:00:00+03:00`;
 }
 
+function getIstanbulDateInputValue(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Istanbul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
+function dateInputToIstanbulIso(value: string): string {
+  return new Date(`${value}T12:00:00+03:00`).toISOString();
+}
+
+function createFollowUpFormState(): FollowUpFormState {
+  return {
+    subject: 'Telefon gorusmesi',
+    note: '',
+    at: getIstanbulDateInputValue(new Date()),
+    nextAt: '',
+  };
+}
+
 export default function DashboardPage() {
   const monthStartIso = useMemo(() => getIstanbulMonthStartIso(new Date()), []);
+  const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error } = useDashboard(monthStartIso);
   const { data: profile } = useCurrentProfile();
@@ -31,6 +68,31 @@ export default function DashboardPage() {
   const kpis = data?.kpis;
   const upcoming = data?.upcomingMeetings ?? [];
   const stockWarnings = data?.stockWarnings ?? [];
+  const [activeFollowUp, setActiveFollowUp] =
+    useState<UpcomingMeetingItem | null>(null);
+  const [followUpForm, setFollowUpForm] = useState<FollowUpFormState>(
+    createFollowUpFormState,
+  );
+  const [followUpFormError, setFollowUpFormError] = useState<string | null>(
+    null,
+  );
+
+  const followUpMutation = useMutation<
+    string,
+    Error,
+    CreateDashboardFollowUpMeetingInput
+  >({
+    mutationFn: createDashboardFollowUpMeeting,
+    onSuccess: () => {
+      setActiveFollowUp(null);
+      setFollowUpForm(createFollowUpFormState());
+      queryClient.invalidateQueries({
+        predicate: (q) =>
+          Array.isArray(q.queryKey) &&
+          (q.queryKey[0] === 'dashboard' || q.queryKey[0] === 'meetings'),
+      });
+    },
+  });
 
   const operationalRows: MetricRow[] = [
     { label: 'SGK Sisteme Girilen', value: kpis?.sgkEnteredThisMonthTotal },
@@ -67,6 +129,47 @@ export default function DashboardPage() {
   ];
 
   const rows = isAdmin ? [...adminRows, ...operationalRows] : operationalRows;
+
+  function openFollowUpModal(item: UpcomingMeetingItem) {
+    setActiveFollowUp(item);
+    setFollowUpForm(createFollowUpFormState());
+    setFollowUpFormError(null);
+    followUpMutation.reset();
+  }
+
+  function closeFollowUpModal() {
+    if (followUpMutation.isPending) return;
+    setActiveFollowUp(null);
+    setFollowUpFormError(null);
+  }
+
+  function handleFollowUpSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeFollowUp) return;
+
+    const subject = followUpForm.subject.trim();
+    if (!subject) {
+      setFollowUpFormError('Baslik zorunludur.');
+      return;
+    }
+
+    if (!followUpForm.at) {
+      setFollowUpFormError('Gorusme tarihi zorunludur.');
+      return;
+    }
+
+    setFollowUpFormError(null);
+    followUpMutation.mutate({
+      sourceMeetingId: activeFollowUp.id,
+      subject,
+      note: followUpForm.note.trim() || null,
+      at: dateInputToIstanbulIso(followUpForm.at),
+      nextAt: followUpForm.nextAt
+        ? dateInputToIstanbulIso(followUpForm.nextAt)
+        : null,
+      satisfaction10: null,
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -169,6 +272,19 @@ export default function DashboardPage() {
                         {item.meetingType} - {displayDate}
                       </p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => openFollowUpModal(item)}
+                      className={
+                        'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ' +
+                        (isError
+                          ? 'bg-red-100 text-red-800 hover:bg-red-200'
+                          : 'bg-amber-100 text-amber-800 hover:bg-amber-200')
+                      }
+                    >
+                      <CalendarPlus className="h-3.5 w-3.5" />
+                      Gorusme gir
+                    </button>
                   </li>
                 );
               })}
@@ -247,6 +363,122 @@ export default function DashboardPage() {
           )}
         </div>
       </section>
+
+      {activeFollowUp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3">
+          <div className="w-full max-w-lg rounded-lg bg-white p-4 shadow-lg">
+            <div className="mb-3">
+              <h2 className="text-sm font-semibold text-slate-900">
+                Gorusme gir
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                {activeFollowUp.subjectName ||
+                  activeFollowUp.subject ||
+                  'Kayit'}{' '}
+                icin takip uyarisi, bu gorusme kaydedildikten sonra kapanir.
+              </p>
+            </div>
+
+            <form className="space-y-3" onSubmit={handleFollowUpSubmit}>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700">
+                  Baslik
+                </label>
+                <input
+                  type="text"
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  value={followUpForm.subject}
+                  onChange={(event) =>
+                    setFollowUpForm((form) => ({
+                      ...form,
+                      subject: event.target.value,
+                    }))
+                  }
+                  placeholder="Orn: Telefon gorusmesi"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700">
+                  Not
+                </label>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  value={followUpForm.note}
+                  onChange={(event) =>
+                    setFollowUpForm((form) => ({
+                      ...form,
+                      note: event.target.value,
+                    }))
+                  }
+                  placeholder="Orn: Telefon acildi, acilmadi, tekrar aranacak..."
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                    Gorusme tarihi
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    value={followUpForm.at}
+                    onChange={(event) =>
+                      setFollowUpForm((form) => ({
+                        ...form,
+                        at: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                    Yeni sonraki gorusme
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    value={followUpForm.nextAt}
+                    onChange={(event) =>
+                      setFollowUpForm((form) => ({
+                        ...form,
+                        nextAt: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              {(followUpFormError || followUpMutation.error) && (
+                <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {followUpFormError || followUpMutation.error?.message}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={closeFollowUpModal}
+                  disabled={followUpMutation.isPending}
+                  className="rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Vazgec
+                </button>
+                <button
+                  type="submit"
+                  disabled={followUpMutation.isPending}
+                  className="inline-flex items-center gap-1 rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <CalendarPlus className="h-3.5 w-3.5" />
+                  {followUpMutation.isPending ? 'Kaydediliyor...' : 'Kaydet'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

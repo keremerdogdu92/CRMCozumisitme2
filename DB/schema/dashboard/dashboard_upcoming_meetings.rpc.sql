@@ -36,12 +36,17 @@ with org_ctx as (
     m.subject_name,
     m.at,
     m.next_at,
-    coalesce(m.next_at, m.at) as follow_up_at
+    m.next_at as follow_up_at
   from public.meetings m
   join org_ctx o on o.org_id is not null and o.org_id = m.org_id
   where m.deleted_at is null
-    and coalesce(m.next_at, m.at) is not null
-    and coalesce(m.next_at, m.at) <= now() + interval '3 days'
+    and m.next_at is not null
+    and m.follow_up_alert_armed_at is not null
+    and m.next_at <= now() + interval '3 days'
+    and (
+      m.follow_up_alert_dismissed_next_at is null
+      or m.follow_up_alert_dismissed_next_at is distinct from m.next_at
+    )
     and (o.is_admin or coalesce(m.meeting_type, '') <> 'reference')
 )
 select

@@ -119,15 +119,27 @@ with org_ctx as (
     count(*) filter (where w.severity = 'error') as critical_count,
     count(*) filter (where w.severity = 'warning') as low_count
   from public.dashboard_stock_warnings(100000, (select org_id from org_ctx)) w
+), inventory_error_jobs as (
+  select distinct r.job_id
+  from public.inventory_import_rows r
+  where r.valid = false
+    and r.resolved_at is null
+), patient_error_jobs as (
+  select distinct r.job_id
+  from public.patients_import_rows r
+  where r.status = 'error'
+), legacy_error_jobs as (
+  select distinct r.job_id
+  from public.patients_legacy_devices_import_rows r
+  where r.status = 'error'
 ), import_counts as (
   select
-    coalesce(count(*) filter (
-      where j.deleted_at is null
-        and j.target_entity = 'inventory'
-        and (
-          j.status = 'failed'
-          or coalesce(j.error_count, 0) > 0
-        )
+    coalesce(count(distinct j.id) filter (
+      where j.status = 'failed'
+        or coalesce(j.error_count, 0) > 0
+        or ie.job_id is not null
+        or pe.job_id is not null
+        or le.job_id is not null
     ), 0) as import_error_job_count,
     coalesce((
       select count(*)
@@ -141,6 +153,11 @@ with org_ctx as (
     ), 0) as inventory_import_error_row_count
   from public.import_jobs j
   join org_ctx o on o.org_id is not null and o.org_id = j.org_id
+  left join inventory_error_jobs ie on ie.job_id = j.id
+  left join patient_error_jobs pe on pe.job_id = j.id
+  left join legacy_error_jobs le on le.job_id = j.id
+  where j.deleted_at is null
+    and j.target_entity in ('inventory', 'patients', 'trials', 'legacy_patient_devices')
 )
 select
   case when (select is_admin from org_ctx) then coalesce((

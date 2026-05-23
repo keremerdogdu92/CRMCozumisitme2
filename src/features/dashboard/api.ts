@@ -33,6 +33,15 @@ type StockWarningRpcRow = {
   severity: string | null;
 };
 
+export type CreateDashboardFollowUpMeetingInput = {
+  sourceMeetingId: string;
+  subject: string;
+  note: string | null;
+  at: string;
+  nextAt: string | null;
+  satisfaction10?: number | null;
+};
+
 function toNumber(value: unknown): number {
   if (value === null || value === undefined) return 0;
   const num = typeof value === 'number' ? value : Number(value);
@@ -129,6 +138,37 @@ export async function fetchDashboardKpis(
       'inventoryImportErrorRowCount',
     ),
   };
+}
+
+export async function createDashboardFollowUpMeeting(
+  input: CreateDashboardFollowUpMeetingInput,
+): Promise<string> {
+  const { data, error } = await supabaseClient.rpc(
+    'create_dashboard_follow_up_meeting',
+    {
+      p_source_meeting_id: input.sourceMeetingId,
+      p_subject: input.subject,
+      p_note: input.note,
+      p_at: input.at,
+      p_next_at: input.nextAt,
+      p_satisfaction_10: input.satisfaction10 ?? null,
+    },
+  );
+
+  if (error) {
+    console.error('DASHBOARD_FOLLOW_UP_CREATE_FAILED', error.message);
+    throw new Error(
+      `DASHBOARD_FOLLOW_UP_CREATE_FAILED: ${
+        error.message ?? 'Unknown error'
+      }`,
+    );
+  }
+
+  if (!data) {
+    throw new Error('DASHBOARD_FOLLOW_UP_CREATE_FAILED: RPC returned empty id');
+  }
+
+  return String(data);
 }
 
 /**
