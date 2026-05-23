@@ -25,8 +25,9 @@ type Props = {
   /**
    * Called when user clicks "Geri getir".
    * Caller should handle confirm and actual RPC mutation.
+   * If omitted, deleted rows render no restore action.
    */
-  onRestore: () => void;
+  onRestore?: () => void;
 
   /**
    * Optional: override button labels.
@@ -76,6 +77,7 @@ export function SoftDeleteRowActionButton({
   return (
     <span className={className ?? ''}>
       {isDeleted ? (
+        onRestore ? (
         <button
           type="button"
           disabled={isBusy}
@@ -88,6 +90,7 @@ export function SoftDeleteRowActionButton({
         >
           {restoreLabel ?? 'Geri getir'}
         </button>
+        ) : null
       ) : (
         <button
           type="button"

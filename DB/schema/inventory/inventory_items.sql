@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS public.inventory_items (
   serial_no text NULL,
   ear_side text NULL,
   status text NOT NULL DEFAULT 'in_stock'::text,
+  catalog_model_id uuid NULL,
   purchase_price numeric(12, 2) NULL,
   list_price numeric(12, 2) NULL,
   sold_patient_id uuid NULL,
@@ -44,6 +45,11 @@ CREATE TABLE IF NOT EXISTS public.inventory_items (
 
   CONSTRAINT inventory_items_org_id_fkey FOREIGN KEY (org_id)
     REFERENCES public.orgs (id) ON DELETE CASCADE,
+
+  CONSTRAINT inventory_items_catalog_model_id_fkey
+    FOREIGN KEY (catalog_model_id)
+    REFERENCES public.device_catalog_models (id)
+    ON DELETE SET NULL,
 
   CONSTRAINT inventory_items_deleted_by_fkey
     FOREIGN KEY (deleted_by) REFERENCES auth.users (id) ON DELETE SET NULL,
@@ -78,6 +84,13 @@ CREATE INDEX IF NOT EXISTS inventory_items_org_model_idx
 ON public.inventory_items USING btree (org_id, model)
 TABLESPACE pg_default
 WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS inventory_items_catalog_model_idx
+ON public.inventory_items (org_id, catalog_model_id)
+WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS inventory_items_catalog_model_fk_idx
+ON public.inventory_items (catalog_model_id);
 
 -- Soft delete filtering performance
 CREATE INDEX IF NOT EXISTS inventory_items_org_deleted_at_idx
@@ -125,6 +138,8 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  PERFORM public.require_current_user_admin();
+
   -- Idempotent: only restore if deleted.
   UPDATE public.inventory_items
   SET deleted_at = NULL,

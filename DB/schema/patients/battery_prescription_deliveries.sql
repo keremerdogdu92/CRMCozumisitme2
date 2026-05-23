@@ -138,10 +138,7 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
-  IF public.current_user_role() <> 'admin' THEN
-    RAISE EXCEPTION 'FORBIDDEN_ADMIN_ONLY'
-      USING ERRCODE = '42501';
-  END IF;
+  PERFORM public.require_current_user_admin();
 
   UPDATE public.battery_prescription_deliveries
   SET deleted_at = NULL,

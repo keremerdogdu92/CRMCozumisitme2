@@ -33,6 +33,7 @@ type InventoryItemDbRow = {
   brand: string;
   model: string;
   item_type: InventoryItemType;
+  catalog_model_id: string | null;
   barcode: string | null;
   serial_no: string | null;
   ear_side: InventoryItemRow['ear_side'];
@@ -85,6 +86,7 @@ export async function fetchInventoryItems(
       brand,
       model,
       item_type,
+      catalog_model_id,
       barcode,
       serial_no,
       ear_side,
@@ -119,6 +121,7 @@ export async function fetchInventoryItems(
       brand: row.brand as string,
       model: row.model as string,
       item_type: row.item_type as InventoryItemType,
+      catalog_model_id: (row.catalog_model_id as string | null) ?? null,
       barcode: (row.barcode as string | null) ?? null,
       serial_no: (row.serial_no as string | null) ?? null,
       ear_side: (row.ear_side as InventoryItemRow['ear_side']) ?? null,

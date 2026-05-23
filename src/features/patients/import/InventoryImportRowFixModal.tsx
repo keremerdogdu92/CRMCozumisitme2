@@ -50,6 +50,7 @@ export function InventoryImportRowFixModal({ row, onClose, onFixed }: Props) {
 
   const [brand, setBrand] = useState(row.raw_brand ?? '');
   const [model, setModel] = useState(row.raw_model ?? '');
+  const [catalogModelId, setCatalogModelId] = useState<string | null>(null);
   const [itemType, setItemType] = useState<InventoryItemType>(
     normalizeInitialItemType(row.raw_item_type),
   );
@@ -143,7 +144,8 @@ export function InventoryImportRowFixModal({ row, onClose, onFixed }: Props) {
   function handleSelectCatalog(row: InventoryCatalogSearchRow) {
     setBrand(row.brand);
     setModel(row.model);
-    setItemType(row.itemType);
+    setItemType(row.itemType as InventoryItemType);
+    setCatalogModelId(row.catalogModelId);
     setPurchasePrice(formatMoneyTr(row.purchase_price));
     setListPrice(formatMoneyTr(row.list_price));
     setResolutionNote(
@@ -202,6 +204,7 @@ export function InventoryImportRowFixModal({ row, onClose, onFixed }: Props) {
         brand: brand.trim(),
         model: model.trim(),
         itemType,
+        catalogModelId,
         barcode: barcode.trim() || null,
         serialNo: serialNo.trim(),
         status,
@@ -255,7 +258,10 @@ export function InventoryImportRowFixModal({ row, onClose, onFixed }: Props) {
               </label>
               <input
                 value={brand}
-                onChange={(e) => setBrand(e.target.value)}
+                onChange={(e) => {
+                  setBrand(e.target.value);
+                  setCatalogModelId(null);
+                }}
                 className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
               />
             </div>
@@ -265,7 +271,10 @@ export function InventoryImportRowFixModal({ row, onClose, onFixed }: Props) {
               </label>
               <input
                 value={model}
-                onChange={(e) => setModel(e.target.value)}
+                onChange={(e) => {
+                  setModel(e.target.value);
+                  setCatalogModelId(null);
+                }}
                 className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
               />
             </div>
@@ -275,7 +284,10 @@ export function InventoryImportRowFixModal({ row, onClose, onFixed }: Props) {
               </label>
               <select
                 value={itemType}
-                onChange={(e) => setItemType(e.target.value as InventoryItemType)}
+                onChange={(e) => {
+                  setItemType(e.target.value as InventoryItemType);
+                  setCatalogModelId(null);
+                }}
                 className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
               >
                 <option value="hearing_aid">Isitme cihazi</option>

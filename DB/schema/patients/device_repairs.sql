@@ -157,6 +157,8 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  PERFORM public.require_current_user_admin();
+
   UPDATE public.device_repairs
   SET deleted_at = now(),
       deleted_by = auth.uid(),
@@ -175,6 +177,8 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  PERFORM public.require_current_user_admin();
+
   UPDATE public.device_repairs
   SET deleted_at = NULL,
       deleted_by = NULL,

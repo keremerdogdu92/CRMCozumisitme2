@@ -19,8 +19,14 @@ create or replace function public.dashboard_kpis(
   "devicePatientsCount" bigint,
   "cardFeeTotal" numeric,
   "referenceCommissionTotal" numeric,
-  "unpaidInstallmentsDueThisMonth" numeric
-) language sql stable as $$
+  "unpaidInstallmentsDueThisMonth" numeric,
+  "criticalStockModelCount" bigint,
+  "lowStockModelCount" bigint,
+  "importErrorJobCount" bigint,
+  "inventoryImportErrorRowCount" bigint
+) language sql stable
+set search_path = public, pg_temp
+as $$
 with org_ctx as (
   select
     case
@@ -108,6 +114,33 @@ with org_ctx as (
   from plan_schedules ps
   cross join window_bounds w
   group by ps.org_id, ps.patient_id, w.month_start_ist_date, w.month_end_ist_date, w.month_end_utc
+), stock_warning_counts as (
+  select
+    count(*) filter (where w.severity = 'error') as critical_count,
+    count(*) filter (where w.severity = 'warning') as low_count
+  from public.dashboard_stock_warnings(100000, (select org_id from org_ctx)) w
+), import_counts as (
+  select
+    coalesce(count(*) filter (
+      where j.deleted_at is null
+        and j.target_entity = 'inventory'
+        and (
+          j.status = 'failed'
+          or coalesce(j.error_count, 0) > 0
+        )
+    ), 0) as import_error_job_count,
+    coalesce((
+      select count(*)
+      from public.inventory_import_rows r
+      join public.import_jobs ij on ij.id = r.job_id
+      join org_ctx o on o.org_id is not null and o.org_id = ij.org_id
+      where ij.deleted_at is null
+        and ij.target_entity = 'inventory'
+        and r.valid = false
+        and r.resolved_at is null
+    ), 0) as inventory_import_error_row_count
+  from public.import_jobs j
+  join org_ctx o on o.org_id is not null and o.org_id = j.org_id
 )
 select
   case when (select is_admin from org_ctx) then coalesce((
@@ -205,7 +238,12 @@ select
       )
     )
     from plan_due pd
-  ), 0) as "unpaidInstallmentsDueThisMonth";
+  ), 0) as "unpaidInstallmentsDueThisMonth",
+
+  coalesce((select critical_count from stock_warning_counts), 0) as "criticalStockModelCount",
+  coalesce((select low_count from stock_warning_counts), 0) as "lowStockModelCount",
+  coalesce((select import_error_job_count from import_counts), 0) as "importErrorJobCount",
+  coalesce((select inventory_import_error_row_count from import_counts), 0) as "inventoryImportErrorRowCount";
 $$;
 
 revoke all on function public.dashboard_kpis(timestamptz, uuid) from public, anon;

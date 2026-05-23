@@ -76,16 +76,16 @@ export async function createInventoryItem(input: NewInventoryItemForm): Promise<
 
   let purchase_price: number | null = null;
   let list_price: number | null = null;
+  const catalogRow = await fetchCatalogPriceForInventory({
+    orgId,
+    brand: brand.trim(),
+    model: model.trim(),
+    itemType: itemType as InventoryItemType,
+  });
+  const catalog_model_id = catalogRow?.catalogModelId ?? null;
 
   if (!hasPurchasePrice && !hasListPrice) {
     // Katalogtan fiyatları çek
-    const catalogRow = await fetchCatalogPriceForInventory({
-      orgId,
-      brand: brand.trim(),
-      model: model.trim(),
-      itemType: itemType as InventoryItemType,
-    });
-
     if (!catalogRow) {
       throw new Error(
         'Katalogta bu marka + model + ürün tipi için fiyat bulunamadı. ' +
@@ -121,6 +121,7 @@ export async function createInventoryItem(input: NewInventoryItemForm): Promise<
     brand: brand.trim(),
     model: model.trim(),
     item_type: itemType as InventoryItemType,
+    catalog_model_id,
     ear_side: ear_side_db,
     barcode: barcode.trim() || null,
     serial_no: serialNo.trim() || null,

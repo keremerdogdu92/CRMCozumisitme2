@@ -38,6 +38,7 @@ import {
 } from '../meetings/api';
 import { useOrgSettings } from '../settings/useOrgSettings';
 import { SoftDeleteRowActionButton } from '../../components/softDelete/SoftDeleteRowActionButton';
+import { useCurrentProfile } from '../auth/useCurrentProfile';
 
 type TrialDetailDrawerProps = {
   trial: TrialRow | null;
@@ -112,6 +113,8 @@ function normalizeTrialSide(raw: string | null): string {
 export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { data: profile } = useCurrentProfile();
+  const canRestore = profile?.role === 'admin';
 
   const [activeTab, setActiveTab] = useState<TrialTabId>('summary');
   const [includeDetailsForPrint, setIncludeDetailsForPrint] =
@@ -335,6 +338,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
   };
 
   const handleRestoreClick = () => {
+    if (!canRestore) return;
     if (!trial?.id) return;
 
     const ok = window.confirm('Bu deneme kaydını geri getirmek istiyor musunuz?');
@@ -730,7 +734,7 @@ export function TrialDetailDrawer({ trial, open, onClose }: TrialDetailDrawerPro
                   isBusy={isBusy}
                   size="xs"
                   onSoftDelete={handleSoftDeleteClick}
-                  onRestore={handleRestoreClick}
+                  onRestore={canRestore ? handleRestoreClick : undefined}
                 />
               </div>
 

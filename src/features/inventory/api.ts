@@ -36,7 +36,10 @@ export {
 
 export {
   fetchCatalogPriceForInventory,
+  fetchInventoryStockThresholds,
   searchCatalogPricesForInventory,
+  saveInventoryStockThreshold,
+  CATALOG_ITEM_TYPES,
   fetchCatalogRowsForInventory,
   type InventoryCatalogPriceResult,
   type InventoryCatalogSearchRow,

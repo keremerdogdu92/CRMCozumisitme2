@@ -248,6 +248,7 @@ export function ReferencesTable({
 }: ReferencesTableProps) {
   const { data: profile } = useCurrentProfile();
   const userId = profile?.id ?? null;
+  const canRestore = profile?.role === 'admin';
 
   const queryClient = useQueryClient();
 
@@ -416,6 +417,7 @@ export function ReferencesTable({
   };
 
   const handleRestoreClick = (r: ReferenceRow) => {
+    if (!canRestore) return;
     if (!r.id) return;
 
     // Defensive guard: only restore if currently deleted.
@@ -571,7 +573,7 @@ export function ReferencesTable({
                   isBusy={isMutating}
                   size="xs"
                   onSoftDelete={() => handleSoftDeleteClick(r)}
-                  onRestore={() => handleRestoreClick(r)}
+                  onRestore={canRestore ? () => handleRestoreClick(r) : undefined}
                 />
 
                 <button
@@ -741,7 +743,7 @@ export function ReferencesTable({
                         isBusy={isMutating}
                         size="sm"
                         onSoftDelete={() => handleSoftDeleteClick(r)}
-                        onRestore={() => handleRestoreClick(r)}
+                        onRestore={canRestore ? () => handleRestoreClick(r) : undefined}
                       />
 
                       <button

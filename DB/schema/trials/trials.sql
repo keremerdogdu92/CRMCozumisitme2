@@ -110,6 +110,8 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  PERFORM public.require_current_user_admin();
+
   -- Idempotent: only restore if deleted.
   UPDATE public.trials
   SET deleted_at = NULL,

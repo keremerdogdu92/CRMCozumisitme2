@@ -43,6 +43,10 @@ const EAR_SIDE_OPTIONS: { value: EarSide; label: string }[] = [
   { value: 'none', label: 'Yok / Henüz Atanmadı' },
 ];
 
+function isInventoryItemType(value: string): value is InventoryItemType {
+  return value === 'hearing_aid' || value === 'charger';
+}
+
 function formatMoneyTr(v: number): string {
   // Keep it simple; UI is text-based and backend already parses flexible formats.
   // 25000 -> "25.000"
@@ -230,12 +234,19 @@ export function InventoryNewItemFormCard({
   };
 
   const handleSelectCatalog = (row: InventoryCatalogSearchRow) => {
+    if (!isInventoryItemType(row.itemType)) {
+      setCatalogHint('Bu katalog tipi stok formundan eklenemez.');
+      return;
+    }
+
+    const selectedItemType: InventoryItemType = row.itemType;
+
     setFormState((s) => ({
       ...s,
       brand: row.brand,
       model: row.model,
-      itemType: row.itemType,
-      earSide: row.itemType === 'charger' ? 'none' : s.earSide,
+      itemType: selectedItemType,
+      earSide: selectedItemType === 'charger' ? 'none' : s.earSide,
       purchasePrice: row.purchase_price != null ? formatMoneyTr(row.purchase_price) : '',
       listPrice: row.list_price != null ? formatMoneyTr(row.list_price) : '',
     }));

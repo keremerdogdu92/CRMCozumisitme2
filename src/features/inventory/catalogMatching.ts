@@ -1,13 +1,13 @@
 // src/features/inventory/catalogMatching.ts
 // Pure helpers shared by inventory import, manual stock create, and row fixes.
 
-import type { InventoryItemType } from './types';
+import type { CatalogItemType } from './types';
 
 export type CatalogPriceLike = {
   id?: string | null;
   brand: string | null;
   model: string | null;
-  item_type: InventoryItemType | null;
+  item_type: CatalogItemType | null;
   purchase_price: unknown;
   list_price: unknown;
   valid_from?: string | null;
@@ -44,7 +44,7 @@ export function normalizeBarcodeForLookup(raw: string): string {
 function applyCatalogModelAlias(
   brandKey: string,
   modelKey: string,
-  itemType: InventoryItemType,
+  itemType: CatalogItemType,
 ): string {
   if (brandKey === 'rexton' && itemType === 'hearing_aid') {
     if (modelKey.startsWith('b li ')) {
@@ -58,7 +58,7 @@ function applyCatalogModelAlias(
 export function makeCatalogPriceKey(
   brand: string,
   model: string,
-  itemType: InventoryItemType,
+  itemType: CatalogItemType,
 ): string {
   return `${normalizeCatalogMatchText(brand)}::${normalizeCatalogMatchText(
     model,
@@ -68,7 +68,7 @@ export function makeCatalogPriceKey(
 export function makeCatalogPriceLookupKeys(
   brand: string,
   model: string,
-  itemType: InventoryItemType,
+  itemType: CatalogItemType,
 ): string[] {
   const brandKey = normalizeCatalogMatchText(brand);
   const modelKey = normalizeCatalogMatchText(model);
@@ -103,7 +103,7 @@ export function findCatalogMatch<T extends CatalogPriceLike>(args: {
   rows: T[];
   brand: string;
   model: string;
-  itemType: InventoryItemType;
+  itemType: CatalogItemType;
   barcodeCatalogKey?: string;
 }): CatalogMatchResult<T> | null {
   const { rows, brand, model, itemType, barcodeCatalogKey } = args;

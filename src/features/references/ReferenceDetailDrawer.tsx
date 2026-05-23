@@ -31,6 +31,7 @@ import { ReferencePatientsSection } from './components/ReferencePatientsSection'
 import { ReferenceGiftsSection } from './components/ReferenceGiftsSection';
 import { SoftDeleteRowActionButton } from '../../components/softDelete/SoftDeleteRowActionButton';
 import { restoreReference, softDeleteReference } from './api';
+import { useCurrentProfile } from '../auth/useCurrentProfile';
 
 type ReferenceDetailDrawerProps = {
   reference: ReferenceRow | null;
@@ -44,6 +45,8 @@ export function ReferenceDetailDrawer({
   onClose,
 }: ReferenceDetailDrawerProps) {
   const queryClient = useQueryClient();
+  const { data: profile } = useCurrentProfile();
+  const canRestore = profile?.role === 'admin';
 
   const [activeTab, setActiveTab] = useState<ReferenceTabId>('summary');
 
@@ -117,6 +120,7 @@ export function ReferenceDetailDrawer({
   };
 
   const handleRestoreClick = () => {
+    if (!canRestore) return;
     if (!reference?.id) return;
 
     // Defensive guard: only restore if currently deleted.
@@ -186,7 +190,7 @@ export function ReferenceDetailDrawer({
                 isBusy={isMutating}
                 size="sm"
                 onSoftDelete={handleSoftDeleteClick}
-                onRestore={handleRestoreClick}
+                onRestore={canRestore ? handleRestoreClick : undefined}
               />
             </div>
           </div>

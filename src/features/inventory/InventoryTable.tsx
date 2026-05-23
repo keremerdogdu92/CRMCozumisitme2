@@ -213,6 +213,7 @@ export function InventoryTable({
   const term = search.trim().toLowerCase();
   const { data: profile } = useCurrentProfile();
   const userId = profile?.id ?? null;
+  const canRestore = profile?.role === 'admin';
 
   const {
     state: prefsState,
@@ -362,6 +363,8 @@ export function InventoryTable({
     const isDeleted = !!item.deleted_at;
 
     if (isDeleted) {
+      if (!canRestore) return <span className="text-slate-400">-</span>;
+
       return (
         <button
           type="button"

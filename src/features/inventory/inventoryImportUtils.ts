@@ -53,6 +53,7 @@ export type InventoryItemImportPayload = {
   brand: string;
   model: string;
   item_type: InventoryItemType;
+  catalog_model_id: string | null;
   barcode: string | null;
   serial_no: string | null;
   ear_side: null;
@@ -79,6 +80,7 @@ export type InventoryImportBuildResult = {
  * - Değer: katalogdaki purchase_price/list_price (number | null)
  */
 export type CatalogPriceMapEntry = {
+  catalog_model_id: string | null;
   purchase_price: number | null;
   list_price: number | null;
 };
@@ -349,6 +351,7 @@ export function buildInventoryImportPayload(args: {
     let status: InventoryStatus = 'in_stock';
     let purchasePrice: number | null = null;
     let listPrice: number | null = null;
+    let catalogModelId: string | null = null;
 
     if (valid) {
       const serialKey = rawSerialNo.trim().toUpperCase();
@@ -425,7 +428,7 @@ export function buildInventoryImportPayload(args: {
     }
 
     // 7) Hem CSV'de hem de hesaplanan değerlerde fiyat boşsa → katalogtan doldurmayı dene
-    if (valid && purchasePrice == null && listPrice == null && catalogPriceMap) {
+    if (valid && catalogPriceMap) {
       const lookupKeys = makeSharedCatalogPriceLookupKeys(
         rawBrand,
         rawModel,
@@ -452,9 +455,13 @@ export function buildInventoryImportPayload(args: {
       }
 
       if (catalog) {
-        purchasePrice =
-          typeof catalog.purchase_price === 'number' ? catalog.purchase_price : null;
-        listPrice = typeof catalog.list_price === 'number' ? catalog.list_price : null;
+        catalogModelId = catalog.catalog_model_id ?? null;
+
+        if (purchasePrice == null && listPrice == null) {
+          purchasePrice =
+            typeof catalog.purchase_price === 'number' ? catalog.purchase_price : null;
+          listPrice =
+            typeof catalog.list_price === 'number' ? catalog.list_price : null;
 
         if (purchasePrice === null && listPrice === null) {
           // Katalog satırı var ama her iki fiyat da null → blocking error
@@ -468,7 +475,8 @@ export function buildInventoryImportPayload(args: {
               : 'purchase_price ve list_price CSV’de boş olduğu için katalog fiyatları ile dolduruldu.',
           );
         }
-      } else {
+        }
+      } else if (purchasePrice == null && listPrice == null) {
         // Katalogta hiç satır yok → blocking error
         valid = false;
         blockingError =
@@ -509,6 +517,7 @@ export function buildInventoryImportPayload(args: {
         brand: rawBrand,
         model: rawModel,
         item_type: itemType,
+        catalog_model_id: catalogModelId,
         barcode: rawBarcode || null,
         serial_no: rawSerialNo || null,
         // Yeni stok importunda cihaz yönsüz: ear_side hiç set edilmez.

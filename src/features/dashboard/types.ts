@@ -122,6 +122,10 @@ export type DashboardKpis = {
    * - org-scoped
    */
   unpaidInstallmentsDueThisMonth: number;
+  criticalStockModelCount: number;
+  lowStockModelCount: number;
+  importErrorJobCount: number;
+  inventoryImportErrorRowCount: number;
 };
 
 export type DashboardTask = {
@@ -147,10 +151,24 @@ export type UpcomingMeetingItem = {
   at: string | null;
   /** Optional follow-up time as ISO string (timestamptz). Render in Europe/Istanbul. */
   nextAt: string | null;
+  followUpAt: string | null;
+  alertSeverity: 'warning' | 'error';
+};
+
+export type StockWarningItem = {
+  catalogModelId: string;
+  brand: string;
+  model: string;
+  itemType: string;
+  inStockCount: number;
+  minimumStock: number;
+  thresholdScope: 'general' | 'model';
+  severity: 'warning' | 'error';
 };
 
 export type DashboardResponse = {
   kpis: DashboardKpis;
   tasks: DashboardTask[];
   upcomingMeetings: UpcomingMeetingItem[];
+  stockWarnings: StockWarningItem[];
 };

@@ -69,6 +69,7 @@ export default function PatientsPage() {
 
   const { data: profile } = useCurrentProfile();
   const userId = profile?.id ?? null;
+  const isAdmin = profile?.role === 'admin';
 
   const linkedTrialId = searchParams.get('trialId');
   const focusPatientId = searchParams.get('focusId');
@@ -302,7 +303,7 @@ export default function PatientsPage() {
         patients={filteredPatients}
         onSelectPatient={handleSelectPatient}
         onDeletePatient={handleDeletePatientFromList}
-        onRestorePatient={handleRestorePatientFromList}
+        onRestorePatient={isAdmin ? handleRestorePatientFromList : undefined}
       />
 
       {detailPatient && (

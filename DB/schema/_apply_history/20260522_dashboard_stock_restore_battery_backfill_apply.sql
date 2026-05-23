@@ -1,0 +1,36 @@
+-- 2026-05-22
+-- Applied to Supabase project sljxmsydtnnvimbslarp.
+--
+-- Scope:
+-- - catalog match helpers:
+--   - public.normalize_catalog_match_text(text)
+--   - public.catalog_model_match_key(text, text, text)
+-- - inventory_items.catalog_model_id + FK/indexes
+-- - public.inventory_stock_thresholds table, RLS, grants, indexes
+-- - best-effort inventory_items.catalog_model_id backfill by normalized catalog match
+-- - public.resolve_inventory_import_row(...) with p_catalog_model_id
+-- - dashboard_stock_warnings, dashboard_upcoming_meetings, dashboard_kpis refresh
+-- - restore_* RPCs updated with public.require_current_user_admin()
+-- - battery_prescription_deliveries SGK backfill for active rows where sgk_expected_amount was null
+--
+-- Notes:
+-- - Supabase apply_migration timed out while initializing migration history, so the SQL was applied in smaller
+--   execute_sql batches and verified afterwards.
+-- - Live verification after apply:
+--   - inventory_stock_thresholds exists
+--   - inventory_items.catalog_model_id exists
+--   - resolve_inventory_import_row and dashboard_stock_warnings exist
+--   - catalog alias key for REXTON / B-Lı M Rugged 80 maps to rexton::bicore b li m rugged 80::hearing_aid
+--   - 117 active inventory_items rows were linked to a catalog model by backfill
+--   - active battery deliveries missing SGK amount = 0
+--   - dashboard_kpis runs successfully with the org-scoped service-role test call
+--
+-- Canonical definitions live in:
+-- - DB/schema/core/catalog_match_helpers.sql
+-- - DB/schema/inventory/inventory_items.sql
+-- - DB/schema/inventory/inventory_stock_thresholds.sql
+-- - DB/schema/inventory/resolve_inventory_import_row.rpc.sql
+-- - DB/schema/dashboard/dashboard_stock_warnings.rpc.sql
+-- - DB/schema/dashboard/dashboard_upcoming_meetings.rpc.sql
+-- - DB/schema/dashboard/dashboard_kpis.rpc.sql
+-- - DB/schema/**/restore_*.sql definitions in their table files

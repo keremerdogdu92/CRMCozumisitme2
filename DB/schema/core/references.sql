@@ -102,6 +102,8 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  PERFORM public.require_current_user_admin();
+
   -- Idempotent: only restore if currently deleted.
   UPDATE public.references
   SET deleted_at = NULL,

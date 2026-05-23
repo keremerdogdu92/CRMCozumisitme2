@@ -451,6 +451,7 @@ export function MeetingsTable() {
   }
 
   async function handleRestoreMeeting(m: MeetingRow) {
+    if (!isAdmin) return;
     try {
       await restoreMutation.mutateAsync({ id: m.id });
     } catch {
@@ -749,7 +750,7 @@ export function MeetingsTable() {
                   >
                     Sil
                   </button>
-                ) : (
+                ) : isAdmin ? (
                   <button
                     type="button"
                     disabled={anyPending}
@@ -758,6 +759,8 @@ export function MeetingsTable() {
                   >
                     Geri Getir
                   </button>
+                ) : (
+                  <span className="text-[11px] text-slate-400">Silinmiş</span>
                 )}
               </div>
             </div>
@@ -911,7 +914,7 @@ export function MeetingsTable() {
                                 >
                                   Sil
                                 </button>
-                              ) : (
+                              ) : isAdmin ? (
                                 <button
                                   type="button"
                                   disabled={anyPending}
@@ -920,6 +923,8 @@ export function MeetingsTable() {
                                 >
                                   Geri Getir
                                 </button>
+                              ) : (
+                                <span className="text-slate-400">Silinmiş</span>
                               )}
                             </div>
                           </td>

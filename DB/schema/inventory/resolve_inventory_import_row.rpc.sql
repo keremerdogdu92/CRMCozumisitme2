@@ -1,11 +1,27 @@
 -- DB/schema/inventory/resolve_inventory_import_row.rpc.sql
 -- Atomically resolves one failed inventory import row and inserts an inventory item.
 
+DROP FUNCTION IF EXISTS public.resolve_inventory_import_row(
+  bigint,
+  text,
+  text,
+  text,
+  text,
+  text,
+  text,
+  numeric,
+  numeric,
+  text,
+  text,
+  text
+);
+
 CREATE OR REPLACE FUNCTION public.resolve_inventory_import_row(
   p_row_id bigint,
   p_brand text,
   p_model text,
   p_item_type text,
+  p_catalog_model_id uuid DEFAULT NULL::uuid,
   p_barcode text DEFAULT NULL::text,
   p_serial_no text DEFAULT NULL::text,
   p_status text DEFAULT 'in_stock'::text,
@@ -24,6 +40,7 @@ DECLARE
   v_org_id uuid;
   v_item_id uuid;
   v_error_count integer;
+  v_catalog_item_type text;
 BEGIN
   SELECT j.org_id
   INTO v_org_id
@@ -61,6 +78,24 @@ BEGIN
     RAISE EXCEPTION 'En az bir fiyat gerekli.';
   END IF;
 
+  IF p_catalog_model_id IS NOT NULL THEN
+    SELECT m.item_type
+    INTO v_catalog_item_type
+    FROM public.device_catalog_models m
+    WHERE m.id = p_catalog_model_id
+      AND m.org_id = v_org_id
+      AND m.deleted_at IS NULL
+      AND m.is_active = TRUE;
+
+    IF v_catalog_item_type IS NULL THEN
+      RAISE EXCEPTION 'Secilen katalog modeli bulunamadi veya bu organizasyona ait degil.';
+    END IF;
+
+    IF v_catalog_item_type IS DISTINCT FROM p_item_type THEN
+      RAISE EXCEPTION 'Secilen katalog modelinin urun tipi satir urun tipi ile uyusmuyor.';
+    END IF;
+  END IF;
+
   IF EXISTS (
     SELECT 1
     FROM public.inventory_items i
@@ -76,6 +111,7 @@ BEGIN
     brand,
     model,
     item_type,
+    catalog_model_id,
     barcode,
     serial_no,
     ear_side,
@@ -90,6 +126,7 @@ BEGIN
     btrim(p_brand),
     btrim(p_model),
     p_item_type,
+    p_catalog_model_id,
     nullif(btrim(coalesce(p_barcode, '')), ''),
     btrim(p_serial_no),
     NULL,
@@ -155,6 +192,7 @@ REVOKE ALL ON FUNCTION public.resolve_inventory_import_row(
   text,
   text,
   text,
+  uuid,
   text,
   text,
   text,
@@ -170,6 +208,7 @@ REVOKE ALL ON FUNCTION public.resolve_inventory_import_row(
   text,
   text,
   text,
+  uuid,
   text,
   text,
   text,
@@ -185,6 +224,7 @@ GRANT EXECUTE ON FUNCTION public.resolve_inventory_import_row(
   text,
   text,
   text,
+  uuid,
   text,
   text,
   text,
@@ -200,6 +240,7 @@ GRANT EXECUTE ON FUNCTION public.resolve_inventory_import_row(
   text,
   text,
   text,
+  uuid,
   text,
   text,
   text,

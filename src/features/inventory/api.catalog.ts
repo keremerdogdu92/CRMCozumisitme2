@@ -2,7 +2,11 @@
 // Catalog price helpers for inventory create/import/fix flows.
 
 import { supabaseClient } from '../../utils/supabaseClient';
-import type { InventoryItemType } from './types';
+import type {
+  CatalogItemType,
+  InventoryItemType,
+  InventoryStockThresholdRow,
+} from './types';
 import {
   findCatalogMatch,
   normalizeCatalogMatchText,
@@ -15,7 +19,7 @@ export type InventoryCatalogPriceResult = {
   catalogModelId: string | null;
   brand: string;
   model: string;
-  itemType: InventoryItemType;
+  itemType: CatalogItemType;
   purchase_price: number | null;
   list_price: number | null;
   valid_from: string | null;
@@ -42,7 +46,7 @@ function mapCatalogRow(
     catalogModelId: row.id ?? null,
     brand: row.brand ?? '',
     model: row.model ?? '',
-    itemType: (row.item_type ?? 'hearing_aid') as InventoryItemType,
+    itemType: (row.item_type ?? 'hearing_aid') as CatalogItemType,
     purchase_price: toNumberOrNull(row.purchase_price),
     list_price: toNumberOrNull(row.list_price),
     valid_from: row.valid_from ?? null,
@@ -54,7 +58,7 @@ function mapCatalogRow(
 
 export async function fetchCatalogRowsForInventory(args: {
   orgId: string;
-  itemTypes?: InventoryItemType[];
+  itemTypes?: CatalogItemType[];
 }): Promise<CatalogPriceRow[]> {
   const { orgId, itemTypes } = args;
 
@@ -106,7 +110,7 @@ export async function fetchCatalogPriceForInventory(args: {
 export async function searchCatalogPricesForInventory(args: {
   orgId: string;
   query: string;
-  itemType?: InventoryItemType | 'all';
+  itemType?: InventoryItemType | CatalogItemType | 'all';
   limit?: number;
 }): Promise<InventoryCatalogSearchRow[]> {
   const { orgId, query, itemType = 'all', limit = 20 } = args;
@@ -140,4 +144,100 @@ export async function searchCatalogPricesForInventory(args: {
         details: mapped.details,
       };
     });
+}
+
+export const CATALOG_ITEM_TYPES: CatalogItemType[] = [
+  'hearing_aid',
+  'charger',
+  'receiver',
+  'battery',
+];
+
+export async function fetchInventoryStockThresholds(
+  orgId: string,
+): Promise<InventoryStockThresholdRow[]> {
+  const { data, error } = await supabaseClient
+    .from('inventory_stock_thresholds')
+    .select('id, org_id, item_type, catalog_model_id, minimum_stock')
+    .eq('org_id', orgId);
+
+  if (error) {
+    throw new Error('INVENTORY_STOCK_THRESHOLDS_FETCH: ' + error.message);
+  }
+
+  return (data ?? []) as InventoryStockThresholdRow[];
+}
+
+export async function saveInventoryStockThreshold(args: {
+  orgId: string;
+  itemType: CatalogItemType | null;
+  catalogModelId: string | null;
+  minimumStock: number | null;
+}): Promise<void> {
+  const { orgId, itemType, catalogModelId, minimumStock } = args;
+
+  if (minimumStock == null) {
+    let deleteQuery = supabaseClient
+      .from('inventory_stock_thresholds')
+      .delete()
+      .eq('org_id', orgId);
+
+    deleteQuery = catalogModelId
+      ? deleteQuery.eq('catalog_model_id', catalogModelId)
+      : deleteQuery.is('catalog_model_id', null).eq('item_type', itemType);
+
+    const { error } = await deleteQuery;
+    if (error) {
+      throw new Error('INVENTORY_STOCK_THRESHOLD_DELETE: ' + error.message);
+    }
+    return;
+  }
+
+  if (minimumStock < 0 || !Number.isInteger(minimumStock)) {
+    throw new Error('Minimum stok 0 veya daha buyuk tam sayi olmalidir.');
+  }
+
+  let existingQuery = supabaseClient
+    .from('inventory_stock_thresholds')
+    .select('id')
+    .eq('org_id', orgId);
+
+  existingQuery = catalogModelId
+    ? existingQuery.eq('catalog_model_id', catalogModelId)
+    : existingQuery.is('catalog_model_id', null).eq('item_type', itemType);
+
+  const { data: existing, error: existingError } =
+    await existingQuery.maybeSingle();
+
+  if (existingError) {
+    throw new Error('INVENTORY_STOCK_THRESHOLD_LOOKUP: ' + existingError.message);
+  }
+
+  if (existing?.id) {
+    const { error } = await supabaseClient
+      .from('inventory_stock_thresholds')
+      .update({
+        minimum_stock: minimumStock,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id as string);
+
+    if (error) {
+      throw new Error('INVENTORY_STOCK_THRESHOLD_UPDATE: ' + error.message);
+    }
+    return;
+  }
+
+  const { error } = await supabaseClient
+    .from('inventory_stock_thresholds')
+    .insert({
+      org_id: orgId,
+      item_type: catalogModelId ? null : itemType,
+      catalog_model_id: catalogModelId,
+      minimum_stock: minimumStock,
+    });
+
+  if (error) {
+    throw new Error('INVENTORY_STOCK_THRESHOLD_INSERT: ' + error.message);
+  }
 }

@@ -32,6 +32,7 @@ import {
 } from './catalogMatching';
 
 type CatalogPriceRow = {
+  id: string | null;
   brand: string | null;
   model: string | null;
   item_type: InventoryItemType | null;
@@ -205,7 +206,7 @@ export async function importInventoryFromCsv(
   const catalogPriceMap: CatalogPriceMap = {};
   const barcodeCatalogKeyMap: BarcodeCatalogKeyMap = {};
 
-  const combosNeedingCatalog = new Set<string>();
+  const combosForCatalog = new Set<string>();
   const itemTypesForFilter = new Set<InventoryItemType>();
   const barcodesForLookup = new Set<string>();
 
@@ -213,20 +214,13 @@ export async function importInventoryFromCsv(
     const rawBrand = (row['brand'] ?? row['device_brand'] ?? '').trim();
     const rawModel = (row['model'] ?? row['device_model'] ?? '').trim();
     const rawItemType = (row['item_type'] ?? '').trim();
-    const hasPurchase = (row['purchase_price'] ?? '').trim().length > 0;
-    const hasList =
-      (row['list_price'] ?? '').trim().length > 0 ||
-      (row['device_price'] ?? '').trim().length > 0;
-
-    // Marka/model/item_type yoksa veya zaten fiyat girilmişse → katalog lookup yok
     if (!rawBrand || !rawModel || !rawItemType) return;
-    if (hasPurchase || hasList) return;
 
     try {
       const itemType = normalizeItemType(rawItemType);
       const key = makeCatalogPriceKey(rawBrand, rawModel, itemType);
-      if (!combosNeedingCatalog.has(key)) {
-        combosNeedingCatalog.add(key);
+      if (!combosForCatalog.has(key)) {
+        combosForCatalog.add(key);
         itemTypesForFilter.add(itemType);
       }
       const barcode = normalizeBarcodeForLookup(row['barcode'] ?? '');
@@ -238,7 +232,7 @@ export async function importInventoryFromCsv(
     }
   });
 
-  if (combosNeedingCatalog.size > 0) {
+  if (combosForCatalog.size > 0) {
     const toNumberOrNull = (v: unknown): number | null => {
       if (v === null || v === undefined || v === '') return null;
       const num = Number(v);
@@ -248,7 +242,7 @@ export async function importInventoryFromCsv(
 
     let query = supabaseClient
       .from('current_device_model_prices_public')
-      .select('brand, model, item_type, list_price, purchase_price')
+      .select('id, brand, model, item_type, list_price, purchase_price')
       .eq('org_id', orgId);
 
     const itemTypeList = Array.from(itemTypesForFilter);
@@ -278,6 +272,7 @@ export async function importInventoryFromCsv(
 
       const key = makeCatalogPriceKey(brand, model, itemType);
       catalogPriceMap[key] = {
+        catalog_model_id: row.id ?? null,
         purchase_price: toNumberOrNull(row.purchase_price),
         list_price: toNumberOrNull(row.list_price),
       };

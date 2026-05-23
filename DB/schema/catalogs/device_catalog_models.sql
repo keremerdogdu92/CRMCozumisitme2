@@ -123,6 +123,8 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
+  PERFORM public.require_current_user_admin();
+
   -- Restore within the caller's org only.
   UPDATE public.device_catalog_models
   SET deleted_at = NULL,

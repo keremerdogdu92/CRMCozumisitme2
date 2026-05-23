@@ -12,8 +12,12 @@ create or replace function public.dashboard_upcoming_meetings(
   subject text,
   subject_name text,
   at timestamptz,
-  next_at timestamptz
-) language sql stable as $$
+  next_at timestamptz,
+  follow_up_at timestamptz,
+  alert_severity text
+) language sql stable
+set search_path = public, pg_temp
+as $$
 with org_ctx as (
   select
     case
@@ -32,14 +36,12 @@ with org_ctx as (
     m.subject_name,
     m.at,
     m.next_at,
-    least(
-      coalesce(m.at, 'infinity'::timestamptz),
-      coalesce(m.next_at, 'infinity'::timestamptz)
-    ) as order_at
+    coalesce(m.next_at, m.at) as follow_up_at
   from public.meetings m
   join org_ctx o on o.org_id is not null and o.org_id = m.org_id
   where m.deleted_at is null
-    and (m.at >= now() or m.next_at >= now())
+    and coalesce(m.next_at, m.at) is not null
+    and coalesce(m.next_at, m.at) <= now() + interval '3 days'
     and (o.is_admin or coalesce(m.meeting_type, '') <> 'reference')
 )
 select
@@ -48,9 +50,17 @@ select
   c.subject,
   c.subject_name,
   c.at,
-  c.next_at
+  c.next_at,
+  c.follow_up_at,
+  case
+    when c.follow_up_at <= now() then 'error'
+    else 'warning'
+  end as alert_severity
 from candidates c
-order by c.order_at asc
+order by
+  case when c.follow_up_at <= now() then 0 else 1 end,
+  case when c.follow_up_at <= now() then c.follow_up_at end desc nulls last,
+  case when c.follow_up_at > now() then c.follow_up_at end asc nulls last
 limit greatest(1, coalesce(_limit, 10));
 $$;
 

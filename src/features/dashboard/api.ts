@@ -6,6 +6,7 @@ import { supabaseClient } from '../../utils/supabaseClient';
 import type {
   DashboardKpis,
   DashboardResponse,
+  StockWarningItem,
   UpcomingMeetingItem,
 } from './types';
 import { DASHBOARD_QUERY_KEY } from './api.keys';
@@ -17,6 +18,19 @@ type UpcomingMeetingRpcRow = {
   subject_name: string | null;
   at: string | null;
   next_at: string | null;
+  follow_up_at: string | null;
+  alert_severity: string | null;
+};
+
+type StockWarningRpcRow = {
+  catalog_model_id: string;
+  brand: string | null;
+  model: string | null;
+  item_type: string | null;
+  in_stock_count: unknown;
+  minimum_stock: unknown;
+  threshold_scope: string | null;
+  severity: string | null;
 };
 
 function toNumber(value: unknown): number {
@@ -104,6 +118,16 @@ export async function fetchDashboardKpis(
       firstRow,
       'unpaidInstallmentsDueThisMonth',
     ),
+    criticalStockModelCount: readNumberField(
+      firstRow,
+      'criticalStockModelCount',
+    ),
+    lowStockModelCount: readNumberField(firstRow, 'lowStockModelCount'),
+    importErrorJobCount: readNumberField(firstRow, 'importErrorJobCount'),
+    inventoryImportErrorRowCount: readNumberField(
+      firstRow,
+      'inventoryImportErrorRowCount',
+    ),
   };
 }
 
@@ -115,12 +139,14 @@ export async function fetchDashboardData(
 ): Promise<DashboardResponse> {
   const kpis = await fetchDashboardKpis(monthStartIso);
   const upcomingMeetings = await fetchUpcomingMeetings();
+  const stockWarnings = await fetchStockWarnings();
 
   return {
     kpis,
     // TODO (Phase 5): populate tasks when task generation backend is implemented.
     tasks: [],
     upcomingMeetings,
+    stockWarnings,
   };
 }
 
@@ -170,6 +196,34 @@ async function fetchUpcomingMeetings(
       subjectName: (row.subject_name as string | null) ?? null,
       at: (row.at as string | null) ?? null,
       nextAt: (row.next_at as string | null) ?? null,
+      followUpAt: (row.follow_up_at as string | null) ?? null,
+      alertSeverity: row.alert_severity === 'error' ? 'error' : 'warning',
     };
   });
+}
+
+async function fetchStockWarnings(limit = 10): Promise<StockWarningItem[]> {
+  const { data, error } = await supabaseClient.rpc('dashboard_stock_warnings', {
+    _limit: limit,
+  });
+
+  if (error) {
+    console.error('DASHBOARD_STOCK_WARNINGS_RPC_FAILED', error.message);
+    throw new Error(
+      `DASHBOARD_STOCK_WARNINGS_RPC_FAILED: ${
+        error.message ?? 'Unknown error'
+      }`,
+    );
+  }
+
+  return ((data ?? []) as StockWarningRpcRow[]).map((row) => ({
+    catalogModelId: row.catalog_model_id,
+    brand: row.brand ?? '',
+    model: row.model ?? '',
+    itemType: row.item_type ?? '',
+    inStockCount: toNumber(row.in_stock_count),
+    minimumStock: toNumber(row.minimum_stock),
+    thresholdScope: row.threshold_scope === 'model' ? 'model' : 'general',
+    severity: row.severity === 'error' ? 'error' : 'warning',
+  }));
 }

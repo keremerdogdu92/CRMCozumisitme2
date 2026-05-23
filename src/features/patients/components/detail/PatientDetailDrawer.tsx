@@ -32,6 +32,7 @@ import {
   MEETINGS_BY_PATIENT_QUERY_KEY,
   fetchMeetingsByPatientId,
 } from '../../../meetings/api';
+import { useCurrentProfile } from '../../../auth/useCurrentProfile';
 
 type PatientDetailTabId =
   | 'info'
@@ -107,6 +108,8 @@ export function PatientDetailDrawer({
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
+  const { data: profile } = useCurrentProfile();
+  const canRestore = profile?.role === 'admin';
 
   const invoiceMutation = useMutation({
     mutationFn: (params: { invoiceIssued: boolean; invoiceIssuedAt: string | null }) =>
@@ -218,7 +221,7 @@ export function PatientDetailDrawer({
   };
 
   const handleRestorePatient = () => {
-    if (restoreMutation.isPending) return;
+    if (!canRestore || restoreMutation.isPending) return;
     restoreMutation.mutate();
   };
 
@@ -302,7 +305,7 @@ export function PatientDetailDrawer({
           <PatientDetailInfoTab
             patient={patient}
             onDeletePatient={handleSoftDeletePatient}
-            onRestorePatient={handleRestorePatient}
+            onRestorePatient={canRestore ? handleRestorePatient : undefined}
             onInfoSaved={onClose}
             isDeleting={softDeleteMutation.isPending}
             isRestoring={restoreMutation.isPending}

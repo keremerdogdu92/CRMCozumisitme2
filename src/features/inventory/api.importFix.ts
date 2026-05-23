@@ -9,6 +9,7 @@ export type InventoryImportRowResolveInput = {
   brand: string;
   model: string;
   itemType: InventoryItemType;
+  catalogModelId: string | null;
   barcode: string | null;
   serialNo: string;
   status: InventoryStatus;
@@ -65,6 +66,7 @@ export async function resolveInventoryImportRow(
       p_brand: input.brand,
       p_model: input.model,
       p_item_type: input.itemType,
+      p_catalog_model_id: input.catalogModelId,
       p_barcode: input.barcode,
       p_serial_no: input.serialNo,
       p_status: input.status,

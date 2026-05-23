@@ -170,6 +170,7 @@ export function TrialsTable({
 }: TrialsTableProps) {
   const { data: profile } = useCurrentProfile();
   const userId = profile?.id ?? null;
+  const canRestore = profile?.role === 'admin';
 
   const queryClient = useQueryClient();
 
@@ -325,6 +326,7 @@ export function TrialsTable({
   };
 
   const handleRestoreClick = (trial: TrialRow) => {
+    if (!canRestore) return;
     if (!trial?.id) return;
 
     const ok = window.confirm('Bu deneme kaydını geri getirmek istiyor musunuz?');
@@ -458,7 +460,7 @@ export function TrialsTable({
                   isBusy={isBusy}
                   size="xs"
                   onSoftDelete={() => handleSoftDeleteClick(t)}
-                  onRestore={() => handleRestoreClick(t)}
+                  onRestore={canRestore ? () => handleRestoreClick(t) : undefined}
                 />
 
                 <button
@@ -615,7 +617,7 @@ export function TrialsTable({
                                   isBusy={isBusy}
                                   size="sm"
                                   onSoftDelete={() => handleSoftDeleteClick(t)}
-                                  onRestore={() => handleRestoreClick(t)}
+                                  onRestore={canRestore ? () => handleRestoreClick(t) : undefined}
                                 />
 
                                 <button

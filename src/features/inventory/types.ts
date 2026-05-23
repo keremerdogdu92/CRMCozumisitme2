@@ -2,6 +2,10 @@
 // Summary: Shared types for the Inventory (stok) feature.
 
 export type InventoryItemType = 'hearing_aid' | 'charger';
+export type CatalogItemType =
+  | InventoryItemType
+  | 'receiver'
+  | 'battery';
 
 export type InventoryStatus = 'in_stock' | 'sold' | 'repair';
 
@@ -22,6 +26,7 @@ export type InventoryItemRow = {
   brand: string;
   model: string;
   item_type: InventoryItemType;
+  catalog_model_id: string | null;
   barcode: string | null;
   serial_no: string | null;
   ear_side: EarSide | null;
@@ -84,4 +89,12 @@ export type InventoryImportSummary = {
   errorCount: number;
   warningCount: number;
   duplicateCount: number;
+};
+
+export type InventoryStockThresholdRow = {
+  id: string;
+  org_id: string;
+  item_type: CatalogItemType | null;
+  catalog_model_id: string | null;
+  minimum_stock: number;
 };

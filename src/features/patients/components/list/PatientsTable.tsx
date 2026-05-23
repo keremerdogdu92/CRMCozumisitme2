@@ -128,6 +128,7 @@ export function PatientsTable({
 }: PatientsTableProps) {
   const { data: profile } = useCurrentProfile();
   const userId = profile?.id ?? null;
+  const canRestore = profile?.role === 'admin';
 
   const handleDeleteClick = (patient: PatientRow) => {
     if (!onDeletePatient) return;
@@ -143,7 +144,7 @@ export function PatientsTable({
   };
 
   const handleRestoreClick = (patient: PatientRow) => {
-    if (!onRestorePatient) return;
+    if (!onRestorePatient || !canRestore) return;
 
     const confirmed = window.confirm(
       `Bu hastayı geri almak istediğinizden emin misiniz?\n\n` +
@@ -345,7 +346,7 @@ export function PatientsTable({
                     </button>
                   )}
 
-                  {isDeleted && onRestorePatient && (
+                  {isDeleted && onRestorePatient && canRestore && (
                     <button
                       type="button"
                       onClick={() => handleRestoreClick(p)}
@@ -695,7 +696,7 @@ export function PatientsTable({
                                   </button>
                                 )}
 
-                                {isDeleted && onRestorePatient && (
+                                {isDeleted && onRestorePatient && canRestore && (
                                   <button
                                     type="button"
                                     onClick={() => handleRestoreClick(p)}
