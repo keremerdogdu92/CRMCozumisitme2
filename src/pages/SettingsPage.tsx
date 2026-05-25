@@ -12,16 +12,23 @@ import { InventoryImportCard } from '../features/inventory/InventoryImportCard';
 import { DeviceCatalogImportCard } from '../features/inventory/deviceCatalog/DeviceCatalogImportCard';
 import { CatalogPriceListCard } from '../features/inventory/deviceCatalog/CatalogPriceListCard';
 import { OrgSettingsCard } from '../features/settings/OrgSettingsCard';
+import { AppearanceSettingsCard } from '../features/settings/AppearanceSettingsCard';
 import { SgkReimbursementSettingsCard } from '../features/settings/SgkReimbursementSettingsCard';
 import { MeetingSatisfactionSettingsCard } from '../features/meetings/MeetingSatisfactionSettingsCard';
 import { useCurrentProfile } from '../features/auth/useCurrentProfile';
 
-type SettingsTab = 'imports' | 'catalog-stock' | 'sgk-operations' | 'organization';
+type SettingsTab =
+  | 'imports'
+  | 'catalog-stock'
+  | 'sgk-operations'
+  | 'appearance'
+  | 'organization';
 
 const SETTINGS_TABS: Array<{ id: SettingsTab; label: string }> = [
   { id: 'imports', label: 'Importlar' },
   { id: 'catalog-stock', label: 'Katalog & Stok' },
   { id: 'sgk-operations', label: 'SGK & Operasyon' },
+  { id: 'appearance', label: 'Gorunum' },
   { id: 'organization', label: 'Organizasyon' },
 ];
 
@@ -30,6 +37,7 @@ function parseSettingsTab(value: string | null): SettingsTab {
     value === 'imports' ||
     value === 'catalog-stock' ||
     value === 'sgk-operations' ||
+    value === 'appearance' ||
     value === 'organization'
   ) {
     return value;
@@ -222,6 +230,18 @@ export default function SettingsPage() {
                 <SgkReimbursementSettingsCard />
                 <MeetingSatisfactionSettingsCard />
               </>
+            ) : (
+              <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+                Bu sekme icin admin yetkisi gerekir.
+              </section>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'appearance' && (
+          <div className="space-y-4">
+            {isAdmin ? (
+              <AppearanceSettingsCard />
             ) : (
               <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
                 Bu sekme icin admin yetkisi gerekir.

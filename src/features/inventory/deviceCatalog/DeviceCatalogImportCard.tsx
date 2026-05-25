@@ -11,6 +11,7 @@ import {
   useDeviceCatalogImportMutation,
   type DeviceCatalogImportSummary,
 } from './api';
+import deviceCatalogTemplateUrl from '../../../../templates/device_catalog_import_template.csv?url';
 
 type Props = {
   open: boolean;
@@ -73,6 +74,13 @@ export function DeviceCatalogImportCard({ open, onToggle }: Props) {
             <label className="mb-1 block text-xs font-medium text-slate-600">
               CSV Dosyası
             </label>
+            <a
+              href={deviceCatalogTemplateUrl}
+              download="device_catalog_import_template.csv"
+              className="mb-2 inline-flex text-[11px] font-medium text-primary-700 hover:text-primary-800"
+            >
+              Template indir
+            </a>
             <input
               type="file"
               accept=".csv,text/csv"

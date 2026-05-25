@@ -79,6 +79,10 @@ export type NewInventoryItemForm = {
   listPrice: string;
 };
 
+export type UpdateInventoryItemForm = NewInventoryItemForm & {
+  id: string;
+};
+
 /**
  * Result summary for CSV import jobs.
  */

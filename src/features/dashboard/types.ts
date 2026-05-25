@@ -166,9 +166,18 @@ export type StockWarningItem = {
   severity: 'warning' | 'error';
 };
 
+export type LowSatisfactionMeetingItem = {
+  id: string;
+  subjectName: string | null;
+  subject: string | null;
+  at: string | null;
+  satisfaction10: number;
+};
+
 export type DashboardResponse = {
   kpis: DashboardKpis;
   tasks: DashboardTask[];
   upcomingMeetings: UpcomingMeetingItem[];
   stockWarnings: StockWarningItem[];
+  lowSatisfactionMeetings: LowSatisfactionMeetingItem[];
 };

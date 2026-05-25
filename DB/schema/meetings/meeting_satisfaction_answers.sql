@@ -212,3 +212,100 @@ GRANT SELECT, INSERT ON TABLE public.meeting_satisfaction_answers TO authenticat
 GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
 ON TABLE public.meeting_satisfaction_answers
 TO service_role;
+
+-- ============================================================
+-- RPC: replace answers atomically and write 1-10 meeting summary
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.save_meeting_satisfaction_answers(
+  p_meeting_id uuid,
+  p_patient_id uuid,
+  p_list_id uuid,
+  p_answers jsonb
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_org_id uuid := public.current_user_org_id();
+  v_meeting_org uuid;
+  v_patient_org uuid;
+  v_list_org uuid;
+  v_average numeric;
+BEGIN
+  IF v_org_id IS NULL THEN
+    RAISE EXCEPTION 'FORBIDDEN_NO_ORG' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT org_id
+  INTO v_meeting_org
+  FROM public.meetings
+  WHERE id = p_meeting_id
+    AND meeting_type = 'patient'
+    AND deleted_at IS NULL;
+
+  SELECT org_id
+  INTO v_patient_org
+  FROM public.patients
+  WHERE id = p_patient_id
+    AND deleted_at IS NULL;
+
+  SELECT org_id
+  INTO v_list_org
+  FROM public.meeting_satisfaction_question_lists
+  WHERE id = p_list_id
+    AND is_active IS TRUE;
+
+  IF v_meeting_org IS DISTINCT FROM v_org_id
+     OR v_patient_org IS DISTINCT FROM v_org_id
+     OR v_list_org IS DISTINCT FROM v_org_id THEN
+    RAISE EXCEPTION 'SATISFACTION_CONTEXT_FORBIDDEN_OR_NOT_FOUND' USING ERRCODE = '42501';
+  END IF;
+
+  DELETE FROM public.meeting_satisfaction_answers
+  WHERE org_id = v_org_id
+    AND meeting_id = p_meeting_id;
+
+  IF jsonb_typeof(coalesce(p_answers, '[]'::jsonb)) = 'array'
+     AND jsonb_array_length(coalesce(p_answers, '[]'::jsonb)) > 0 THEN
+    INSERT INTO public.meeting_satisfaction_answers (
+      org_id, meeting_id, patient_id, list_id, question_id, score
+    )
+    SELECT
+      v_org_id,
+      p_meeting_id,
+      p_patient_id,
+      p_list_id,
+      parsed.question_id,
+      parsed.score
+    FROM jsonb_to_recordset(p_answers) AS parsed(question_id uuid, score smallint)
+    JOIN public.meeting_satisfaction_questions q
+      ON q.id = parsed.question_id
+      AND q.org_id = v_org_id
+      AND q.list_id = p_list_id
+      AND q.is_active IS TRUE
+    WHERE parsed.score BETWEEN 1 AND 5;
+  END IF;
+
+  SELECT avg(score)::numeric
+  INTO v_average
+  FROM public.meeting_satisfaction_answers
+  WHERE org_id = v_org_id
+    AND meeting_id = p_meeting_id;
+
+  UPDATE public.meetings
+  SET satisfaction_10 = CASE
+      WHEN v_average IS NULL THEN NULL
+      ELSE greatest(1, least(10, round(v_average * 2)::integer))
+    END
+  WHERE id = p_meeting_id
+    AND org_id = v_org_id;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.save_meeting_satisfaction_answers(uuid, uuid, uuid, jsonb)
+FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.save_meeting_satisfaction_answers(uuid, uuid, uuid, jsonb)
+TO authenticated, service_role;

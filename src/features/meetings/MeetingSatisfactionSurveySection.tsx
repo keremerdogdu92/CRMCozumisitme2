@@ -107,6 +107,10 @@ export function MeetingSatisfactionSurveySection(
       queryClient.invalidateQueries({
         queryKey: ['meeting-satisfaction-answers', variables.meetingId],
       });
+      queryClient.invalidateQueries({
+        predicate: (q) =>
+          Array.isArray(q.queryKey) && q.queryKey[0] === 'meetings',
+      });
     },
   });
 

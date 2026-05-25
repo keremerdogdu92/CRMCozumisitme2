@@ -1,0 +1,8 @@
+# Cihaz katalog fiyat import sablonu
+# Zorunlu basliklar: brand,model,item_type,purchase_price,list_price
+# item_type: hearing_aid, charger, receiver, battery
+# valid_from bos kalirsa bugunun tarihi kullanilir.
+# details, battery_type ve barcode opsiyoneldir.
+brand,model,item_type,purchase_price,list_price,details,battery_type,barcode,valid_from
+REXTON,REACH R LI 80,hearing_aid,12000,24000,Ornek cihaz,,5714880226362,2026-05-23
+REXTON,TRAVEL CHARGER,charger,750,1500,Ornek sarj cihazi,,5714880116946,2026-05-23

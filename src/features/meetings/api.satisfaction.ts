@@ -15,55 +15,6 @@ import type {
 } from './meetingSatisfactionTypes';
 
 /**
- * Shared helper: resolve org_id from current auth user via profiles.
- */
-async function getCurrentOrgId(): Promise<string> {
-  const { data: userData, error: userError } =
-    await supabaseClient.auth.getUser();
-  if (userError) {
-    console.error(
-      'SATISFACTION_STEP_USER: Failed to get current user',
-      userError,
-    );
-    throw new Error(
-      'SATISFACTION_STEP_USER: ' + userError.message,
-    );
-  }
-  const user = userData.user;
-  if (!user) {
-    throw new Error('SATISFACTION_STEP_USER: User not authenticated');
-  }
-
-  const { data: profile, error: profileError } = await supabaseClient
-    .from('profiles')
-    .select('org_id')
-    .eq('id', user.id)
-    .single();
-
-  if (profileError) {
-    console.error(
-      'SATISFACTION_STEP_PROFILE: Failed to load profile for org_id',
-      profileError,
-    );
-    throw new Error(
-      'SATISFACTION_STEP_PROFILE: ' + profileError.message,
-    );
-  }
-
-  if (!profile?.org_id) {
-    console.error(
-      'SATISFACTION_STEP_NO_ORG: Profile org_id is missing',
-      profile,
-    );
-    throw new Error(
-      'SATISFACTION_STEP_NO_ORG: Profile org_id is missing',
-    );
-  }
-
-  return profile.org_id as string;
-}
-
-/**
  * Fetch active survey question lists for the current org.
  * (Org is inferred from RLS; we don't filter by org_id on the client.)
  */
@@ -285,61 +236,31 @@ export async function fetchAnswersForMeeting(
 
 /**
  * Save / replace all satisfaction answers for a meeting.
- * Strategy: delete old rows for that meeting, then insert the new list.
- * - org_id is resolved from current user's profile.
+ * The RPC performs delete + insert + meeting satisfaction_10 update atomically.
  */
 export async function saveMeetingSatisfaction(
   payload: SaveMeetingSatisfactionInput,
 ): Promise<void> {
   const { meetingId, patientId, listId, answers } = payload;
 
-  // Org id needed for NOT NULL org_id column
-  const orgId = await getCurrentOrgId();
-
-  // 1) Delete previous answers for this meeting (idempotent save).
-  const { error: deleteError } = await supabaseClient
-    .from('meeting_satisfaction_answers')
-    .delete()
-    .eq('meeting_id', meetingId);
-
-  if (deleteError) {
-    console.error(
-      'saveMeetingSatisfaction delete error',
-      deleteError,
-    );
-    throw deleteError;
-  }
-
-  if (answers.length === 0) {
-    // Nothing to insert; treat as "cleared".
-    return;
-  }
-
   type AnswerInput = {
     questionId: string;
     score: SatisfactionScore;
   };
 
-  // 2) Insert new answers
-  const rows = answers.map((a: AnswerInput) => ({
-    org_id: orgId,
-    meeting_id: meetingId,
-    patient_id: patientId,
-    list_id: listId,
-    question_id: a.questionId,
-    score: a.score,
-  }));
+  const { error } = await supabaseClient.rpc('save_meeting_satisfaction_answers', {
+    p_meeting_id: meetingId,
+    p_patient_id: patientId,
+    p_list_id: listId,
+    p_answers: answers.map((a: AnswerInput) => ({
+      question_id: a.questionId,
+      score: a.score,
+    })),
+  });
 
-  const { error: insertError } = await supabaseClient
-    .from('meeting_satisfaction_answers')
-    .insert(rows);
-
-  if (insertError) {
-    console.error(
-      'saveMeetingSatisfaction insert error',
-      insertError,
-    );
-    throw insertError;
+  if (error) {
+    console.error('saveMeetingSatisfaction rpc error', error);
+    throw error;
   }
 }
 

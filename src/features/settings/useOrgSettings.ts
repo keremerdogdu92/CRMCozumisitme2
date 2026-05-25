@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabaseClient } from '../../utils/supabaseClient';
 import { useCurrentProfile } from '../auth/useCurrentProfile';
 import type { OrgSettings } from './orgSettingsTypes';
+import { DEFAULT_THEME_PRESET, normalizeThemePreset } from './themePresets';
 
 export const ORG_SETTINGS_QUERY_KEY = (orgId: string | null) => [
   'org-settings',
@@ -12,13 +13,27 @@ export const ORG_SETTINGS_QUERY_KEY = (orgId: string | null) => [
 ];
 
 async function fetchOrgSettings(orgId: string): Promise<OrgSettings> {
-  const { data, error } = await supabaseClient
+  const primaryResult = await supabaseClient
     .from('org_settings')
     .select(
-      'org_id, company_name, company_tagline, phone, address, website, logo_url, offer_watermark',
+      'org_id, company_name, company_tagline, phone, address, website, logo_url, offer_watermark, theme_preset',
     )
     .eq('org_id', orgId)
     .maybeSingle();
+  let data = primaryResult.data as Record<string, unknown> | null;
+  let error = primaryResult.error;
+
+  if (error && error.message.toLowerCase().includes('theme_preset')) {
+    const fallback = await supabaseClient
+      .from('org_settings')
+      .select(
+        'org_id, company_name, company_tagline, phone, address, website, logo_url, offer_watermark',
+      )
+      .eq('org_id', orgId)
+      .maybeSingle();
+    data = fallback.data as Record<string, unknown> | null;
+    error = fallback.error;
+  }
 
   if (error) {
     console.error('ORG_SETTINGS_FETCH_ERROR:', error);
@@ -35,6 +50,7 @@ async function fetchOrgSettings(orgId: string): Promise<OrgSettings> {
       address: '',
       website: '',
       logoUrl: null,
+      themePreset: DEFAULT_THEME_PRESET,
       offerWatermark: 'İşitme Cihazı Teklifi',
     };
   }
@@ -50,6 +66,7 @@ async function fetchOrgSettings(orgId: string): Promise<OrgSettings> {
     address: (data.address as string | null) ?? '',
     website: (data.website as string | null) ?? '',
     logoUrl: (data.logo_url as string | null) ?? null,
+    themePreset: normalizeThemePreset(data.theme_preset as string | null),
     offerWatermark:
       (data.offer_watermark as string | null) ?? 'İşitme Cihazı Teklifi',
   };

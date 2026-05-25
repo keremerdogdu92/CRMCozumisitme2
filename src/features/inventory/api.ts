@@ -16,6 +16,11 @@ export {
 } from './api.create';
 
 export {
+  updateInventoryItemDetails,
+  useUpdateInventoryItemMutation,
+} from './api.update';
+
+export {
   softDeleteInventoryItem,
   restoreInventoryItem,
   useSoftDeleteInventoryItemMutation,

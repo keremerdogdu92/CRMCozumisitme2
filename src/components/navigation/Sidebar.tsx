@@ -4,12 +4,12 @@
 import { NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import {
-  Activity,
   BarChart3,
   BookUser,
   Boxes,
   CalendarClock,
   Calculator,
+  CheckSquare,
   ClipboardList,
   FlaskConical,
   Settings,
@@ -39,11 +39,15 @@ const NAV_ITEMS: NavItem[] = [
     icon: <CalendarClock className="h-5 w-5" />,
   },
   {
+    path: '/tasks',
+    label: 'Gorevler',
+    icon: <CheckSquare className="h-5 w-5" />,
+  },
+  {
     path: '/references',
     label: 'Referanslar',
     icon: <BookUser className="h-5 w-5" />,
   },
-  { path: '/audiogram', label: 'Odyogram', icon: <Activity className="h-5 w-5" /> },
   {
     path: '/profit-calculator',
     label: 'Kar Hesaplayıcı',

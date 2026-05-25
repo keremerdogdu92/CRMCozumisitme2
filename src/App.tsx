@@ -30,6 +30,7 @@ const ProfitCalculatorPage = lazy(
 const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const TasksPage = lazy(() => import('./pages/TasksPage'));
 
 function ProtectedLayout() {
   const [status, setStatus] = useState<'loading' | 'authed' | 'guest'>(
@@ -124,6 +125,10 @@ const router = createBrowserRouter([
       {
         path: 'meetings',
         element: <MeetingsPage />,
+      },
+      {
+        path: 'tasks',
+        element: <TasksPage />,
       },
       {
         path: 'references',

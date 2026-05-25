@@ -23,6 +23,7 @@ import type { LegacyDevicesImportStatusSummary } from '../../import/types';
 import { parseSimpleCsv } from '../../../../utils/csvUtils';
 import { getAuthenticatedJsonHeaders } from '../../../../utils/apiAuthHeaders';
 import { normalizeHeaderKey } from '../../import/legacyDevicesValidator';
+import legacyDevicesTemplateUrl from '../../../../../templates/legacy_patient_devices.csv?url';
 
 type ImportPhase = 'idle' | 'uploading' | 'processing';
 
@@ -142,6 +143,13 @@ export function LegacyDevicesImportSection() {
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <a
+            href={legacyDevicesTemplateUrl}
+            download="legacy_patient_devices.csv"
+            className="inline-flex items-center justify-center rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Template indir
+          </a>
           <input
             type="file"
             accept=".csv,text/csv"

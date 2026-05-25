@@ -9,6 +9,7 @@ import {
   useDashboard,
 } from '../features/dashboard/api';
 import type { UpcomingMeetingItem } from '../features/dashboard/types';
+import { useTasks } from '../features/tasks/api';
 
 type MetricRow = {
   label: string;
@@ -63,11 +64,16 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error } = useDashboard(monthStartIso);
+  const { data: dashboardTasks, isError: tasksError } = useTasks();
   const { data: profile } = useCurrentProfile();
   const isAdmin = profile?.role === 'admin';
   const kpis = data?.kpis;
   const upcoming = data?.upcomingMeetings ?? [];
   const stockWarnings = data?.stockWarnings ?? [];
+  const lowSatisfactionMeetings = data?.lowSatisfactionMeetings ?? [];
+  const activeTasks = (dashboardTasks ?? [])
+    .filter((task) => task.status !== 'done' && task.status !== 'cancelled')
+    .slice(0, 6);
   const [activeFollowUp, setActiveFollowUp] =
     useState<UpcomingMeetingItem | null>(null);
   const [followUpForm, setFollowUpForm] = useState<FollowUpFormState>(
@@ -201,6 +207,51 @@ export default function DashboardPage() {
         </p>
       )}
 
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-lg font-semibold text-slate-900">Bekleyen Gorevler</h3>
+          <Link
+            to="/tasks"
+            className="text-xs font-medium text-primary-700 hover:text-primary-800"
+          >
+            Tumunu ac
+          </Link>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          {tasksError && (
+            <p className="text-sm text-slate-500">
+              Gorev tablosu henuz hazir degil veya gorevler yuklenemedi.
+            </p>
+          )}
+          {!tasksError && activeTasks.length === 0 && (
+            <p className="text-sm text-slate-500">Bekleyen gorev yok.</p>
+          )}
+          {!tasksError && activeTasks.length > 0 && (
+            <ul className="space-y-2 text-sm">
+              {activeTasks.map((task) => (
+                <li
+                  key={task.id}
+                  className="flex flex-col gap-1 rounded-md border border-slate-100 bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="font-medium text-slate-900">{task.title}</p>
+                    <p className="text-xs text-slate-500">
+                      Oncelik: {task.priority} | Son tarih:{' '}
+                      {task.due_at
+                        ? new Date(task.due_at).toLocaleDateString('tr-TR')
+                        : '-'}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                    {task.status}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
       {(kpis?.importErrorJobCount ?? 0) > 0 && (
         <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -288,6 +339,44 @@ export default function DashboardPage() {
                   </li>
                 );
               })}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-lg font-semibold text-slate-900">
+          Dusuk Memnuniyet Takibi
+        </h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          {isLoading && <p className="text-sm text-slate-500">Yukleniyor...</p>}
+          {!isLoading && lowSatisfactionMeetings.length === 0 && (
+            <p className="text-sm text-slate-500">
+              Dusuk memnuniyet skoru olan son gorusme yok.
+            </p>
+          )}
+          {!isLoading && lowSatisfactionMeetings.length > 0 && (
+            <ul className="space-y-2 text-sm">
+              {lowSatisfactionMeetings.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-col gap-1 rounded-md border border-red-100 bg-red-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="font-medium text-red-900">
+                      {item.subjectName || item.subject || 'Hasta gorusmesi'}
+                    </p>
+                    <p className="text-xs text-red-700">
+                      {item.at
+                        ? new Date(item.at).toLocaleDateString('tr-TR')
+                        : 'Tarih yok'}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">
+                    {item.satisfaction10}/10
+                  </span>
+                </li>
+              ))}
             </ul>
           )}
         </div>

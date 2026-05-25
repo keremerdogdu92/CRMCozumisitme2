@@ -6,6 +6,83 @@
 
 :root {
   color-scheme: light;
+  --color-primary-50: 239 246 255;
+  --color-primary-100: 219 234 254;
+  --color-primary-200: 191 219 254;
+  --color-primary-300: 147 197 253;
+  --color-primary-400: 96 165 250;
+  --color-primary-500: 59 130 246;
+  --color-primary-600: 37 99 235;
+  --color-primary-700: 29 78 216;
+  --color-primary-800: 30 64 175;
+  --color-primary-900: 30 58 138;
+  --color-accent-50: 254 242 242;
+  --color-accent-100: 254 226 226;
+  --color-accent-200: 254 202 202;
+  --color-accent-500: 239 68 68;
+  --color-accent-600: 220 38 38;
+  --color-accent-700: 185 28 28;
+  --color-app-bg: 241 245 249;
+}
+
+:root[data-theme='cozum'] {
+  --color-primary-50: 239 246 255;
+  --color-primary-100: 219 234 254;
+  --color-primary-200: 191 219 254;
+  --color-primary-300: 147 197 253;
+  --color-primary-400: 74 122 173;
+  --color-primary-500: 36 79 127;
+  --color-primary-600: 29 67 111;
+  --color-primary-700: 24 56 94;
+  --color-primary-800: 19 44 75;
+  --color-primary-900: 14 34 59;
+  --color-accent-50: 254 242 242;
+  --color-accent-100: 254 226 226;
+  --color-accent-200: 254 202 202;
+  --color-accent-500: 239 31 45;
+  --color-accent-600: 220 24 38;
+  --color-accent-700: 185 21 32;
+  --color-app-bg: 248 250 252;
+}
+
+:root[data-theme='navy'] {
+  --color-primary-50: 239 246 255;
+  --color-primary-100: 219 234 254;
+  --color-primary-200: 191 219 254;
+  --color-primary-300: 147 197 253;
+  --color-primary-400: 96 165 250;
+  --color-primary-500: 59 130 246;
+  --color-primary-600: 29 78 216;
+  --color-primary-700: 30 64 175;
+  --color-primary-800: 30 58 138;
+  --color-primary-900: 23 37 84;
+  --color-accent-50: 254 242 242;
+  --color-accent-100: 254 226 226;
+  --color-accent-200: 254 202 202;
+  --color-accent-500: 239 68 68;
+  --color-accent-600: 220 38 38;
+  --color-accent-700: 185 28 28;
+  --color-app-bg: 241 245 249;
+}
+
+:root[data-theme='graphite'] {
+  --color-primary-50: 248 250 252;
+  --color-primary-100: 241 245 249;
+  --color-primary-200: 226 232 240;
+  --color-primary-300: 203 213 225;
+  --color-primary-400: 148 163 184;
+  --color-primary-500: 100 116 139;
+  --color-primary-600: 51 65 85;
+  --color-primary-700: 30 41 59;
+  --color-primary-800: 15 23 42;
+  --color-primary-900: 2 6 23;
+  --color-accent-50: 254 242 242;
+  --color-accent-100: 254 226 226;
+  --color-accent-200: 254 202 202;
+  --color-accent-500: 220 38 38;
+  --color-accent-600: 185 28 28;
+  --color-accent-700: 153 27 27;
+  --color-app-bg: 248 250 252;
 }
 
 html,
@@ -15,5 +92,6 @@ body,
 }
 
 body {
-  @apply bg-slate-100 text-slate-900;
+  background-color: rgb(var(--color-app-bg));
+  @apply text-slate-900;
 }

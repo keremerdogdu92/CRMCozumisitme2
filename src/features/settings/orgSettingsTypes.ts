@@ -10,4 +10,5 @@ export type OrgSettings = {
   website: string;
   logoUrl: string | null;
   offerWatermark: string;
+  themePreset: 'cozum' | 'navy' | 'graphite';
 };

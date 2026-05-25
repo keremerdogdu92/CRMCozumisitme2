@@ -10,6 +10,8 @@ import type {
   PieSlice,
 } from './types';
 import { useReportsKpis } from './api';
+import { IncomeTaxCard } from '../finance/IncomeTaxCard';
+import { SupplierPayablesCard } from '../finance/SupplierPayablesCard';
 
 function getDefaultMonth(): string {
   const now = new Date();
@@ -226,6 +228,14 @@ export function ReportsDashboard() {
               suffix="â‚º"
             />
           </div>
+
+          <IncomeTaxCard
+            month={filter.month}
+            crmRevenue={kpis.monthlyTurnover}
+            inventoryCost={kpis.monthDevicesSoldCost}
+          />
+
+          <SupplierPayablesCard />
 
           <SgkPaymentTrackingTable rows={kpis.sgkPaymentRows ?? []} />
 

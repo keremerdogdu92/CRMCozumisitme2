@@ -16,10 +16,31 @@ CREATE TABLE IF NOT EXISTS public.org_settings (
   website text NULL,
   logo_url text NULL,
   offer_watermark text NULL,
+  theme_preset text NOT NULL DEFAULT 'cozum',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT org_settings_pkey PRIMARY KEY (org_id)
+  CONSTRAINT org_settings_pkey PRIMARY KEY (org_id),
+  CONSTRAINT org_settings_theme_preset_check CHECK (
+    theme_preset = ANY (ARRAY['cozum'::text, 'navy'::text, 'graphite'::text])
+  )
 );
+
+ALTER TABLE public.org_settings
+  ADD COLUMN IF NOT EXISTS theme_preset text NOT NULL DEFAULT 'cozum';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'org_settings_theme_preset_check'
+  ) THEN
+    ALTER TABLE public.org_settings
+      ADD CONSTRAINT org_settings_theme_preset_check CHECK (
+        theme_preset = ANY (ARRAY['cozum'::text, 'navy'::text, 'graphite'::text])
+      );
+  END IF;
+END$$;
 
 DO $$
 BEGIN

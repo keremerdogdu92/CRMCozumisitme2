@@ -10,6 +10,7 @@ import type { PatientsImportStatusSummary } from '../../import/types';
 import { parseSimpleCsv } from '../../../../utils/csvUtils';
 import { getAuthenticatedJsonHeaders } from '../../../../utils/apiAuthHeaders';
 import { normalizeHeaderKey } from '../../patientsImportUtils';
+import patientsImportTemplateUrl from '../../../../../templates/patients_import_template_v2.csv?url';
 
 type ImportPhase = 'idle' | 'uploading' | 'processing';
 
@@ -103,6 +104,13 @@ export function PatientsImportSection() {
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <a
+            href={patientsImportTemplateUrl}
+            download="patients_import_template_v2.csv"
+            className="inline-flex items-center justify-center rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Template indir
+          </a>
           <input
             type="file"
             accept=".csv,text/csv"

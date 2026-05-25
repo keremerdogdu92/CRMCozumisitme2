@@ -38,6 +38,7 @@ type Props = {
   onTypeFilterChange: (value: InventoryItemType | 'all') => void;
 
   canManageSoftDelete: boolean;
+  onEdit: (item: InventoryItemRow) => void;
   onSoftDelete: (item: InventoryItemRow) => void;
   onRestore: (item: InventoryItemRow) => void;
 
@@ -206,6 +207,7 @@ export function InventoryTable({
   onStatusFilterChange,
   onTypeFilterChange,
   canManageSoftDelete,
+  onEdit,
   onSoftDelete,
   onRestore,
   isMutating,
@@ -379,15 +381,26 @@ export function InventoryTable({
     }
 
     return (
-      <button
-        type="button"
-        disabled={!!isMutating}
-        onClick={() => onSoftDelete(item)}
-        className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
-        title="Kaydı soft delete ile sil"
-      >
-        Sil
-      </button>
+      <div className="inline-flex items-center justify-end gap-2">
+        <button
+          type="button"
+          disabled={!!isMutating}
+          onClick={() => onEdit(item)}
+          className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          title="Stok urun bilgilerini duzenle"
+        >
+          Duzenle
+        </button>
+        <button
+          type="button"
+          disabled={!!isMutating}
+          onClick={() => onSoftDelete(item)}
+          className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+          title="Kaydı soft delete ile sil"
+        >
+          Sil
+        </button>
+      </div>
     );
   };
 

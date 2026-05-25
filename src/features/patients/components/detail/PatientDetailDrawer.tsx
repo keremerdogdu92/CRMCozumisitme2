@@ -233,7 +233,6 @@ export function PatientDetailDrawer({
     { id: 'payments', label: 'Ödemeler' },
     { id: 'accessories', label: 'Aksesuarlar' },
     { id: 'batteryPrescriptions', label: 'Pil Reçeteleri' },
-    { id: 'audiogram', label: 'Audiogram' },
   ];
 
   const {

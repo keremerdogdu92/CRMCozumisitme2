@@ -6,6 +6,7 @@ import { supabaseClient } from '../../utils/supabaseClient';
 import type {
   DashboardKpis,
   DashboardResponse,
+  LowSatisfactionMeetingItem,
   StockWarningItem,
   UpcomingMeetingItem,
 } from './types';
@@ -180,6 +181,7 @@ export async function fetchDashboardData(
   const kpis = await fetchDashboardKpis(monthStartIso);
   const upcomingMeetings = await fetchUpcomingMeetings();
   const stockWarnings = await fetchStockWarnings();
+  const lowSatisfactionMeetings = await fetchLowSatisfactionMeetings();
 
   return {
     kpis,
@@ -187,6 +189,7 @@ export async function fetchDashboardData(
     tasks: [],
     upcomingMeetings,
     stockWarnings,
+    lowSatisfactionMeetings,
   };
 }
 
@@ -265,5 +268,32 @@ async function fetchStockWarnings(limit = 10): Promise<StockWarningItem[]> {
     minimumStock: toNumber(row.minimum_stock),
     thresholdScope: row.threshold_scope === 'model' ? 'model' : 'general',
     severity: row.severity === 'error' ? 'error' : 'warning',
+  }));
+}
+
+async function fetchLowSatisfactionMeetings(
+  limit = 10,
+): Promise<LowSatisfactionMeetingItem[]> {
+  const { data, error } = await supabaseClient
+    .from('meetings')
+    .select('id, subject_name, subject, at, satisfaction_10')
+    .eq('meeting_type', 'patient')
+    .is('deleted_at', null)
+    .not('satisfaction_10', 'is', null)
+    .lte('satisfaction_10', 6)
+    .order('at', { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('DASHBOARD_LOW_SATISFACTION_FETCH_FAILED', error.message);
+    return [];
+  }
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    id: String(row.id),
+    subjectName: (row.subject_name as string | null) ?? null,
+    subject: (row.subject as string | null) ?? null,
+    at: (row.at as string | null) ?? null,
+    satisfaction10: toNumber(row.satisfaction_10),
   }));
 }

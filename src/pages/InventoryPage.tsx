@@ -15,6 +15,7 @@ import { useState } from 'react';
 import {
   useInventoryItems,
   useCreateInventoryItemMutation,
+  useUpdateInventoryItemMutation,
   useSoftDeleteInventoryItemMutation,
   useRestoreInventoryItemMutation,
 } from '../features/inventory/api';
@@ -23,9 +24,11 @@ import type {
   InventoryItemType,
   InventoryStatus,
   NewInventoryItemForm,
+  UpdateInventoryItemForm,
 } from '../features/inventory/types';
 import { InventoryNewItemFormCard } from '../features/inventory/InventoryNewItemFormCard';
 import { InventoryTable } from '../features/inventory/InventoryTable';
+import { InventoryEditModal } from '../features/inventory/InventoryEditModal';
 import { SoftDeleteModeFilter } from '../components/table/SoftDeleteModeFilter';
 import type { SoftDeleteMode } from '../utils/softDelete/softDeleteTypes';
 
@@ -37,6 +40,7 @@ export default function InventoryPage() {
   });
 
   const createMutation = useCreateInventoryItemMutation();
+  const updateMutation = useUpdateInventoryItemMutation();
   const softDeleteMutation = useSoftDeleteInventoryItemMutation();
   const restoreMutation = useRestoreInventoryItemMutation();
 
@@ -48,9 +52,11 @@ export default function InventoryPage() {
     'all',
   );
   const [search, setSearch] = useState('');
+  const [editingItem, setEditingItem] = useState<InventoryItemRow | null>(null);
 
   const isMutating =
     createMutation.isPending ||
+    updateMutation.isPending ||
     softDeleteMutation.isPending ||
     restoreMutation.isPending;
 
@@ -75,6 +81,12 @@ export default function InventoryPage() {
 
   const handleSubmit = (values: NewInventoryItemForm) => {
     createMutation.mutate(values);
+  };
+
+  const handleUpdateSubmit = (values: UpdateInventoryItemForm) => {
+    updateMutation.mutate(values, {
+      onSuccess: () => setEditingItem(null),
+    });
   };
 
   const mutationError =
@@ -139,9 +151,28 @@ export default function InventoryPage() {
         onStatusFilterChange={setStatusFilter}
         onTypeFilterChange={setTypeFilter}
         canManageSoftDelete={true}
+        onEdit={(item) => {
+          updateMutation.reset();
+          setEditingItem(item);
+        }}
         onSoftDelete={handleSoftDelete}
         onRestore={handleRestore}
         isMutating={isMutating}
+      />
+
+      <InventoryEditModal
+        open={!!editingItem}
+        item={editingItem}
+        isSubmitting={updateMutation.isPending}
+        errorMessage={
+          updateMutation.isError
+            ? (updateMutation.error as Error | null)?.message
+            : undefined
+        }
+        onClose={() => {
+          if (!updateMutation.isPending) setEditingItem(null);
+        }}
+        onSubmit={handleUpdateSubmit}
       />
     </div>
   );

@@ -1,0 +1,10 @@
+-- DB/schema/_apply_history/20260523_crm_missing_modules_apply.sql
+-- Apply order for this local schema batch:
+-- 1) DB/schema/core/org_settings.sql
+-- 2) DB/schema/inventory/update_inventory_item_details.rpc.sql
+-- 3) DB/schema/finance/income_tax.sql
+-- 4) DB/schema/finance/suppliers.sql
+-- 5) DB/schema/operations/tasks.sql
+-- 6) DB/schema/meetings/meeting_satisfaction_answers.sql
+-- 7) DB/schema/reports/reports_kpis_v1.rpc.sql
+-- 8) DB/schema/dashboard/dashboard_kpis.rpc.sql

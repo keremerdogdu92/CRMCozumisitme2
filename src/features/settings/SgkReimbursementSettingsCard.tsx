@@ -81,18 +81,47 @@ function formatMoney(value: number | null | undefined): string {
   });
 }
 
+function getPeriodStatus(
+  period: SgkReimbursementPeriod,
+  activePeriodId: string | null,
+): { label: string; className: string } {
+  const today = todayDateInput();
+
+  if (period.valid_from > today) {
+    return { label: 'Planli', className: 'bg-sky-50 text-sky-700' };
+  }
+
+  if (period.id === activePeriodId) {
+    return { label: 'Aktif', className: 'bg-emerald-50 text-emerald-700' };
+  }
+
+  return { label: 'Gecmis', className: 'bg-slate-100 text-slate-600' };
+}
+
 export function SgkReimbursementSettingsCard() {
   const { data: profile } = useCurrentProfile();
   const queryClient = useQueryClient();
   const { data: periods, isLoading, isError } = useSgkReimbursementPeriods();
 
-  const sortedPeriods = useMemo(
+  const sortedNewestFirst = useMemo(
     () => [...(periods ?? [])].sort((a, b) => b.valid_from.localeCompare(a.valid_from)),
     [periods],
   );
-  const latestPeriod = sortedPeriods[0] ?? null;
+  const sortedOldestFirst = useMemo(
+    () => [...(periods ?? [])].sort((a, b) => a.valid_from.localeCompare(b.valid_from)),
+    [periods],
+  );
+  const activePeriodId = useMemo(() => {
+    const today = todayDateInput();
+    return (
+      [...sortedOldestFirst].filter((period) => period.valid_from <= today)
+        .slice(-1)[0]?.id ?? null
+    );
+  }, [sortedOldestFirst]);
+  const latestPeriod = sortedNewestFirst[0] ?? null;
 
   const [form, setForm] = useState<FormState | null>(null);
+  const [expandedPeriodId, setExpandedPeriodId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -106,10 +135,7 @@ export function SgkReimbursementSettingsCard() {
     setMessage(null);
   };
 
-  const patchRate = (
-    profileId: string,
-    patch: Partial<RateDraft>,
-  ) => {
+  const patchRate = (profileId: string, patch: Partial<RateDraft>) => {
     setForm((current) =>
       current
         ? {
@@ -127,13 +153,13 @@ export function SgkReimbursementSettingsCard() {
     setMessage(null);
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(form.validFrom)) {
-      setMessage('Geçerli bir başlangıç tarihi seçin.');
+      setMessage('Gecerli bir baslangic tarihi secin.');
       return;
     }
 
     const pillExtraPerDevice = parseMoney(form.pillExtraPerDevice);
     if (pillExtraPerDevice == null || pillExtraPerDevice < 0) {
-      setMessage('Pil ek tutarı geçerli olmalı.');
+      setMessage('Pil ek tutari gecerli olmali.');
       return;
     }
 
@@ -142,7 +168,7 @@ export function SgkReimbursementSettingsCard() {
       const gross = parseMoney(rate.gross);
       const netToFirm = parseMoney(rate.net_to_firm);
       if (gross == null || netToFirm == null) {
-        setMessage(`${rate.label} için brüt ve net firma tutarı zorunlu.`);
+        setMessage(`${rate.label} icin brut ve net firma tutari zorunlu.`);
         return;
       }
       rates.push({
@@ -157,7 +183,7 @@ export function SgkReimbursementSettingsCard() {
     }
 
     if (rates.length === 0) {
-      setMessage('Kaydedilecek SGK profili bulunamadı.');
+      setMessage('Kaydedilecek SGK profili bulunamadi.');
       return;
     }
 
@@ -172,12 +198,12 @@ export function SgkReimbursementSettingsCard() {
         queryKey: SGK_REIMBURSEMENT_PERIODS_QUERY_KEY,
       });
       setForm(null);
-      setMessage('SGK oran dönemi kaydedildi.');
+      setMessage('SGK oran donemi kaydedildi.');
     } catch (err) {
       setMessage(
         err instanceof Error
           ? err.message
-          : 'SGK oran dönemi kaydedilirken hata oluştu.',
+          : 'SGK oran donemi kaydedilirken hata olustu.',
       );
     } finally {
       setIsSaving(false);
@@ -188,10 +214,10 @@ export function SgkReimbursementSettingsCard() {
     return (
       <section className="mx-auto max-w-5xl rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="text-sm font-semibold text-slate-900">
-          SGK Ödeme Oranları
+          SGK Odeme Oranlari
         </h3>
         <p className="mt-1 text-xs text-slate-600">
-          Oturumda geçerli organizasyon bulunamadı.
+          Oturumda gecerli organizasyon bulunamadi.
         </p>
       </section>
     );
@@ -202,10 +228,12 @@ export function SgkReimbursementSettingsCard() {
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">
-            SGK Ödeme Oranları
+            SGK Odeme Oranlari
           </h3>
           <p className="mt-1 text-xs text-slate-600">
-            Yeni dönem açarken son kayıt kopyalanır; hasta hesaplaması sisteme işlenme tarihindeki dönemi kullanır.
+            Tum SGK donemleri burada listelenir. Yeni donem acarken son kayit
+            kopyalanir; hasta hesaplamasi sisteme islenme tarihindeki donemi
+            kullanir.
           </p>
         </div>
         <button
@@ -214,16 +242,16 @@ export function SgkReimbursementSettingsCard() {
           className="inline-flex items-center justify-center rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 disabled:opacity-60"
           disabled={isLoading || isSaving}
         >
-          Yeni SGK dönemi ekle
+          Yeni SGK donemi ekle
         </button>
       </div>
 
       {isLoading && (
-        <p className="text-xs text-slate-500">SGK oranları yükleniyor...</p>
+        <p className="text-xs text-slate-500">SGK oranlari yukleniyor...</p>
       )}
       {isError && (
         <p className="text-xs text-red-600">
-          SGK oranları alınırken hata oluştu. Fallback oranlar gösterilebilir.
+          SGK oranlari alinirken hata olustu. Fallback oranlar gosterilebilir.
         </p>
       )}
       {message && (
@@ -233,32 +261,125 @@ export function SgkReimbursementSettingsCard() {
       )}
 
       <div className="space-y-2">
-        {sortedPeriods.slice(0, 4).map((period) => (
-          <div
-            key={period.id}
-            className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="font-medium text-slate-800">
-                Geçerlilik: {formatDate(period.valid_from)}
-              </div>
-              <div className="text-slate-600">
-                Pil ek tutarı: {formatMoney(period.pill_extra_per_device)} TL / cihaz
-              </div>
-            </div>
-            <div className="mt-1 text-[11px] text-slate-500">
-              {period.rates.length} SGK profili
-              {period.id.startsWith('fallback-') ? ' - kod fallback oranı' : ''}
-            </div>
+        {sortedOldestFirst.length === 0 && !isLoading && (
+          <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
+            Kayitli SGK donemi bulunamadi.
           </div>
-        ))}
+        )}
+
+        {sortedOldestFirst.map((period) => {
+          const isExpanded = expandedPeriodId === period.id;
+          const status = getPeriodStatus(period, activePeriodId);
+
+          return (
+            <div
+              key={period.id}
+              className="rounded-md border border-slate-100 bg-slate-50 text-xs"
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setExpandedPeriodId((current) =>
+                    current === period.id ? null : period.id,
+                  )
+                }
+                className="flex w-full flex-col gap-2 px-3 py-2 text-left sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-slate-800">
+                      Gecerlilik: {formatDate(period.valid_from)}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${status.className}`}
+                    >
+                      {status.label}
+                    </span>
+                    {period.id.startsWith('fallback-') && (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                        Fallback
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    {period.rates.length} SGK profili
+                  </div>
+                </div>
+                <div className="text-slate-600">
+                  Pil ek tutari: {formatMoney(period.pill_extra_per_device)} TL / cihaz
+                </div>
+              </button>
+
+              {isExpanded && (
+                <div className="border-t border-slate-200 bg-white px-3 py-3">
+                  <div className="mb-2 text-[11px] text-slate-500">
+                    Gecmis donemler kilitlidir. Yeni oran geldiginde son donemi
+                    kopyalayarak yeni SGK donemi ekleyin.
+                  </div>
+                  <div className="overflow-x-auto rounded-md border border-slate-200">
+                    <table className="min-w-full divide-y divide-slate-200 text-xs">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="px-2 py-2 text-left font-medium text-slate-600">
+                            Profil
+                          </th>
+                          <th className="px-2 py-2 text-right font-medium text-slate-600">
+                            Brut
+                          </th>
+                          <th className="px-2 py-2 text-right font-medium text-slate-600">
+                            Firmaya net
+                          </th>
+                          <th className="px-2 py-2 text-right font-medium text-slate-600">
+                            Calisan payi
+                          </th>
+                          <th className="px-2 py-2 text-right font-medium text-slate-600">
+                            Emekli payi
+                          </th>
+                          <th className="px-2 py-2 text-right font-medium text-slate-600">
+                            Emekli net
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {period.rates.map((rate) => (
+                          <tr key={rate.id}>
+                            <td className="whitespace-nowrap px-2 py-2 font-medium text-slate-800">
+                              {rate.label}
+                            </td>
+                            <td className="whitespace-nowrap px-2 py-2 text-right text-slate-700">
+                              {formatMoney(rate.gross)}
+                            </td>
+                            <td className="whitespace-nowrap px-2 py-2 text-right text-slate-700">
+                              {formatMoney(rate.net_to_firm)}
+                            </td>
+                            <td className="whitespace-nowrap px-2 py-2 text-right text-slate-700">
+                              {formatMoney(rate.employee_share)}
+                            </td>
+                            <td className="whitespace-nowrap px-2 py-2 text-right text-slate-700">
+                              {formatMoney(rate.retiree_share)}
+                            </td>
+                            <td className="whitespace-nowrap px-2 py-2 text-right text-slate-700">
+                              {formatMoney(rate.retiree_net_after_share)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {form && (
         <div className="mt-4 space-y-3 rounded-md border border-primary-100 bg-primary-50/40 p-3">
           <div className="grid gap-3 text-xs sm:grid-cols-2">
             <label className="flex flex-col gap-1">
-              <span className="font-medium text-slate-700">Geçerlilik başlangıcı</span>
+              <span className="font-medium text-slate-700">
+                Gecerlilik baslangici
+              </span>
               <input
                 type="date"
                 value={form.validFrom}
@@ -271,7 +392,9 @@ export function SgkReimbursementSettingsCard() {
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="font-medium text-slate-700">Pil ek tutarı / cihaz</span>
+              <span className="font-medium text-slate-700">
+                Pil ek tutari / cihaz
+              </span>
               <input
                 type="text"
                 value={form.pillExtraPerDevice}
@@ -296,16 +419,16 @@ export function SgkReimbursementSettingsCard() {
                     Profil
                   </th>
                   <th className="px-2 py-2 text-left font-medium text-slate-600">
-                    Brüt
+                    Brut
                   </th>
                   <th className="px-2 py-2 text-left font-medium text-slate-600">
                     Firmaya net
                   </th>
                   <th className="px-2 py-2 text-left font-medium text-slate-600">
-                    Çalışan payı
+                    Calisan payi
                   </th>
                   <th className="px-2 py-2 text-left font-medium text-slate-600">
-                    Emekli payı
+                    Emekli payi
                   </th>
                   <th className="px-2 py-2 text-left font-medium text-slate-600">
                     Emekli net
@@ -378,7 +501,7 @@ export function SgkReimbursementSettingsCard() {
               disabled={isSaving}
               className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white disabled:opacity-60"
             >
-              İptal
+              Iptal
             </button>
             <button
               type="button"

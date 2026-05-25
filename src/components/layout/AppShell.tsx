@@ -13,7 +13,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-slate-100">
+    <div className="flex min-h-screen bg-[rgb(var(--color-app-bg))]">
       {/* Desktop sidebar (md and up) */}
       <div className="hidden md:block">
         <Sidebar />
