@@ -14,7 +14,7 @@ export function ResponsiveTableShell({
   className = '',
 }: ResponsiveTableShellProps) {
   const baseClasses =
-    'w-full max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm';
+    'isolate w-full max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm';
 
   return <div className={`${baseClasses} ${className}`}>{children}</div>;
 }

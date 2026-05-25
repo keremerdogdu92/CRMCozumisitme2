@@ -591,7 +591,7 @@ export function ReferencesTable({
 
       {/* Desktop / tablet table (md and above) */}
       <ResponsiveTableShell className="hidden md:block">
-        <table className="min-w-full text-xs md:text-sm">
+        <table className="min-w-[1100px] text-xs md:text-sm">
           <thead className="bg-slate-50">
             <tr>
               {visibleColumns.map((col) => {
@@ -608,6 +608,10 @@ export function ReferencesTable({
                     key={col.id}
                     className={`px-4 py-2 font-medium text-slate-600 ${alignClass} ${
                       col.sortable ? 'cursor-pointer select-none' : ''
+                    } ${
+                      col.id === 'full_name'
+                        ? 'sticky left-0 z-20 bg-slate-50 shadow-[1px_0_0_0_rgb(226_232_240)]'
+                        : ''
                     }`}
                     onClick={() => col.sortable && setSort(col.id)}
                   >
@@ -622,7 +626,7 @@ export function ReferencesTable({
                   </th>
                 );
               })}
-              <th className="px-4 py-2 text-right font-medium text-slate-600">
+              <th className="sticky right-0 z-20 bg-slate-50 px-4 py-2 text-right font-medium text-slate-600 shadow-[-1px_0_0_0_rgb(226_232_240)]">
                 İşlemler
               </th>
             </tr>
@@ -654,7 +658,7 @@ export function ReferencesTable({
                         );
                       case 'full_name':
                         return (
-                          <td key={col.id} className="px-4 py-2 text-slate-800">
+                          <td key={col.id} className="sticky left-0 z-10 bg-white px-4 py-2 text-slate-800 shadow-[1px_0_0_0_rgb(226_232_240)]">
                             {r.full_name ?? '-'}
                           </td>
                         );
@@ -736,7 +740,7 @@ export function ReferencesTable({
                     }
                   })}
 
-                  <td className="whitespace-nowrap px-4 py-2 text-right">
+                  <td className="sticky right-0 z-10 whitespace-nowrap bg-white px-4 py-2 text-right shadow-[-1px_0_0_0_rgb(226_232_240)]">
                     <div className="inline-flex items-center gap-2">
                       <SoftDeleteRowActionButton
                         isDeleted={isDeleted}

@@ -30,12 +30,12 @@ export interface PageLayoutProps extends PropsWithChildren {
 function getMaxWidthClasses(maxWidth: PageMaxWidth): string {
   switch (maxWidth) {
     case 'lg':
-      return 'mx-auto w-full max-w-5xl';
+      return 'mx-auto min-w-0 w-full max-w-5xl';
     case 'xl':
-      return 'mx-auto w-full max-w-6xl';
+      return 'mx-auto min-w-0 w-full max-w-6xl';
     case 'full':
     default:
-      return 'w-full max-w-full';
+      return 'min-w-0 w-full max-w-full';
   }
 }
 
@@ -68,7 +68,7 @@ export function PageLayout(props: PageLayoutProps) {
   } = props;
 
   const rootClasses = twMerge(
-    'flex w-full flex-col gap-4',
+    'flex min-w-0 w-full flex-col gap-4',
     fillHeight && 'h-full',
     getPaddingClasses(padding),
     className,

@@ -5,6 +5,7 @@ import {
   useAssignableProfiles,
   useCreateTaskMutation,
   useTasks,
+  useUpdateTaskMutation,
   useUpdateTaskStatusMutation,
 } from '../features/tasks/api';
 import type {
@@ -44,6 +45,13 @@ function formatDate(value: string | null): string {
     : parsed.toLocaleDateString('tr-TR');
 }
 
+function formatInputDate(value: string | null): string {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
+}
+
 function getTaskClass(task: TaskRow): string {
   if (task.status === 'done') return 'border-emerald-200 bg-emerald-50/50';
   if (task.priority === 'urgent') return 'border-red-200 bg-red-50/50';
@@ -56,12 +64,16 @@ export default function TasksPage() {
   const { data: profiles } = useAssignableProfiles();
   const createMutation = useCreateTaskMutation();
   const statusMutation = useUpdateTaskStatusMutation();
+  const updateMutation = useUpdateTaskMutation();
   const [form, setForm] = useState<NewTaskForm>(EMPTY_FORM);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<NewTaskForm>(EMPTY_FORM);
 
   const profileLabelMap = useMemo(() => {
     const map = new Map<string, string>();
     (profiles ?? []).forEach((profile, index) => {
-      map.set(profile.id, `${profile.role === 'admin' ? 'Admin' : 'Personel'} ${index + 1}`);
+      const fallback = `${profile.role === 'admin' ? 'Admin' : 'Personel'} ${index + 1}`;
+      map.set(profile.id, profile.display_name?.trim() || fallback);
     });
     return map;
   }, [profiles]);
@@ -75,6 +87,41 @@ export default function TasksPage() {
     createMutation.mutate(form, {
       onSuccess: () => setForm(EMPTY_FORM),
     });
+  }
+
+  function startEdit(task: TaskRow) {
+    setEditingId(task.id);
+    setEditForm({
+      title: task.title,
+      description: task.description ?? '',
+      assignedTo: task.assigned_to ?? '',
+      priority: task.priority,
+      dueAt: formatInputDate(task.due_at),
+    });
+  }
+
+  function patchEdit<K extends keyof NewTaskForm>(key: K, value: NewTaskForm[K]) {
+    setEditForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleEditSubmit(event: FormEvent<HTMLFormElement>, task: TaskRow) {
+    event.preventDefault();
+    updateMutation.mutate(
+      {
+        taskId: task.id,
+        title: editForm.title,
+        description: editForm.description,
+        assignedTo: editForm.assignedTo || null,
+        priority: editForm.priority,
+        dueAt: editForm.dueAt || null,
+      },
+      {
+        onSuccess: () => {
+          setEditingId(null);
+          setEditForm(EMPTY_FORM);
+        },
+      },
+    );
   }
 
   return (
@@ -119,7 +166,8 @@ export default function TasksPage() {
               <option value="">Atanmadi</option>
               {(profiles ?? []).map((profile, index) => (
                 <option key={profile.id} value={profile.id}>
-                  {profile.role === 'admin' ? 'Admin' : 'Personel'} {index + 1}
+                  {profile.display_name?.trim() ||
+                    `${profile.role === 'admin' ? 'Admin' : 'Personel'} ${index + 1}`}
                 </option>
               ))}
             </select>
@@ -197,25 +245,133 @@ export default function TasksPage() {
                     Atanan: {task.assigned_to ? profileLabelMap.get(task.assigned_to) ?? task.assigned_to : '-'} | Son tarih:{' '}
                     {formatDate(task.due_at)}
                   </p>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Olusturan:{' '}
+                    {task.created_by
+                      ? profileLabelMap.get(task.created_by) ?? task.created_by
+                      : '-'}
+                  </p>
                 </div>
-                <select
-                  value={task.status}
-                  disabled={statusMutation.isPending}
-                  onChange={(event) =>
-                    statusMutation.mutate({
-                      taskId: task.id,
-                      status: event.target.value as TaskStatus,
-                    })
-                  }
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                >
-                  {STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  <select
+                    value={task.status}
+                    disabled={statusMutation.isPending}
+                    onChange={(event) =>
+                      statusMutation.mutate({
+                        taskId: task.id,
+                        status: event.target.value as TaskStatus,
+                      })
+                    }
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  >
+                    {STATUS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      editingId === task.id ? setEditingId(null) : startEdit(task)
+                    }
+                    className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    {editingId === task.id ? 'Vazgec' : 'Duzenle'}
+                  </button>
+                </div>
               </div>
+
+              {editingId === task.id && (
+                <form
+                  className="mt-4 grid gap-3 border-t border-slate-200 pt-3 text-xs md:grid-cols-2"
+                  onSubmit={(event) => handleEditSubmit(event, task)}
+                >
+                  <label className="space-y-1 md:col-span-2">
+                    <span className="font-medium text-slate-700">Baslik</span>
+                    <input
+                      type="text"
+                      value={editForm.title}
+                      onChange={(event) => patchEdit('title', event.target.value)}
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    />
+                  </label>
+
+                  <label className="space-y-1 md:col-span-2">
+                    <span className="font-medium text-slate-700">Aciklama</span>
+                    <textarea
+                      rows={3}
+                      value={editForm.description}
+                      onChange={(event) =>
+                        patchEdit('description', event.target.value)
+                      }
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    />
+                  </label>
+
+                  <label className="space-y-1">
+                    <span className="font-medium text-slate-700">Atanan kisi</span>
+                    <select
+                      value={editForm.assignedTo}
+                      onChange={(event) =>
+                        patchEdit('assignedTo', event.target.value)
+                      }
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    >
+                      <option value="">Atanmadi</option>
+                      {(profiles ?? []).map((profile, index) => (
+                        <option key={profile.id} value={profile.id}>
+                          {profile.display_name?.trim() ||
+                            `${profile.role === 'admin' ? 'Admin' : 'Personel'} ${index + 1}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-1">
+                    <span className="font-medium text-slate-700">Oncelik</span>
+                    <select
+                      value={editForm.priority}
+                      onChange={(event) =>
+                        patchEdit('priority', event.target.value as TaskPriority)
+                      }
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    >
+                      {PRIORITY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-1">
+                    <span className="font-medium text-slate-700">Son tarih</span>
+                    <input
+                      type="date"
+                      value={editForm.dueAt}
+                      onChange={(event) => patchEdit('dueAt', event.target.value)}
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    />
+                  </label>
+
+                  <div className="flex items-end justify-end">
+                    <button
+                      type="submit"
+                      disabled={updateMutation.isPending}
+                      className="w-full rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-60 sm:w-auto"
+                    >
+                      {updateMutation.isPending ? 'Kaydediliyor...' : 'Kaydet'}
+                    </button>
+                  </div>
+
+                  {updateMutation.error && (
+                    <p className="md:col-span-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+                      {(updateMutation.error as Error).message}
+                    </p>
+                  )}
+                </form>
+              )}
             </article>
           ))}
         </div>

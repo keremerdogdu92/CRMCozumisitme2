@@ -21,6 +21,7 @@ import type {
   MeetingType,
 } from './types';
 import { useCurrentProfile } from '../auth/useCurrentProfile';
+import { saveMeetingSatisfaction } from './api.satisfaction';
 
 export const MEETINGS_QUERY_KEY = ['meetings'] as const;
 
@@ -282,11 +283,6 @@ export async function createMeeting(input: NewMeetingForm): Promise<string> {
   }
 
   // 3) Form verisini normalize et
-  const satisfaction =
-    input.satisfaction10.trim() === ''
-      ? null
-      : Math.min(10, Math.max(1, Number.parseInt(input.satisfaction10, 10) || 0));
-
   const atIso = input.at ? new Date(input.at).toISOString() : null;
   const nextAtIso = input.next_at ? new Date(input.next_at).toISOString() : null;
 
@@ -323,7 +319,7 @@ export async function createMeeting(input: NewMeetingForm): Promise<string> {
       note: input.note.trim() || null,
       at: atIso,
       next_at: nextAtIso,
-      satisfaction_10: satisfaction,
+      satisfaction_10: null,
       created_by: user.id,
       follow_up_alert_armed_at: nextAtIso ? new Date().toISOString() : null,
     })
@@ -372,6 +368,33 @@ export async function createMeeting(input: NewMeetingForm): Promise<string> {
         throw new Error('MEET_STEP_ACCESSORIES_INSERT: ' + accErr.message);
       }
       throw accErr;
+    }
+  }
+
+  if (
+    input.meetingType === 'patient' &&
+    input.subjectId &&
+    input.satisfaction &&
+    input.satisfaction.questionIds.length > 0
+  ) {
+    try {
+      await saveMeetingSatisfaction({
+        meetingId,
+        patientId: input.subjectId,
+        questionIds: input.satisfaction.questionIds,
+        answers: input.satisfaction.answers,
+      });
+    } catch (satisfactionErr) {
+      console.error(
+        'Failed to save meeting satisfaction (MEET_STEP_SATISFACTION_SAVE):',
+        satisfactionErr,
+      );
+      if (satisfactionErr instanceof Error) {
+        throw new Error(
+          'MEET_STEP_SATISFACTION_SAVE: ' + satisfactionErr.message,
+        );
+      }
+      throw satisfactionErr;
     }
   }
 

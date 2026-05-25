@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid NOT NULL,
   org_id uuid NOT NULL,
   role text NOT NULL,
+  display_name text NULL,
   created_at timestamp with time zone NULL DEFAULT now(),
   is_admin boolean NOT NULL DEFAULT false,
 
@@ -36,6 +37,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     role = ANY (ARRAY['admin'::text, 'staff'::text])
   )
 );
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS display_name text NULL;
 
 -- Optional explicit unique index (PK already enforces this).
 CREATE UNIQUE INDEX IF NOT EXISTS profiles_pkey
@@ -151,8 +155,20 @@ ON public.profiles
 AS PERMISSIVE
 FOR UPDATE
 TO authenticated
-USING (id = auth.uid())
-WITH CHECK (id = auth.uid());
+USING (
+  id = auth.uid()
+  OR (
+    org_id = public.current_user_org_id()
+    AND public.current_user_role() = 'admin'
+  )
+)
+WITH CHECK (
+  id = auth.uid()
+  OR (
+    org_id = public.current_user_org_id()
+    AND public.current_user_role() = 'admin'
+  )
+);
 
 -- DELETE:
 CREATE POLICY profiles_delete_service_only
@@ -217,6 +233,7 @@ AS $function$
 DECLARE
   v_org_id uuid;
   v_role text;
+  v_display_name text;
 BEGIN
   -- org_id must come from user_metadata
   v_org_id := nullif(new.raw_user_meta_data->>'org_id', '')::uuid;
@@ -232,8 +249,13 @@ BEGIN
     RAISE EXCEPTION 'org_id is required in user_metadata to create profile';
   END IF;
 
-  INSERT INTO public.profiles (id, org_id, role, is_admin)
-  VALUES (new.id, v_org_id, v_role, (v_role = 'admin'))
+  v_display_name := nullif(
+    trim(coalesce(new.raw_user_meta_data->>'display_name', new.raw_user_meta_data->>'full_name', '')),
+    ''
+  );
+
+  INSERT INTO public.profiles (id, org_id, role, display_name, is_admin)
+  VALUES (new.id, v_org_id, v_role, v_display_name, (v_role = 'admin'))
   ON CONFLICT (id) DO NOTHING;
 
   RETURN new;

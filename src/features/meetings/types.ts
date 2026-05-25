@@ -4,6 +4,8 @@
 // - public.meetings: includes deleted_at for soft delete UI filtering.
 // - Soft delete operations are executed via RPC (soft_delete_meetings / restore_meetings).
 
+import type { MeetingSatisfactionDraft } from './meetingSatisfactionTypes';
+
 export type MeetingType = 'patient' | 'trial' | 'reference';
 
 export type MeetingAccessoryType =
@@ -66,7 +68,6 @@ export interface NewMeetingForm {
   note: string;
   at: string; // yyyy-MM-dd (HTML date input)
   next_at: string; // yyyy-MM-dd (HTML date input)
-  satisfaction10: string; // kept as string in form, parsed on submit
 
   /**
    * Payment section (currently only used when meetingType === 'patient'):
@@ -82,4 +83,9 @@ export interface NewMeetingForm {
    * Accessories sold in this meeting (only for patient type).
    */
   accessories?: MeetingAccessoryDraft[];
+
+  /**
+   * Optional patient satisfaction prompts and answers shown in the same form.
+   */
+  satisfaction?: MeetingSatisfactionDraft | null;
 }

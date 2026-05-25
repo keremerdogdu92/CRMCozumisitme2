@@ -478,8 +478,7 @@ export function TrialsTable({
 
       {/* Desktop / tablet: classic table (md and up) */}
       <ResponsiveTableShell className="hidden md:block">
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          <table className="min-w-full text-xs md:text-sm">
+        <table className="min-w-[980px] text-xs md:text-sm">
             <thead className="bg-slate-50">
               <tr>
                 {visibleColumns.map((col) => {
@@ -494,6 +493,12 @@ export function TrialsTable({
                       key={col.id}
                       className={`px-4 py-2 font-medium text-slate-600 ${alignClass} ${
                         col.sortable ? 'cursor-pointer select-none' : ''
+                      } ${
+                        col.id === 'full_name'
+                          ? 'sticky left-0 z-20 bg-slate-50 shadow-[1px_0_0_0_rgb(226_232_240)]'
+                          : col.id === 'actions'
+                            ? 'sticky right-0 z-20 bg-slate-50 shadow-[-1px_0_0_0_rgb(226_232_240)]'
+                            : ''
                       }`}
                       onClick={() => col.sortable && setSort(col.id)}
                     >
@@ -558,7 +563,7 @@ export function TrialsTable({
                           );
                         case 'full_name':
                           return (
-                            <td key={col.id} className="px-4 py-2 text-slate-800">
+                            <td key={col.id} className="sticky left-0 z-10 bg-white px-4 py-2 text-slate-800 shadow-[1px_0_0_0_rgb(226_232_240)]">
                               {t.full_name ?? '-'}
                             </td>
                           );
@@ -609,7 +614,7 @@ export function TrialsTable({
                           return (
                             <td
                               key={col.id}
-                              className="whitespace-nowrap px-4 py-2 text-right"
+                              className="sticky right-0 z-10 whitespace-nowrap bg-white px-4 py-2 text-right shadow-[-1px_0_0_0_rgb(226_232_240)]"
                             >
                               <div className="inline-flex items-center gap-2">
                                 <SoftDeleteRowActionButton
@@ -638,8 +643,7 @@ export function TrialsTable({
                 );
               })}
             </tbody>
-          </table>
-        </div>
+        </table>
       </ResponsiveTableShell>
     </div>
   );

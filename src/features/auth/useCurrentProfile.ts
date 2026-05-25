@@ -11,6 +11,7 @@ export interface CurrentProfile {
   org_id: string | null;
   role: UserRole;
   full_name: string | null;
+  display_name: string | null;
 }
 
 /**
@@ -40,12 +41,9 @@ async function fetchCurrentProfile(): Promise<CurrentProfile | null> {
     return null;
   }
 
-  // NOTE:
-  // Current `profiles` schema has: id, org_id, role, created_at
-  // There is no `full_name` column, so we only select existing fields.
   const { data, error } = await supabaseClient
     .from('profiles')
-    .select('id, org_id, role')
+    .select('id, org_id, role, display_name')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -62,8 +60,8 @@ async function fetchCurrentProfile(): Promise<CurrentProfile | null> {
     id: data.id as string,
     org_id: (data.org_id as string | null) ?? null,
     role: mapRole(data.role),
-    // Profiles table currently does not store a full_name field.
-    full_name: null,
+    full_name: (data.display_name as string | null) ?? null,
+    display_name: (data.display_name as string | null) ?? null,
   };
 }
 

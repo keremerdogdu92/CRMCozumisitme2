@@ -23,7 +23,7 @@ export type TaskRow = {
 export type AssignableProfile = {
   id: string;
   role: UserRole;
-  full_name: string | null;
+  display_name: string | null;
 };
 
 export type NewTaskForm = {

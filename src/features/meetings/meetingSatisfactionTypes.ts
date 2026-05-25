@@ -63,11 +63,30 @@ export interface MeetingSatisfactionAnswer {
   created_at?: string | null;
 }
 
+export interface MeetingSatisfactionPromptQuestion {
+  prompt_id?: string | null;
+  question_id: string;
+  list_id: string;
+  list_name: string;
+  question_text: string;
+  sort_order: number;
+  prompt_order: number;
+  score?: SatisfactionScore | null;
+}
+
+export interface MeetingSatisfactionDraft {
+  questionIds: string[];
+  answers: {
+    questionId: string;
+    score: SatisfactionScore;
+  }[];
+}
+
 // Payload expected by saveMeetingSatisfaction() API helper
 export interface SaveMeetingSatisfactionInput {
   meetingId: string;
   patientId: string;
-  listId: string;
+  questionIds: string[];
   answers: {
     questionId: string;
     score: SatisfactionScore;

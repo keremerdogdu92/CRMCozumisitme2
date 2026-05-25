@@ -16,6 +16,7 @@ import { AppearanceSettingsCard } from '../features/settings/AppearanceSettingsC
 import { SgkReimbursementSettingsCard } from '../features/settings/SgkReimbursementSettingsCard';
 import { MeetingSatisfactionSettingsCard } from '../features/meetings/MeetingSatisfactionSettingsCard';
 import { useCurrentProfile } from '../features/auth/useCurrentProfile';
+import { UserProfilesCard } from '../features/settings/UserProfilesCard';
 
 type SettingsTab =
   | 'imports'
@@ -253,11 +254,12 @@ export default function SettingsPage() {
         {activeTab === 'organization' && (
           <div className="space-y-4">
             {isAdmin ? (
-              <OrgSettingsCard />
+              <>
+                <OrgSettingsCard />
+                <UserProfilesCard />
+              </>
             ) : (
-              <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-                Bu sekme icin admin yetkisi gerekir.
-              </section>
+              <UserProfilesCard />
             )}
           </div>
         )}

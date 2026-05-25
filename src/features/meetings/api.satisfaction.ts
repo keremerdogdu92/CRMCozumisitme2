@@ -10,6 +10,7 @@ import type {
   MeetingSatisfactionQuestionList,
   MeetingSatisfactionQuestion,
   MeetingSatisfactionAnswer,
+  MeetingSatisfactionPromptQuestion,
   SaveMeetingSatisfactionInput,
   SatisfactionScore,
 } from './meetingSatisfactionTypes';
@@ -234,6 +235,61 @@ export async function fetchAnswersForMeeting(
   return (data ?? []) as MeetingSatisfactionAnswer[];
 }
 
+function mapPromptRows(
+  rows: Array<Record<string, unknown>>,
+): MeetingSatisfactionPromptQuestion[] {
+  return rows.map((row) => ({
+    prompt_id: (row.prompt_id as string | null | undefined) ?? null,
+    question_id: row.question_id as string,
+    list_id: row.list_id as string,
+    list_name: (row.list_name as string | null) ?? '',
+    question_text: (row.question_text as string | null) ?? '',
+    sort_order: Number(row.sort_order ?? 0),
+    prompt_order: Number(row.prompt_order ?? 0),
+    score:
+      typeof row.score === 'number'
+        ? (row.score as SatisfactionScore)
+        : null,
+  }));
+}
+
+export async function fetchSuggestedSatisfactionQuestions(
+  patientId: string,
+): Promise<MeetingSatisfactionPromptQuestion[]> {
+  const { data, error } = await supabaseClient.rpc(
+    'get_patient_satisfaction_prompt_questions',
+    {
+      p_patient_id: patientId,
+      p_limit: 5,
+    },
+  );
+
+  if (error) {
+    console.error('fetchSuggestedSatisfactionQuestions rpc error', error);
+    throw error;
+  }
+
+  return mapPromptRows((data ?? []) as Array<Record<string, unknown>>);
+}
+
+export async function fetchMeetingSatisfactionPrompts(
+  meetingId: string,
+): Promise<MeetingSatisfactionPromptQuestion[]> {
+  const { data, error } = await supabaseClient.rpc(
+    'get_meeting_satisfaction_prompt_questions',
+    {
+      p_meeting_id: meetingId,
+    },
+  );
+
+  if (error) {
+    console.error('fetchMeetingSatisfactionPrompts rpc error', error);
+    throw error;
+  }
+
+  return mapPromptRows((data ?? []) as Array<Record<string, unknown>>);
+}
+
 /**
  * Save / replace all satisfaction answers for a meeting.
  * The RPC performs delete + insert + meeting satisfaction_10 update atomically.
@@ -241,7 +297,7 @@ export async function fetchAnswersForMeeting(
 export async function saveMeetingSatisfaction(
   payload: SaveMeetingSatisfactionInput,
 ): Promise<void> {
-  const { meetingId, patientId, listId, answers } = payload;
+  const { meetingId, patientId, questionIds, answers } = payload;
 
   type AnswerInput = {
     questionId: string;
@@ -251,7 +307,7 @@ export async function saveMeetingSatisfaction(
   const { error } = await supabaseClient.rpc('save_meeting_satisfaction_answers', {
     p_meeting_id: meetingId,
     p_patient_id: patientId,
-    p_list_id: listId,
+    p_question_ids: questionIds,
     p_answers: answers.map((a: AnswerInput) => ({
       question_id: a.questionId,
       score: a.score,

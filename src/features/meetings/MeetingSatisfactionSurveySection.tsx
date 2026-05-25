@@ -1,254 +1,231 @@
-// src/features/meetings/MeetingSatisfactionSurveySection.tsx
-// Summary: 5-question satisfaction survey section for meetings.
-// - Pulls active question lists and questions.
-// - Lets user pick a list and answer 1-5 with fixed labels.
-// - On submit, calls saveMeetingSatisfaction() with all answers.
-//
-// Patch v2.2:
-// - Better "pre-save" UX: if meetingId is null, show a small inline hint and
-//   disable the Save button instead of silently doing nothing.
-// - Keeps existing logic intact for loading lists/questions/answers.
-
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/ui/Button';
 import {
-  fetchActiveSatisfactionLists,
-  fetchQuestionsForList,
-  fetchAnswersForMeeting,
+  fetchMeetingSatisfactionPrompts,
+  fetchSuggestedSatisfactionQuestions,
   saveMeetingSatisfaction,
 } from './api.satisfaction';
 import {
   SATISFACTION_OPTIONS,
-  type MeetingSatisfactionQuestion,
+  type MeetingSatisfactionDraft,
+  type MeetingSatisfactionPromptQuestion,
   type SatisfactionScore,
 } from './meetingSatisfactionTypes';
-import { useCurrentProfile } from '../auth/useCurrentProfile';
 
 interface MeetingSatisfactionSurveySectionProps {
-  meetingId: string | null; // null for brand new meetings (pre-save)
+  meetingId?: string | null;
   patientId: string;
-  onRequireMeetingId?: () => void;
+  mode?: 'draft' | 'edit';
+  disabled?: boolean;
+  onDraftChange?: (draft: MeetingSatisfactionDraft) => void;
+  onSaved?: () => void;
 }
 
-type QuestionWithAnswer = {
-  question: MeetingSatisfactionQuestion;
-  score: SatisfactionScore | null;
-};
+type ScoresByQuestion = Record<string, SatisfactionScore | null>;
 
-export function MeetingSatisfactionSurveySection(
-  props: MeetingSatisfactionSurveySectionProps,
-) {
-  const { meetingId, patientId, onRequireMeetingId } = props;
+function buildDraft(
+  questions: MeetingSatisfactionPromptQuestion[],
+  scores: ScoresByQuestion,
+): MeetingSatisfactionDraft {
+  return {
+    questionIds: questions.map((question) => question.question_id),
+    answers: questions
+      .map((question) => ({
+        questionId: question.question_id,
+        score: scores[question.question_id],
+      }))
+      .filter(
+        (answer): answer is { questionId: string; score: SatisfactionScore } =>
+          answer.score != null,
+      ),
+  };
+}
+
+export function MeetingSatisfactionSurveySection({
+  meetingId = null,
+  patientId,
+  mode = 'edit',
+  disabled = false,
+  onDraftChange,
+  onSaved,
+}: MeetingSatisfactionSurveySectionProps) {
   const queryClient = useQueryClient();
-  const { data: profile } = useCurrentProfile();
+  const [scores, setScores] = useState<ScoresByQuestion>({});
 
-  const [selectedListId, setSelectedListId] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<QuestionWithAnswer[]>([]);
-  const [loadingQuestions, setLoadingQuestions] = useState(false);
-
-  // Fetch lists
-  const { data: lists, isLoading: loadingLists } = useQuery({
-    queryKey: ['meeting-satisfaction-lists', profile?.org_id],
-    queryFn: fetchActiveSatisfactionLists,
-  });
-
-  // If we already have a meetingId, load existing answers to pre-fill.
-  const { data: existingAnswers, isLoading: loadingExisting } = useQuery({
-    queryKey: ['meeting-satisfaction-answers', meetingId],
-    queryFn: () =>
-      meetingId ? fetchAnswersForMeeting(meetingId) : Promise.resolve([]),
-    enabled: !!meetingId,
-  });
-
-  // Load questions when list changes
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadQuestions(listId: string) {
-      setLoadingQuestions(true);
-      try {
-        const qs: MeetingSatisfactionQuestion[] =
-          await fetchQuestionsForList(listId);
-
-        if (cancelled) return;
-
-        const mapped: QuestionWithAnswer[] = qs.map((q) => {
-          const existing = existingAnswers?.find(
-            (a) => a.question_id === q.id,
-          );
-          return {
-            question: q,
-            score: (existing?.score as SatisfactionScore | undefined) ?? null,
-          };
-        });
-
-        // Limit to 5 questions (as requested)
-        setQuestions(mapped.slice(0, 5));
-      } finally {
-        if (!cancelled) setLoadingQuestions(false);
+  const query = useQuery({
+    queryKey: ['meeting-satisfaction-prompts', mode, meetingId, patientId],
+    enabled: !!patientId,
+    queryFn: async () => {
+      if (meetingId) {
+        const existing = await fetchMeetingSatisfactionPrompts(meetingId);
+        if (existing.length > 0) return existing;
       }
-    }
 
-    if (selectedListId) {
-      loadQuestions(selectedListId);
-    } else {
-      setQuestions([]);
-    }
+      return fetchSuggestedSatisfactionQuestions(patientId);
+    },
+  });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedListId, existingAnswers]);
+  const questions = useMemo(
+    () => (query.data ?? []) as MeetingSatisfactionPromptQuestion[],
+    [query.data],
+  );
+
+  useEffect(() => {
+    const next: ScoresByQuestion = {};
+    questions.forEach((question) => {
+      next[question.question_id] = question.score ?? null;
+    });
+    setScores(next);
+  }, [questions]);
+
+  useEffect(() => {
+    if (mode !== 'draft' || !onDraftChange) return;
+    onDraftChange(buildDraft(questions, scores));
+  }, [mode, onDraftChange, questions, scores]);
 
   const mutation = useMutation({
     mutationFn: saveMeetingSatisfaction,
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['meeting-satisfaction-answers', variables.meetingId],
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: ['meeting-satisfaction-prompts', mode, variables.meetingId, patientId],
       });
-      queryClient.invalidateQueries({
+      await queryClient.invalidateQueries({
         predicate: (q) =>
           Array.isArray(q.queryKey) && q.queryKey[0] === 'meetings',
       });
+      onSaved?.();
     },
   });
 
   const averageScore = useMemo(() => {
-    const filled = questions.filter((q) => q.score != null);
+    const filled = Object.values(scores).filter(
+      (score): score is SatisfactionScore => score != null,
+    );
     if (filled.length === 0) return null;
-    const sum = filled.reduce((acc, q) => acc + (q.score ?? 0), 0);
+    const sum = filled.reduce((acc, score) => acc + score, 0);
     return sum / filled.length;
-  }, [questions]);
+  }, [scores]);
 
   function handleScoreChange(questionId: string, value: SatisfactionScore) {
-    setQuestions((prev) =>
-      prev.map((qa) =>
-        qa.question.id === questionId ? { ...qa, score: value } : qa,
-      ),
-    );
+    setScores((current) => ({
+      ...current,
+      [questionId]: current[questionId] === value ? null : value,
+    }));
   }
 
   async function handleSave() {
-    if (!meetingId) {
-      if (onRequireMeetingId) onRequireMeetingId();
-      return;
-    }
-    if (!selectedListId) return;
+    if (!meetingId || questions.length === 0) return;
 
-    const filledAnswers = questions.filter(
-      (q) => q.score != null,
-    ) as QuestionWithAnswer[];
-
-    const payload = {
+    await mutation.mutateAsync({
       meetingId,
       patientId,
-      listId: selectedListId,
-      answers: filledAnswers.map((q) => ({
-        questionId: q.question.id,
-        score: q.score as SatisfactionScore,
-      })),
-    };
-
-    await mutation.mutateAsync(payload);
+      ...buildDraft(questions, scores),
+    });
   }
 
-  const disabled =
-    loadingLists || loadingQuestions || loadingExisting || mutation.isPending;
-
-  const canSave = !!meetingId && !!selectedListId && !disabled;
+  const isBusy = query.isLoading || mutation.isPending || disabled;
+  const canSave = mode === 'edit' && !!meetingId && questions.length > 0 && !isBusy;
 
   return (
-    <div className="mt-6 space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+    <div className="mt-4 space-y-4 rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-sm font-semibold text-gray-800">
-          Memnuniyet Anketi (5 soru)
-        </h3>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">
+            Memnuniyet Anketi
+          </h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Sistem aktif soru listelerinden 5 soruyu otomatik secer. Bos
+            birakilan sorular kaydi engellemez.
+          </p>
+        </div>
+
         {averageScore != null && (
-          <span className="text-xs text-gray-600">
-            Ortalama skor: {averageScore.toFixed(2)} / 5
+          <span className="rounded-full bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700">
+            Ortalama: {averageScore.toFixed(2)} / 5
           </span>
         )}
       </div>
 
-      {!meetingId && (
-        <p className="text-xs text-gray-500">
-          Anketi kaydetmek için önce görüşmeyi kaydedin.
+      {query.isLoading && (
+        <p className="text-xs text-slate-500">Sorular yukleniyor...</p>
+      )}
+
+      {query.isError && (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+          {(query.error as Error)?.message ?? 'Sorular yuklenemedi.'}
         </p>
       )}
 
-      {/* List selector */}
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-gray-700">Anket tipi</label>
-        <select
-          className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          value={selectedListId ?? ''}
-          onChange={(e) => setSelectedListId(e.target.value || null)}
-          disabled={disabled || !lists || lists.length === 0}
-        >
-          <option value="">Seçiniz...</option>
-          {lists?.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
-            </option>
-          ))}
-        </select>
-        {(!lists || lists.length === 0) && !loadingLists && (
-          <p className="text-xs text-gray-500">
-            Henüz tanımlı anket listesi yok. Önce yönetim panelinden ekleyin.
-          </p>
-        )}
-      </div>
+      {!query.isLoading && !query.isError && questions.length === 0 && (
+        <p className="text-xs text-slate-500">
+          Aktif memnuniyet sorusu bulunamadi. Ayarlar ekranindan soru listesi
+          ekleyebilirsiniz.
+        </p>
+      )}
 
-      {/* Questions */}
-      {selectedListId && (
+      {questions.length > 0 && (
         <div className="space-y-3">
-          {loadingQuestions && (
-            <p className="text-xs text-gray-500">Sorular yükleniyor...</p>
-          )}
-
-          {!loadingQuestions &&
-            questions.map((qa) => (
-              <div key={qa.question.id} className="space-y-1">
-                <p className="text-xs font-medium text-gray-800">
-                  {qa.question.sort_order + 1}. {qa.question.question_text}
+          {questions.map((question, index) => (
+            <div
+              key={question.question_id}
+              className="space-y-2 rounded-md border border-slate-100 bg-slate-50 p-3"
+            >
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                <p className="text-xs font-medium text-slate-800">
+                  {index + 1}. {question.question_text}
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {SATISFACTION_OPTIONS.map((opt) => (
+                <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                  {question.list_name}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {SATISFACTION_OPTIONS.map((option) => {
+                  const selected = scores[question.question_id] === option.value;
+                  return (
                     <button
-                      key={opt.value}
+                      key={option.value}
                       type="button"
                       className={[
                         'rounded-md border px-2 py-1 text-xs',
-                        qa.score === opt.value
-                          ? 'border-blue-500 bg-blue-50 font-semibold'
-                          : 'border-gray-300 bg-white',
+                        selected
+                          ? 'border-primary-500 bg-primary-50 font-semibold text-primary-800'
+                          : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
                       ].join(' ')}
                       onClick={() =>
-                        handleScoreChange(qa.question.id, opt.value)
+                        handleScoreChange(question.question_id, option.value)
                       }
-                      disabled={disabled}
+                      disabled={isBusy}
                     >
-                      {opt.value}. {opt.label}
+                      {option.value}. {option.label}
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-            ))}
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Save button */}
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          onClick={handleSave}
-          disabled={!canSave}
-          variant="primary"
-        >
-          Anket Cevaplarını Kaydet
-        </Button>
-      </div>
+      {mutation.error && (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+          {(mutation.error as Error).message}
+        </p>
+      )}
+
+      {mode === 'edit' && (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={!canSave}
+            variant="primary"
+          >
+            {mutation.isPending ? 'Kaydediliyor...' : 'Memnuniyeti Kaydet'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

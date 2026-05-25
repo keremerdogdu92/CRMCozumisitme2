@@ -674,8 +674,7 @@ export function InventoryTable({
 
       {/* Desktop/tablet */}
       <ResponsiveTableShell className="hidden md:block">
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          <table className="min-w-full text-xs md:text-sm">
+        <table className="min-w-[1100px] text-xs md:text-sm">
             <thead className="bg-slate-50">
               <tr>
                 {visibleColumns.map((col) => {
@@ -696,6 +695,12 @@ export function InventoryTable({
                       key={col.id}
                       className={`px-3 py-2 text-[11px] font-medium text-slate-600 md:px-4 md:py-2.5 md:text-xs ${alignClass} ${
                         col.sortable ? 'cursor-pointer select-none' : ''
+                      } ${
+                        col.id === 'brand'
+                          ? 'sticky left-0 z-20 bg-slate-50 shadow-[1px_0_0_0_rgb(226_232_240)]'
+                          : col.id === 'actions'
+                            ? 'sticky right-0 z-20 bg-slate-50 shadow-[-1px_0_0_0_rgb(226_232_240)]'
+                            : ''
                       }`}
                       onClick={() => col.sortable && setSort(col.id)}
                     >
@@ -775,7 +780,7 @@ export function InventoryTable({
                           return (
                             <td
                               key={col.id}
-                              className="px-3 py-2 text-slate-800 md:px-4 md:py-2.5"
+                              className="sticky left-0 z-10 bg-white px-3 py-2 text-slate-800 shadow-[1px_0_0_0_rgb(226_232_240)] md:px-4 md:py-2.5"
                             >
                               {item.brand}
                             </td>
@@ -865,7 +870,7 @@ export function InventoryTable({
                           return (
                             <td
                               key={col.id}
-                              className="whitespace-nowrap px-3 py-2 text-right md:px-4 md:py-2.5"
+                              className="sticky right-0 z-10 whitespace-nowrap bg-white px-3 py-2 text-right shadow-[-1px_0_0_0_rgb(226_232_240)] md:px-4 md:py-2.5"
                             >
                               {renderRowActions(item)}
                             </td>
@@ -878,8 +883,7 @@ export function InventoryTable({
                 );
               })}
             </tbody>
-          </table>
-        </div>
+        </table>
       </ResponsiveTableShell>
 
       <p className="text-[11px] text-slate-500">

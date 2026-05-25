@@ -32,6 +32,7 @@ import {
   MEETINGS_BY_PATIENT_QUERY_KEY,
   fetchMeetingsByPatientId,
 } from '../../../meetings/api';
+import { MeetingSatisfactionSurveySection } from '../../../meetings/MeetingSatisfactionSurveySection';
 import { useCurrentProfile } from '../../../auth/useCurrentProfile';
 
 type PatientDetailTabId =
@@ -89,6 +90,7 @@ export function PatientDetailDrawer({
     patient.sgk_prescription_no ?? '',
   );
   const [activeTab, setActiveTab] = useState<PatientDetailTabId>(initialTab);
+  const [satisfactionMeetingId, setSatisfactionMeetingId] = useState<string | null>(null);
 
   // Sisteme işlendiği tarih (timestamptz) – DB’den gelen değer.
   const [sgkRecordedToSystemAt, setSgkRecordedToSystemAt] = useState<
@@ -185,6 +187,7 @@ export function PatientDetailDrawer({
     setSgkRecordedToSystem(!!patient.sgk_recorded_to_system);
     setSgkPrescriptionNo(patient.sgk_prescription_no ?? '');
     setActiveTab(initialTab);
+    setSatisfactionMeetingId(null);
 
     setInvoiceIssued(patient.invoice_issued === true);
     setInvoiceIssuedAt((patient.invoice_issued_at as string | null) ?? null);
@@ -385,6 +388,7 @@ export function PatientDetailDrawer({
                       <th className="px-2 py-1 text-left font-medium">
                         Memnuniyet
                       </th>
+                      <th className="px-2 py-1 text-right font-medium">Islem</th>
                       <th className="px-2 py-1 text-left font-medium">Not</th>
                     </tr>
                   </thead>
@@ -406,6 +410,19 @@ export function PatientDetailDrawer({
                         <td className="px-2 py-1 text-slate-800">
                           {m.satisfaction_10 ?? '-'}
                         </td>
+                        <td className="px-2 py-1 text-right">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSatisfactionMeetingId((current) =>
+                                current === m.id ? null : m.id,
+                              )
+                            }
+                            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            Memnuniyet duzenle
+                          </button>
+                        </td>
                         <td className="px-2 py-1 text-slate-600">
                           {m.note ? m.note.slice(0, 160) : '-'}
                           {m.note && m.note.length > 160 ? '…' : ''}
@@ -414,6 +431,18 @@ export function PatientDetailDrawer({
                     ))}
                   </tbody>
                 </table>
+                {satisfactionMeetingId && (
+                  <MeetingSatisfactionSurveySection
+                    meetingId={satisfactionMeetingId}
+                    patientId={patient.id}
+                    mode="edit"
+                    onSaved={() => {
+                      void queryClient.invalidateQueries({
+                        queryKey: MEETINGS_BY_PATIENT_QUERY_KEY(patient.id),
+                      });
+                    }}
+                  />
+                )}
                 <p className="text-[11px] text-slate-400">
                   Yeni görüşme eklemek için <span className="font-semibold">Görüşmeler</span>{' '}
                   ana ekranını kullanın. Bu sekme sadece ilgili hasta görüşmelerini

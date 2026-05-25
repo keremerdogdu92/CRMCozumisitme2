@@ -770,7 +770,7 @@ export function MeetingsTable() {
 
       {/* Desktop / tablet: classic table (md ve üzeri) */}
       <ResponsiveTableShell className="hidden md:block">
-        <table className="min-w-full text-left text-xs">
+        <table className="min-w-[980px] text-left text-xs">
           <thead className="bg-slate-50 text-slate-600">
             <tr>
               {visibleColumns.map((col) => {
@@ -789,6 +789,12 @@ export function MeetingsTable() {
                     key={col.id}
                     className={`px-3 py-2 font-medium ${alignClass} ${
                       col.sortable ? 'cursor-pointer select-none' : ''
+                    } ${
+                      col.id === 'subject_name'
+                        ? 'sticky left-0 z-20 bg-slate-50 shadow-[1px_0_0_0_rgb(226_232_240)]'
+                        : col.id === 'actions'
+                          ? 'sticky right-0 z-20 bg-slate-50 shadow-[-1px_0_0_0_rgb(226_232_240)]'
+                          : ''
                     }`}
                     onClick={() => col.sortable && setSort(col.id)}
                   >
@@ -838,7 +844,7 @@ export function MeetingsTable() {
                           <td
                             key={col.id}
                             className={
-                              'px-3 py-2 ' +
+                              'sticky left-0 z-10 bg-white px-3 py-2 shadow-[1px_0_0_0_rgb(226_232_240)] ' +
                               (deleted
                                 ? 'text-slate-500 line-through'
                                 : 'text-slate-800')
@@ -891,7 +897,10 @@ export function MeetingsTable() {
                         );
                       case 'actions': {
                         return (
-                          <td key={col.id} className="px-3 py-2 text-right">
+                          <td
+                            key={col.id}
+                            className="sticky right-0 z-10 bg-white px-3 py-2 text-right shadow-[-1px_0_0_0_rgb(226_232_240)]"
+                          >
                             <div className="inline-flex flex-wrap justify-end gap-2">
                               {nav ? (
                                 <button

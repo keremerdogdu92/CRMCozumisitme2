@@ -470,8 +470,7 @@ export function PatientsTable({
       </div>
 
       <ResponsiveTableShell className="hidden md:block">
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          <table className="min-w-[900px] text-xs lg:text-sm">
+        <table className="min-w-[900px] text-xs lg:text-sm">
             <thead className="bg-slate-50">
               <tr>
                 {visibleColumns.map((col) => {
@@ -489,7 +488,13 @@ export function PatientsTable({
                     <th
                       key={col.id}
                       className={`px-3 py-2 text-[11px] font-medium text-slate-600 sm:px-4 sm:py-2.5 sm:text-xs ${col.sortable ? 'cursor-pointer select-none' : ''
-                        } ${alignClass}`}
+                        } ${alignClass} ${
+                          col.id === 'full_name'
+                            ? 'sticky left-0 z-20 bg-slate-50 shadow-[1px_0_0_0_rgb(226_232_240)]'
+                            : col.id === 'actions'
+                              ? 'sticky right-0 z-20 bg-slate-50 shadow-[-1px_0_0_0_rgb(226_232_240)]'
+                              : ''
+                        }`}
                       onClick={() => col.sortable && setSort(col.id)}
                     >
                       <span className="inline-flex items-center gap-1">
@@ -541,7 +546,7 @@ export function PatientsTable({
                           return (
                             <td
                               key={col.id}
-                              className="max-w-[220px] truncate px-3 py-2 text-slate-800 sm:px-4 sm:py-2.5"
+                              className="sticky left-0 z-10 max-w-[220px] truncate bg-white px-3 py-2 text-slate-800 shadow-[1px_0_0_0_rgb(226_232_240)] sm:px-4 sm:py-2.5"
                             >
                               <div className="flex items-center gap-2">
                                 <span className="truncate">{p.full_name}</span>
@@ -675,7 +680,7 @@ export function PatientsTable({
                           return (
                             <td
                               key={col.id}
-                              className="whitespace-nowrap px-3 py-2 text-right sm:px-4 sm:py-2.5"
+                              className="sticky right-0 z-10 whitespace-nowrap bg-white px-3 py-2 text-right shadow-[-1px_0_0_0_rgb(226_232_240)] sm:px-4 sm:py-2.5"
                             >
                               <div className="inline-flex items-center gap-2">
                                 <button
@@ -716,8 +721,7 @@ export function PatientsTable({
                 );
               })}
             </tbody>
-          </table>
-        </div>
+        </table>
       </ResponsiveTableShell>
     </div>
   );
