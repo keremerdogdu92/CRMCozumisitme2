@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-24T06:38:04.114Z",
+  "generatedAt": "2026-05-31T06:58:46.741Z",
   "scannedDirs": [
     "src",
     "api",
@@ -7,7 +7,7 @@
     "scripts",
     "DB/schema"
   ],
-  "filesScanned": 232,
+  "filesScanned": 250,
   "tables": [
     {
       "name": "inventory_items",
@@ -15,7 +15,7 @@
         "supabase.from",
         "raw.sql"
       ],
-      "hitCount": 49,
+      "hitCount": 52,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.create.ts",
@@ -73,7 +73,7 @@
         "raw.sql",
         "supabase.from"
       ],
-      "hitCount": 45,
+      "hitCount": 49,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.fetch.ts",
@@ -130,7 +130,7 @@
       "kinds": [
         "raw.sql"
       ],
-      "hitCount": 35,
+      "hitCount": 46,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
@@ -163,22 +163,22 @@
           "snippet": "revoke execute on all functions in schema public from anon;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Lastbatch.sql",
-          "line": 99,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 123,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_payments FROM anon;"
+          "snippet": "REVOKE ALL ON TABLE public.tasks FROM anon;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Lastbatch.sql",
-          "line": 155,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 125,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_accessories FROM anon;"
+          "snippet": "REVOKE ALL ON TABLE public.task_comments FROM anon;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Lastbatch.sql",
-          "line": 200,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 339,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.patient_installment_plans FROM anon;"
+          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_prompts FROM anon;"
         }
       ]
     },
@@ -188,11 +188,23 @@
         "supabase.from",
         "raw.sql"
       ],
-      "hitCount": 29,
+      "hitCount": 39,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/auth/useCurrentProfile.ts",
-          "line": 47,
+          "line": 45,
+          "kind": "supabase.from",
+          "snippet": ".from('profiles')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/supplierApi.ts",
+          "line": 40,
+          "kind": "supabase.from",
+          "snippet": ".from('profiles')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/taxApi.ts",
+          "line": 58,
           "kind": "supabase.from",
           "snippet": ".from('profiles')"
         },
@@ -215,28 +227,131 @@
           "snippet": ".from('profiles')"
         },
         {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.update.ts",
+          "line": 21,
+          "kind": "supabase.from",
+          "snippet": ".from('profiles')"
+        },
+        {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/deviceCatalog/api.import.ts",
           "line": 183,
           "kind": "supabase.from",
           "snippet": ".from('profiles')"
+        }
+      ]
+    },
+    {
+      "name": "PUBLIC",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 39,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_multi_org_phase1_apply.sql",
+          "line": 50,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON FUNCTION public.current_user_org_id() FROM PUBLIC;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 38,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_multi_org_phase1_apply.sql",
+          "line": 51,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON FUNCTION public.current_user_role() FROM PUBLIC;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 292,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON FUNCTION public.create_task(text, text, uuid, text, timestamptz) FROM PUBLIC, anon;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 293,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON FUNCTION public.update_task(uuid, text, text, uuid, text, timestamptz) FROM PUBLIC, anon;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 294,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON FUNCTION public.update_task_status(uuid, text) FROM PUBLIC, anon;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 574,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON FUNCTION public.get_patient_satisfaction_prompt_questions(uuid, integer) FROM PUBLIC, anon;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 575,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON FUNCTION public.get_meeting_satisfaction_prompt_questions(uuid) FROM PUBLIC, anon;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 576,
+          "kind": "raw.sql",
+          "snippet": "REVOKE ALL ON FUNCTION public.save_meeting_satisfaction_answers(uuid, uuid, uuid[], jsonb) FROM PUBLIC, anon;"
+        }
+      ]
+    },
+    {
+      "name": "meetings",
+      "kinds": [
+        "supabase.from",
+        "raw.sql"
+      ],
+      "hitCount": 29,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/dashboard/api.ts",
+          "line": 278,
           "kind": "supabase.from",
-          "snippet": ".from('profiles')"
+          "snippet": ".from('meetings')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
-          "line": 269,
+          "line": 45,
           "kind": "supabase.from",
-          "snippet": ".from('profiles')"
+          "snippet": ".from('meetings')"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/patients/api/api.patients.create.ts",
-          "line": 391,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
+          "line": 85,
           "kind": "supabase.from",
-          "snippet": ".from('profiles')"
+          "snippet": ".from('meetings')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
+          "line": 119,
+          "kind": "supabase.from",
+          "snippet": ".from('meetings')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
+          "line": 312,
+          "kind": "supabase.from",
+          "snippet": ".from('meetings')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 457,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meetings m"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 501,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meetings m"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 543,
+          "kind": "raw.sql",
+          "snippet": "UPDATE public.meetings SET satisfaction_10 = NULL WHERE id = p_meeting_id AND org_id = v_org_id;"
         }
       ]
     },
@@ -299,117 +414,59 @@
       ]
     },
     {
-      "name": "PUBLIC",
+      "name": "authenticated",
       "kinds": [
         "raw.sql"
       ],
-      "hitCount": 25,
+      "hitCount": 22,
       "sample": [
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_multi_org_phase1_apply.sql",
-          "line": 50,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
+          "line": 104,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON FUNCTION public.current_user_org_id() FROM PUBLIC;"
+          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_question_lists FROM authenticated;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_multi_org_phase1_apply.sql",
-          "line": 51,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
+          "line": 189,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON FUNCTION public.current_user_role() FROM PUBLIC;"
+          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_questions FROM authenticated;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/catalogs/device_catalog_prices.sql",
-          "line": 94,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
+          "line": 271,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON FUNCTION public.soft_delete_device_catalog_prices(uuid, text) FROM PUBLIC;"
+          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_answers FROM authenticated;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/catalogs/device_catalog_prices.sql",
-          "line": 120,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260521_security_dashboard_battery_sgk_apply.sql",
+          "line": 28,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON FUNCTION public.restore_device_catalog_prices(uuid) FROM PUBLIC;"
+          "snippet": "execute 'revoke all on table public.device_catalog_import_rows from authenticated';"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 97,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 124,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON FUNCTION public.current_user_org_id() FROM PUBLIC;"
+          "snippet": "REVOKE ALL ON TABLE public.tasks FROM authenticated;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 98,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 126,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON FUNCTION public.current_user_role() FROM PUBLIC;"
+          "snippet": "REVOKE ALL ON TABLE public.task_comments FROM authenticated;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 99,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 340,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON FUNCTION public.require_current_user_admin() FROM PUBLIC;"
+          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_prompts FROM authenticated;"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/references.sql",
-          "line": 95,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/catalogs/device_catalog_models.sql",
+          "line": 204,
           "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON FUNCTION public.soft_delete_references(uuid, text) FROM PUBLIC;"
-        }
-      ]
-    },
-    {
-      "name": "meetings",
-      "kinds": [
-        "supabase.from",
-        "raw.sql"
-      ],
-      "hitCount": 20,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
-          "line": 44,
-          "kind": "supabase.from",
-          "snippet": ".from('meetings')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
-          "line": 84,
-          "kind": "supabase.from",
-          "snippet": ".from('meetings')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
-          "line": 118,
-          "kind": "supabase.from",
-          "snippet": ".from('meetings')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
-          "line": 316,
-          "kind": "supabase.from",
-          "snippet": ".from('meetings')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/dashboard/dashboard_upcoming_meetings.rpc.sql",
-          "line": 40,
-          "kind": "raw.sql",
-          "snippet": "from public.meetings m"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/create_dashboard_follow_up_meeting.rpc.sql",
-          "line": 53,
-          "kind": "raw.sql",
-          "snippet": "from public.meetings m"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/create_dashboard_follow_up_meeting.rpc.sql",
-          "line": 86,
-          "kind": "raw.sql",
-          "snippet": "insert into public.meetings ("
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/create_dashboard_follow_up_meeting.rpc.sql",
-          "line": 120,
-          "kind": "raw.sql",
-          "snippet": "update public.meetings"
+          "snippet": "REVOKE ALL ON TABLE public.device_catalog_models FROM authenticated;"
         }
       ]
     },
@@ -422,7 +479,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/auth/useCurrentProfile.ts",
-          "line": 17,
+          "line": 18,
           "kind": "raw.sql",
           "snippet": "* Map the raw role value from the database into a safe UserRole union."
         },
@@ -471,68 +528,11 @@
       ]
     },
     {
-      "name": "authenticated",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 16,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
-          "line": 104,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_question_lists FROM authenticated;"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
-          "line": 189,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_questions FROM authenticated;"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_01_meeting_satisfaction_rls.sql",
-          "line": 271,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.meeting_satisfaction_answers FROM authenticated;"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260521_security_dashboard_battery_sgk_apply.sql",
-          "line": 28,
-          "kind": "raw.sql",
-          "snippet": "execute 'revoke all on table public.device_catalog_import_rows from authenticated';"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/catalogs/device_catalog_models.sql",
-          "line": 204,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.device_catalog_models FROM authenticated;"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 255,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.profiles FROM authenticated;"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/reference_gifts.sql",
-          "line": 138,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.reference_gifts FROM authenticated;"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/inventory/import_jobs.sql",
-          "line": 199,
-          "kind": "raw.sql",
-          "snippet": "REVOKE ALL ON TABLE public.import_jobs FROM authenticated;"
-        }
-      ]
-    },
-    {
       "name": "device_catalog_models",
       "kinds": [
         "raw.sql"
       ],
-      "hitCount": 15,
+      "hitCount": 16,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/Core_context_catalog_current_price_views.sql",
@@ -581,6 +581,64 @@
           "line": 87,
           "kind": "raw.sql",
           "snippet": "FROM public.device_catalog_models m"
+        }
+      ]
+    },
+    {
+      "name": "tasks",
+      "kinds": [
+        "supabase.from",
+        "raw.sql"
+      ],
+      "hitCount": 15,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/tasks/api.ts",
+          "line": 18,
+          "kind": "supabase.from",
+          "snippet": ".from('tasks')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 94,
+          "kind": "raw.sql",
+          "snippet": "FROM public.tasks t"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 112,
+          "kind": "raw.sql",
+          "snippet": "FROM public.tasks t"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 167,
+          "kind": "raw.sql",
+          "snippet": "INSERT INTO public.tasks (org_id, title, description, priority, assigned_to, created_by, due_at)"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 206,
+          "kind": "raw.sql",
+          "snippet": "FROM public.tasks"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 234,
+          "kind": "raw.sql",
+          "snippet": "UPDATE public.tasks"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 269,
+          "kind": "raw.sql",
+          "snippet": "FROM public.tasks"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 283,
+          "kind": "raw.sql",
+          "snippet": "UPDATE public.tasks"
         }
       ]
     },
@@ -758,6 +816,63 @@
       ]
     },
     {
+      "name": "v_org_id",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 12,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 374,
+          "kind": "raw.sql",
+          "snippet": "IF v_patient_org IS DISTINCT FROM v_org_id THEN"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 460,
+          "kind": "raw.sql",
+          "snippet": "IF v_meeting_org IS DISTINCT FROM v_org_id THEN"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 508,
+          "kind": "raw.sql",
+          "snippet": "IF v_meeting.org_id IS DISTINCT FROM v_org_id"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 509,
+          "kind": "raw.sql",
+          "snippet": "OR v_patient_org IS DISTINCT FROM v_org_id"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/inventory/resolve_inventory_import_row.rpc.sql",
+          "line": 46,
+          "kind": "raw.sql",
+          "snippet": "INTO v_org_id"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/inventory/update_inventory_item_details.rpc.sql",
+          "line": 87,
+          "kind": "raw.sql",
+          "snippet": "IF v_catalog_org IS DISTINCT FROM v_org_id THEN"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 310,
+          "kind": "raw.sql",
+          "snippet": "IF v_patient_org IS DISTINCT FROM v_org_id THEN"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 418,
+          "kind": "raw.sql",
+          "snippet": "IF v_meeting_org IS DISTINCT FROM v_org_id THEN"
+        }
+      ]
+    },
+    {
       "name": "public",
       "kinds": [
         "raw.sql"
@@ -931,6 +1046,63 @@
       ]
     },
     {
+      "name": "meeting_satisfaction_prompts",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 10,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 405,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meeting_satisfaction_prompts p"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 466,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meeting_satisfaction_prompts p"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 516,
+          "kind": "raw.sql",
+          "snippet": "DELETE FROM public.meeting_satisfaction_prompts WHERE org_id = v_org_id AND meeting_id = p_meeting_id;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 531,
+          "kind": "raw.sql",
+          "snippet": "INSERT INTO public.meeting_satisfaction_prompts ("
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 539,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meeting_satisfaction_prompts"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 355,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meeting_satisfaction_prompts p"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 432,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meeting_satisfaction_prompts p"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 496,
+          "kind": "raw.sql",
+          "snippet": "DELETE FROM public.meeting_satisfaction_prompts"
+        }
+      ]
+    },
+    {
       "name": "device_sgk",
       "kinds": [
         "raw.sql"
@@ -1045,6 +1217,64 @@
       ]
     },
     {
+      "name": "meeting_satisfaction_answers",
+      "kinds": [
+        "supabase.from",
+        "raw.sql"
+      ],
+      "hitCount": 8,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
+          "line": 227,
+          "kind": "supabase.from",
+          "snippet": ".from('meeting_satisfaction_answers')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
+          "line": 331,
+          "kind": "supabase.from",
+          "snippet": ".from('meeting_satisfaction_answers')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 515,
+          "kind": "raw.sql",
+          "snippet": "DELETE FROM public.meeting_satisfaction_answers WHERE org_id = v_org_id AND meeting_id = p_meeting_id;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 549,
+          "kind": "raw.sql",
+          "snippet": "INSERT INTO public.meeting_satisfaction_answers ("
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 562,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meeting_satisfaction_answers"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 492,
+          "kind": "raw.sql",
+          "snippet": "DELETE FROM public.meeting_satisfaction_answers"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 556,
+          "kind": "raw.sql",
+          "snippet": "INSERT INTO public.meeting_satisfaction_answers ("
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 576,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meeting_satisfaction_answers"
+        }
+      ]
+    },
+    {
       "name": "meeting_payments",
       "kinds": [
         "supabase.from",
@@ -1054,7 +1284,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
-          "line": 346,
+          "line": 342,
           "kind": "supabase.from",
           "snippet": "const { error: paymentError } = await supabaseClient.from('meeting_payments').insert({"
         },
@@ -1219,6 +1449,63 @@
       ]
     },
     {
+      "name": "v_user_id",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 8,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 215,
+          "kind": "raw.sql",
+          "snippet": "AND v_task.created_by IS DISTINCT FROM v_user_id"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 216,
+          "kind": "raw.sql",
+          "snippet": "AND v_task.assigned_to IS DISTINCT FROM v_user_id THEN"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 278,
+          "kind": "raw.sql",
+          "snippet": "AND v_task.created_by IS DISTINCT FROM v_user_id"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 279,
+          "kind": "raw.sql",
+          "snippet": "AND v_task.assigned_to IS DISTINCT FROM v_user_id THEN"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/operations/tasks.sql",
+          "line": 208,
+          "kind": "raw.sql",
+          "snippet": "AND v_task.created_by IS DISTINCT FROM v_user_id"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/operations/tasks.sql",
+          "line": 209,
+          "kind": "raw.sql",
+          "snippet": "AND v_task.assigned_to IS DISTINCT FROM v_user_id THEN"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/operations/tasks.sql",
+          "line": 278,
+          "kind": "raw.sql",
+          "snippet": "AND v_task.created_by IS DISTINCT FROM v_user_id"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/operations/tasks.sql",
+          "line": 279,
+          "kind": "raw.sql",
+          "snippet": "AND v_task.assigned_to IS DISTINCT FROM v_user_id THEN"
+        }
+      ]
+    },
+    {
       "name": "CSV",
       "kinds": [
         "raw.sql"
@@ -1266,6 +1553,58 @@
           "line": 56,
           "kind": "raw.sql",
           "snippet": "* Normalize a raw payment method string coming from CSV"
+        }
+      ]
+    },
+    {
+      "name": "meeting_satisfaction_questions",
+      "kinds": [
+        "supabase.from",
+        "raw.sql"
+      ],
+      "hitCount": 7,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
+          "line": 60,
+          "kind": "supabase.from",
+          "snippet": ".from('meeting_satisfaction_questions')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
+          "line": 80,
+          "kind": "supabase.from",
+          "snippet": ".from('meeting_satisfaction_questions')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
+          "line": 170,
+          "kind": "supabase.from",
+          "snippet": ".from('meeting_satisfaction_questions')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
+          "line": 206,
+          "kind": "supabase.from",
+          "snippet": ".from('meeting_satisfaction_questions')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 381,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meeting_satisfaction_questions q"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 87,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meeting_satisfaction_questions q"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 322,
+          "kind": "raw.sql",
+          "snippet": "FROM public.meeting_satisfaction_questions q"
         }
       ]
     },
@@ -1560,6 +1899,96 @@
       ]
     },
     {
+      "name": "v_patient_org",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 6,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 370,
+          "kind": "raw.sql",
+          "snippet": "SELECT p.org_id INTO v_patient_org"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 504,
+          "kind": "raw.sql",
+          "snippet": "SELECT p.org_id INTO v_patient_org"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 78,
+          "kind": "raw.sql",
+          "snippet": "SELECT p.org_id INTO v_patient_org"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 107,
+          "kind": "raw.sql",
+          "snippet": "OR NEW.org_id IS DISTINCT FROM v_patient_org"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 305,
+          "kind": "raw.sql",
+          "snippet": "INTO v_patient_org"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 480,
+          "kind": "raw.sql",
+          "snippet": "INTO v_patient_org"
+        }
+      ]
+    },
+    {
+      "name": "pg_constraint",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 6,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/org_settings.sql",
+          "line": 35,
+          "kind": "raw.sql",
+          "snippet": "FROM pg_constraint"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/org_settings.sql",
+          "line": 49,
+          "kind": "raw.sql",
+          "snippet": "FROM pg_constraint"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meetings.sql",
+          "line": 86,
+          "kind": "raw.sql",
+          "snippet": "FROM pg_constraint"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/sgk_reimbursements.sql",
+          "line": 81,
+          "kind": "raw.sql",
+          "snippet": "FROM pg_constraint"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/sgk_reimbursements.sql",
+          "line": 93,
+          "kind": "raw.sql",
+          "snippet": "FROM pg_constraint"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/sgk_reimbursements.sql",
+          "line": 105,
+          "kind": "raw.sql",
+          "snippet": "FROM pg_constraint"
+        }
+      ]
+    },
+    {
       "name": "org_ctx",
       "kinds": [
         "raw.sql"
@@ -1605,6 +2034,46 @@
       ]
     },
     {
+      "name": "supplier_ledger_entries",
+      "kinds": [
+        "supabase.from",
+        "raw.sql"
+      ],
+      "hitCount": 5,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/supplierApi.ts",
+          "line": 63,
+          "kind": "supabase.from",
+          "snippet": ".from('supplier_ledger_entries')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/supplierApi.ts",
+          "line": 116,
+          "kind": "supabase.from",
+          "snippet": "const { error } = await supabaseClient.from('supplier_ledger_entries').insert({"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/finance/suppliers.sql",
+          "line": 145,
+          "kind": "raw.sql",
+          "snippet": "UPDATE public.supplier_ledger_entries"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/finance/suppliers.sql",
+          "line": 161,
+          "kind": "raw.sql",
+          "snippet": "UPDATE public.supplier_ledger_entries"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/finance/suppliers.sql",
+          "line": 169,
+          "kind": "raw.sql",
+          "snippet": "INSERT INTO public.supplier_ledger_entries ("
+        }
+      ]
+    },
+    {
       "name": "inventory_stock_thresholds",
       "kinds": [
         "supabase.from"
@@ -1644,45 +2113,6 @@
       ]
     },
     {
-      "name": "current",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 5,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/deviceCatalog/api.import.ts",
-          "line": 7,
-          "kind": "raw.sql",
-          "snippet": "// - Resolve org_id from current profile."
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/MeetingSatisfactionSettingsCard.tsx",
-          "line": 5,
-          "kind": "raw.sql",
-          "snippet": "// - Uses org_id from current profile for inserts; RLS guards reads."
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 6,
-          "kind": "raw.sql",
-          "snippet": "// - All inserts include org_id, resolved from current user's profile."
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 18,
-          "kind": "raw.sql",
-          "snippet": "* Shared helper: resolve org_id from current auth user via profiles."
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 289,
-          "kind": "raw.sql",
-          "snippet": "* - org_id is resolved from current user's profile."
-        }
-      ]
-    },
-    {
       "name": "meeting_satisfaction_question_lists",
       "kinds": [
         "supabase.from",
@@ -1692,25 +2122,25 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 72,
+          "line": 24,
           "kind": "supabase.from",
           "snippet": ".from('meeting_satisfaction_question_lists')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 89,
+          "line": 41,
           "kind": "supabase.from",
           "snippet": ".from('meeting_satisfaction_question_lists')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 154,
+          "line": 106,
           "kind": "supabase.from",
           "snippet": ".from('meeting_satisfaction_question_lists')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 186,
+          "line": 138,
           "kind": "supabase.from",
           "snippet": ".from('meeting_satisfaction_question_lists')"
         },
@@ -1719,46 +2149,6 @@
           "line": 83,
           "kind": "raw.sql",
           "snippet": "FROM public.meeting_satisfaction_question_lists l"
-        }
-      ]
-    },
-    {
-      "name": "meeting_satisfaction_questions",
-      "kinds": [
-        "supabase.from",
-        "raw.sql"
-      ],
-      "hitCount": 5,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 108,
-          "kind": "supabase.from",
-          "snippet": ".from('meeting_satisfaction_questions')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 128,
-          "kind": "supabase.from",
-          "snippet": ".from('meeting_satisfaction_questions')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 218,
-          "kind": "supabase.from",
-          "snippet": ".from('meeting_satisfaction_questions')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 254,
-          "kind": "supabase.from",
-          "snippet": ".from('meeting_satisfaction_questions')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
-          "line": 87,
-          "kind": "raw.sql",
-          "snippet": "FROM public.meeting_satisfaction_questions q"
         }
       ]
     },
@@ -1772,13 +2162,13 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
-          "line": 210,
+          "line": 211,
           "kind": "supabase.from",
           "snippet": ".from('meeting_accessories')"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
-          "line": 228,
+          "line": 229,
           "kind": "supabase.from",
           "snippet": ".from('meeting_accessories')"
         },
@@ -1882,45 +2272,6 @@
       ]
     },
     {
-      "name": "pg_constraint",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 5,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/org_settings.sql",
-          "line": 28,
-          "kind": "raw.sql",
-          "snippet": "FROM pg_constraint"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meetings.sql",
-          "line": 86,
-          "kind": "raw.sql",
-          "snippet": "FROM pg_constraint"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/sgk_reimbursements.sql",
-          "line": 81,
-          "kind": "raw.sql",
-          "snippet": "FROM pg_constraint"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/sgk_reimbursements.sql",
-          "line": 93,
-          "kind": "raw.sql",
-          "snippet": "FROM pg_constraint"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/sgk_reimbursements.sql",
-          "line": 105,
-          "kind": "raw.sql",
-          "snippet": "FROM pg_constraint"
-        }
-      ]
-    },
-    {
       "name": "an",
       "kinds": [
         "raw.sql"
@@ -1929,13 +2280,13 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/dashboard/api.ts",
-          "line": 52,
+          "line": 53,
           "kind": "raw.sql",
           "snippet": "* Safely read a numeric field from an RPC row."
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 168,
+          "line": 120,
           "kind": "raw.sql",
           "snippet": "* Update an existing list (name / is_active)."
         },
@@ -1950,39 +2301,6 @@
           "line": 29,
           "kind": "raw.sql",
           "snippet": "* This is used after fetching from an *_all source."
-        }
-      ]
-    },
-    {
-      "name": "meeting_satisfaction_answers",
-      "kinds": [
-        "supabase.from"
-      ],
-      "hitCount": 4,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 275,
-          "kind": "supabase.from",
-          "snippet": ".from('meeting_satisfaction_answers')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 301,
-          "kind": "supabase.from",
-          "snippet": ".from('meeting_satisfaction_answers')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 334,
-          "kind": "supabase.from",
-          "snippet": ".from('meeting_satisfaction_answers')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 354,
-          "kind": "supabase.from",
-          "snippet": ".from('meeting_satisfaction_answers')"
         }
       ]
     },
@@ -2053,6 +2371,39 @@
       ]
     },
     {
+      "name": "org_settings",
+      "kinds": [
+        "supabase.from"
+      ],
+      "hitCount": 4,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/settings/AppearanceSettingsCard.tsx",
+          "line": 28,
+          "kind": "supabase.from",
+          "snippet": ".from('org_settings')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/settings/OrgSettingsCard.tsx",
+          "line": 98,
+          "kind": "supabase.from",
+          "snippet": ".from('org_settings')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/settings/useOrgSettings.ts",
+          "line": 17,
+          "kind": "supabase.from",
+          "snippet": ".from('org_settings')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/settings/useOrgSettings.ts",
+          "line": 28,
+          "kind": "supabase.from",
+          "snippet": ".from('org_settings')"
+        }
+      ]
+    },
+    {
       "name": "legacy",
       "kinds": [
         "raw.sql"
@@ -2086,6 +2437,105 @@
       ]
     },
     {
+      "name": "v_task",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 4,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 205,
+          "kind": "raw.sql",
+          "snippet": "SELECT * INTO v_task"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 268,
+          "kind": "raw.sql",
+          "snippet": "SELECT * INTO v_task"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/operations/tasks.sql",
+          "line": 196,
+          "kind": "raw.sql",
+          "snippet": "INTO v_task"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/operations/tasks.sql",
+          "line": 266,
+          "kind": "raw.sql",
+          "snippet": "INTO v_task"
+        }
+      ]
+    },
+    {
+      "name": "active_questions",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 4,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 388,
+          "kind": "raw.sql",
+          "snippet": "FROM active_questions aq"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 400,
+          "kind": "raw.sql",
+          "snippet": "FROM active_questions aq"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 335,
+          "kind": "raw.sql",
+          "snippet": "FROM active_questions aq"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 350,
+          "kind": "raw.sql",
+          "snippet": "FROM active_questions aq"
+        }
+      ]
+    },
+    {
+      "name": "v_meeting_org",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 4,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 456,
+          "kind": "raw.sql",
+          "snippet": "SELECT m.org_id INTO v_meeting_org"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 74,
+          "kind": "raw.sql",
+          "snippet": "SELECT m.org_id INTO v_meeting_org"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 106,
+          "kind": "raw.sql",
+          "snippet": "IF NEW.org_id IS DISTINCT FROM v_meeting_org"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 413,
+          "kind": "raw.sql",
+          "snippet": "INTO v_meeting_org"
+        }
+      ]
+    },
+    {
       "name": "table",
       "kinds": [
         "raw.sql",
@@ -2110,6 +2560,62 @@
           "line": 56,
           "kind": "supabase.from",
           "snippet": "// from('table')"
+        }
+      ]
+    },
+    {
+      "name": "supplier_payment_method_mappings",
+      "kinds": [
+        "supabase.from",
+        "raw.sql"
+      ],
+      "hitCount": 3,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/supplierApi.ts",
+          "line": 82,
+          "kind": "supabase.from",
+          "snippet": ".from('supplier_payment_method_mappings')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/supplierApi.ts",
+          "line": 138,
+          "kind": "supabase.from",
+          "snippet": "const { error } = await supabaseClient.from('supplier_payment_method_mappings').upsert("
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/finance/suppliers.sql",
+          "line": 155,
+          "kind": "raw.sql",
+          "snippet": "FROM public.supplier_payment_method_mappings m"
+        }
+      ]
+    },
+    {
+      "name": "income_tax_brackets",
+      "kinds": [
+        "supabase.from",
+        "raw.sql"
+      ],
+      "hitCount": 3,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/taxApi.ts",
+          "line": 89,
+          "kind": "supabase.from",
+          "snippet": ".from('income_tax_brackets')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/finance/income_tax.sql",
+          "line": 115,
+          "kind": "raw.sql",
+          "snippet": "INSERT INTO public.income_tax_brackets ("
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/finance/income_tax.sql",
+          "line": 128,
+          "kind": "raw.sql",
+          "snippet": "FROM public.income_tax_brackets b"
         }
       ]
     },
@@ -2142,6 +2648,33 @@
       ]
     },
     {
+      "name": "current",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 3,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/deviceCatalog/api.import.ts",
+          "line": 7,
+          "kind": "raw.sql",
+          "snippet": "// - Resolve org_id from current profile."
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/MeetingSatisfactionSettingsCard.tsx",
+          "line": 5,
+          "kind": "raw.sql",
+          "snippet": "// - Uses org_id from current profile for inserts; RLS guards reads."
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
+          "line": 6,
+          "kind": "raw.sql",
+          "snippet": "// - All inserts include org_id, resolved from current user's profile."
+        }
+      ]
+    },
+    {
       "name": "DB",
       "kinds": [
         "raw.sql"
@@ -2150,7 +2683,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 347,
+          "line": 324,
           "kind": "raw.sql",
           "snippet": "* Calculate average score for a given meeting directly from DB."
         },
@@ -2339,19 +2872,19 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 184,
+          "line": 200,
           "kind": "raw.sql",
           "snippet": "IF (NEW.org_id IS DISTINCT FROM OLD.org_id) THEN"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 188,
+          "line": 204,
           "kind": "raw.sql",
           "snippet": "IF (NEW.role IS DISTINCT FROM OLD.role) THEN"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 192,
+          "line": 208,
           "kind": "raw.sql",
           "snippet": "IF (NEW.is_admin IS DISTINCT FROM OLD.is_admin) THEN"
         }
@@ -2385,29 +2918,29 @@
       ]
     },
     {
-      "name": "v_org_id",
+      "name": "TO",
       "kinds": [
         "raw.sql"
       ],
       "hitCount": 3,
       "sample": [
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/inventory/resolve_inventory_import_row.rpc.sql",
-          "line": 46,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/finance/suppliers.sql",
+          "line": 83,
           "kind": "raw.sql",
-          "snippet": "INTO v_org_id"
+          "snippet": "ON public.suppliers FOR UPDATE TO authenticated"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patient_inventory_item_rpcs.sql",
-          "line": 38,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/finance/suppliers.sql",
+          "line": 100,
           "kind": "raw.sql",
-          "snippet": "IF v_patient_org_id IS DISTINCT FROM v_org_id THEN"
+          "snippet": "ON public.supplier_payment_method_mappings FOR UPDATE TO authenticated"
         },
         {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/patients/patient_inventory_item_rpcs.sql",
-          "line": 124,
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/finance/suppliers.sql",
+          "line": 117,
           "kind": "raw.sql",
-          "snippet": "IF v_patient_org_id IS DISTINCT FROM v_org_id THEN"
+          "snippet": "ON public.supplier_ledger_entries FOR UPDATE TO authenticated"
         }
       ]
     },
@@ -2435,6 +2968,48 @@
           "line": 50,
           "kind": "raw.sql",
           "snippet": "INTO v_patient_org_id"
+        }
+      ]
+    },
+    {
+      "name": "suppliers",
+      "kinds": [
+        "supabase.from"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/supplierApi.ts",
+          "line": 52,
+          "kind": "supabase.from",
+          "snippet": ".from('suppliers')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/supplierApi.ts",
+          "line": 95,
+          "kind": "supabase.from",
+          "snippet": "const { error } = await supabaseClient.from('suppliers').insert({"
+        }
+      ]
+    },
+    {
+      "name": "monthly_tax_records",
+      "kinds": [
+        "supabase.from"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/taxApi.ts",
+          "line": 110,
+          "kind": "supabase.from",
+          "snippet": ".from('monthly_tax_records')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/taxApi.ts",
+          "line": 122,
+          "kind": "supabase.from",
+          "snippet": "const { error } = await supabaseClient.from('monthly_tax_records').upsert("
         }
       ]
     },
@@ -2468,13 +3043,13 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/types.ts",
-          "line": 46,
+          "line": 48,
           "kind": "raw.sql",
           "snippet": "at: string | null; // ISO string from timestamptz"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/types.ts",
-          "line": 47,
+          "line": 49,
           "kind": "raw.sql",
           "snippet": "next_at: string | null; // ISO string from timestamptz"
         }
@@ -2607,27 +3182,6 @@
       ]
     },
     {
-      "name": "org_settings",
-      "kinds": [
-        "supabase.from"
-      ],
-      "hitCount": 2,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/settings/OrgSettingsCard.tsx",
-          "line": 98,
-          "kind": "supabase.from",
-          "snippet": ".from('org_settings')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/settings/useOrgSettings.ts",
-          "line": 16,
-          "kind": "supabase.from",
-          "snippet": ".from('org_settings')"
-        }
-      ]
-    },
-    {
       "name": "current_device_catalog_prices_public",
       "kinds": [
         "supabase.from"
@@ -2688,6 +3242,237 @@
           "line": 653,
           "kind": "raw.sql",
           "snippet": "console.error('Final job status update failed:', err);"
+        }
+      ]
+    },
+    {
+      "name": "v_task_id",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 177,
+          "kind": "raw.sql",
+          "snippet": "RETURNING id INTO v_task_id;"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/operations/tasks.sql",
+          "line": 167,
+          "kind": "raw.sql",
+          "snippet": "RETURNING id INTO v_task_id;"
+        }
+      ]
+    },
+    {
+      "name": "eligible",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 422,
+          "kind": "raw.sql",
+          "snippet": "FROM eligible e"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 372,
+          "kind": "raw.sql",
+          "snippet": "FROM eligible e"
+        }
+      ]
+    },
+    {
+      "name": "mixed",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 425,
+          "kind": "raw.sql",
+          "snippet": "FROM mixed m"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 381,
+          "kind": "raw.sql",
+          "snippet": "FROM mixed m"
+        }
+      ]
+    },
+    {
+      "name": "v_meeting",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 500,
+          "kind": "raw.sql",
+          "snippet": "SELECT m.org_id, m.meeting_type, m.subject_id INTO v_meeting"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 474,
+          "kind": "raw.sql",
+          "snippet": "INTO v_meeting"
+        }
+      ]
+    },
+    {
+      "name": "p_patient_id",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 511,
+          "kind": "raw.sql",
+          "snippet": "OR v_meeting.subject_id IS DISTINCT FROM p_patient_id THEN"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 488,
+          "kind": "raw.sql",
+          "snippet": "OR v_meeting.subject_id IS DISTINCT FROM p_patient_id THEN"
+        }
+      ]
+    },
+    {
+      "name": "unnest",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 520,
+          "kind": "raw.sql",
+          "snippet": "FROM unnest(coalesce(p_question_ids, ARRAY[]::uuid[]))"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 504,
+          "kind": "raw.sql",
+          "snippet": "FROM unnest(coalesce(p_question_ids, ARRAY[]::uuid[]))"
+        }
+      ]
+    },
+    {
+      "name": "requested",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 525,
+          "kind": "raw.sql",
+          "snippet": "FROM requested r"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 512,
+          "kind": "raw.sql",
+          "snippet": "FROM requested r"
+        }
+      ]
+    },
+    {
+      "name": "valid_questions",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 535,
+          "kind": "raw.sql",
+          "snippet": "FROM valid_questions vq"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 537,
+          "kind": "raw.sql",
+          "snippet": "FROM valid_questions vq"
+        }
+      ]
+    },
+    {
+      "name": "v_question_count",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 538,
+          "kind": "raw.sql",
+          "snippet": "SELECT count(*) INTO v_question_count"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 541,
+          "kind": "raw.sql",
+          "snippet": "INTO v_question_count"
+        }
+      ]
+    },
+    {
+      "name": "jsonb_to_recordset",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 553,
+          "kind": "raw.sql",
+          "snippet": "FROM jsonb_to_recordset(p_answers) AS parsed(question_id uuid, score smallint)"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 566,
+          "kind": "raw.sql",
+          "snippet": "FROM jsonb_to_recordset(p_answers) AS parsed(question_id uuid, score smallint)"
+        }
+      ]
+    },
+    {
+      "name": "v_average",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 561,
+          "kind": "raw.sql",
+          "snippet": "SELECT avg(score)::numeric INTO v_average"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
+          "line": 575,
+          "kind": "raw.sql",
+          "snippet": "INTO v_average"
         }
       ]
     },
@@ -2814,48 +3599,6 @@
           "line": 76,
           "kind": "raw.sql",
           "snippet": "if v_source.follow_up_alert_dismissed_next_at is not distinct from v_source.next_at then"
-        }
-      ]
-    },
-    {
-      "name": "v_meeting_org",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 2,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
-          "line": 74,
-          "kind": "raw.sql",
-          "snippet": "SELECT m.org_id INTO v_meeting_org"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
-          "line": 106,
-          "kind": "raw.sql",
-          "snippet": "IF NEW.org_id IS DISTINCT FROM v_meeting_org"
-        }
-      ]
-    },
-    {
-      "name": "v_patient_org",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 2,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
-          "line": 78,
-          "kind": "raw.sql",
-          "snippet": "SELECT p.org_id INTO v_patient_org"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
-          "line": 107,
-          "kind": "raw.sql",
-          "snippet": "OR NEW.org_id IS DISTINCT FROM v_patient_org"
         }
       ]
     },
@@ -3025,21 +3768,6 @@
       ]
     },
     {
-      "name": "previous",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 1,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/MeetingNewFormCard.tsx",
-          "line": 78,
-          "kind": "raw.sql",
-          "snippet": "// If user is not admin but form state has \"reference\" from previous session, fix it"
-        }
-      ]
-    },
-    {
       "name": "non",
       "kinds": [
         "raw.sql"
@@ -3078,9 +3806,24 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
-          "line": 68,
+          "line": 20,
           "kind": "raw.sql",
           "snippet": "* (Org is inferred from RLS; we don't filter by org_id on the client.)"
+        }
+      ]
+    },
+    {
+      "name": "atomically",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
+          "line": 295,
+          "kind": "raw.sql",
+          "snippet": "* The RPC performs delete + insert + meeting satisfaction_10 update atomically."
         }
       ]
     },
@@ -3093,7 +3836,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/meetingSatisfactionTypes.ts",
-          "line": 385,
+          "line": 404,
           "kind": "raw.sql",
           "snippet": "* - When all questions are used, it resets and starts again from full pool."
         }
@@ -3633,7 +4376,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 147,
+          "line": 151,
           "kind": "raw.sql",
           "snippet": "-- Allow a user to update their own row (future: name/phone fields),"
         }
@@ -3648,7 +4391,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 221,
+          "line": 238,
           "kind": "raw.sql",
           "snippet": "-- org_id must come from user_metadata"
         }
@@ -3726,6 +4469,21 @@
           "line": 83,
           "kind": "raw.sql",
           "snippet": "from effective_thresholds et"
+        }
+      ]
+    },
+    {
+      "name": "v_supplier_id",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/finance/suppliers.sql",
+          "line": 154,
+          "kind": "raw.sql",
+          "snippet": "INTO v_supplier_id"
         }
       ]
     },
@@ -3831,6 +4589,36 @@
           "line": 167,
           "kind": "raw.sql",
           "snippet": "INTO v_error_count"
+        }
+      ]
+    },
+    {
+      "name": "v_item",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/inventory/update_inventory_item_details.rpc.sql",
+          "line": 32,
+          "kind": "raw.sql",
+          "snippet": "INTO v_item"
+        }
+      ]
+    },
+    {
+      "name": "v_catalog_org",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/inventory/update_inventory_item_details.rpc.sql",
+          "line": 83,
+          "kind": "raw.sql",
+          "snippet": "INTO v_catalog_org"
         }
       ]
     },
@@ -4136,7 +4924,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/dashboard/api.ts",
-          "line": 77,
+          "line": 78,
           "kind": "supabase.rpc",
           "snippet": "const { data, error } = await supabaseClient.rpc('dashboard_kpis', {"
         }
@@ -4148,7 +4936,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/dashboard/api.ts",
-          "line": 246,
+          "line": 249,
           "kind": "supabase.rpc",
           "snippet": "const { data, error } = await supabaseClient.rpc('dashboard_stock_warnings', {"
         }
@@ -4179,12 +4967,36 @@
       ]
     },
     {
+      "name": "update_inventory_item_details",
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.update.ts",
+          "line": 60,
+          "kind": "supabase.rpc",
+          "snippet": "const { error } = await supabaseClient.rpc('update_inventory_item_details', {"
+        }
+      ]
+    },
+    {
+      "name": "save_meeting_satisfaction_answers",
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.satisfaction.ts",
+          "line": 307,
+          "kind": "supabase.rpc",
+          "snippet": "const { error } = await supabaseClient.rpc('save_meeting_satisfaction_answers', {"
+        }
+      ]
+    },
+    {
       "name": "soft_delete_meetings",
       "hitCount": 1,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
-          "line": 389,
+          "line": 412,
           "kind": "supabase.rpc",
           "snippet": "const { error } = await supabaseClient.rpc('soft_delete_meetings', {"
         }
@@ -4196,7 +5008,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/meetings/api.ts",
-          "line": 404,
+          "line": 427,
           "kind": "supabase.rpc",
           "snippet": "const { error } = await supabaseClient.rpc('restore_meetings', {"
         }
@@ -4259,6 +5071,42 @@
           "line": 17,
           "kind": "supabase.rpc",
           "snippet": "const { data, error } = await supabaseClient.rpc('reports_kpis_v1', {"
+        }
+      ]
+    },
+    {
+      "name": "create_task",
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/tasks/api.ts",
+          "line": 71,
+          "kind": "supabase.rpc",
+          "snippet": "const { error } = await supabaseClient.rpc('create_task', {"
+        }
+      ]
+    },
+    {
+      "name": "update_task_status",
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/tasks/api.ts",
+          "line": 87,
+          "kind": "supabase.rpc",
+          "snippet": ".rpc('update_task_status', {"
+        }
+      ]
+    },
+    {
+      "name": "update_task",
+      "hitCount": 1,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/tasks/api.ts",
+          "line": 110,
+          "kind": "supabase.rpc",
+          "snippet": "const { error } = await supabaseClient.rpc('update_task', {"
         }
       ]
     },
