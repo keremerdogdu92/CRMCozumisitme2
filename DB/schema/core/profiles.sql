@@ -53,28 +53,38 @@ CREATE UNIQUE INDEX IF NOT EXISTS profiles_pkey
 -- SECURITY DEFINER is required so RLS checks don't deadlock on profiles access.
 CREATE OR REPLACE FUNCTION public.current_user_org_id()
 RETURNS uuid
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT p.org_id
+DECLARE
+  v_org_id uuid;
+BEGIN
+  SELECT p.org_id INTO v_org_id
   FROM public.profiles p
   WHERE p.id = auth.uid()
   LIMIT 1;
+  RETURN v_org_id;
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.current_user_role()
 RETURNS text
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT p.role
+DECLARE
+  v_role text;
+BEGIN
+  SELECT p.role INTO v_role
   FROM public.profiles p
   WHERE p.id = auth.uid()
   LIMIT 1;
+  RETURN v_role;
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.require_current_user_admin()

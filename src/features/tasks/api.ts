@@ -42,23 +42,21 @@ export async function fetchTasks(): Promise<TaskRow[]> {
 }
 
 export async function fetchAssignableProfiles(): Promise<AssignableProfile[]> {
-  const { data, error } = await supabaseClient
-    .from('profiles')
-    .select('id, role, display_name')
-    .order('role', { ascending: true });
+  const { data, error } = await supabaseClient.rpc('get_org_profiles');
 
-  if (error) throw new Error('TASK_PROFILE_FETCH: ' + error.message);
+  if (error) throw new Error('PROFILE_FETCH: ' + error.message);
 
   return ((data ?? []) as Array<{
-    id: string;
+    profile_id: string;
     role: string | null;
     display_name: string | null;
   }>).map((row) => ({
-    id: row.id,
+    id: row.profile_id,
     role: row.role === 'admin' || row.role === 'staff' ? row.role : 'unknown',
     display_name: row.display_name ?? null,
   }));
 }
+
 
 export async function createTask(input: NewTaskForm): Promise<void> {
   const title = input.title.trim();

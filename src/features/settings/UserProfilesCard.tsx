@@ -19,24 +19,19 @@ function roleLabel(role: ProfileRow['role']): string {
 }
 
 async function fetchProfiles(): Promise<ProfileRow[]> {
-  const { data, error } = await supabaseClient
-    .from('profiles')
-    .select('id, role, display_name, created_at')
-    .order('role', { ascending: true })
-    .order('created_at', { ascending: true });
+  const { data, error } = await supabaseClient.rpc('get_org_profiles');
 
   if (error) throw new Error('PROFILE_LIST: ' + error.message);
 
   return ((data ?? []) as Array<{
-    id: string;
+    profile_id: string;
     role: string | null;
     display_name: string | null;
-    created_at: string | null;
   }>).map((row) => ({
-    id: row.id,
+    id: row.profile_id,
     role: row.role === 'admin' || row.role === 'staff' ? row.role : 'unknown',
     display_name: row.display_name ?? null,
-    created_at: row.created_at ?? null,
+    created_at: null,
   }));
 }
 
