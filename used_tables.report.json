@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-31T06:58:46.741Z",
+  "generatedAt": "2026-06-07T07:06:16.091Z",
   "scannedDirs": [
     "src",
     "api",
@@ -7,7 +7,7 @@
     "scripts",
     "DB/schema"
   ],
-  "filesScanned": 250,
+  "filesScanned": 252,
   "tables": [
     {
       "name": "inventory_items",
@@ -183,69 +183,11 @@
       ]
     },
     {
-      "name": "profiles",
-      "kinds": [
-        "supabase.from",
-        "raw.sql"
-      ],
-      "hitCount": 39,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/auth/useCurrentProfile.ts",
-          "line": 45,
-          "kind": "supabase.from",
-          "snippet": ".from('profiles')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/supplierApi.ts",
-          "line": 40,
-          "kind": "supabase.from",
-          "snippet": ".from('profiles')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/taxApi.ts",
-          "line": 58,
-          "kind": "supabase.from",
-          "snippet": ".from('profiles')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/InventoryNewItemFormCard.tsx",
-          "line": 124,
-          "kind": "supabase.from",
-          "snippet": ".from('profiles')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.create.ts",
-          "line": 52,
-          "kind": "supabase.from",
-          "snippet": ".from('profiles')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
-          "line": 128,
-          "kind": "supabase.from",
-          "snippet": ".from('profiles')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.update.ts",
-          "line": 21,
-          "kind": "supabase.from",
-          "snippet": ".from('profiles')"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/deviceCatalog/api.import.ts",
-          "line": 183,
-          "kind": "supabase.from",
-          "snippet": ".from('profiles')"
-        }
-      ]
-    },
-    {
       "name": "PUBLIC",
       "kinds": [
         "raw.sql"
       ],
-      "hitCount": 39,
+      "hitCount": 44,
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20251224_multi_org_phase1_apply.sql",
@@ -294,6 +236,64 @@
           "line": 576,
           "kind": "raw.sql",
           "snippet": "REVOKE ALL ON FUNCTION public.save_meeting_satisfaction_answers(uuid, uuid, uuid[], jsonb) FROM PUBLIC, anon;"
+        }
+      ]
+    },
+    {
+      "name": "profiles",
+      "kinds": [
+        "supabase.from",
+        "raw.sql"
+      ],
+      "hitCount": 43,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/auth/useCurrentProfile.ts",
+          "line": 45,
+          "kind": "supabase.from",
+          "snippet": ".from('profiles')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/supplierApi.ts",
+          "line": 40,
+          "kind": "supabase.from",
+          "snippet": ".from('profiles')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/finance/taxApi.ts",
+          "line": 58,
+          "kind": "supabase.from",
+          "snippet": ".from('profiles')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/InventoryNewItemFormCard.tsx",
+          "line": 124,
+          "kind": "supabase.from",
+          "snippet": ".from('profiles')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.create.ts",
+          "line": 52,
+          "kind": "supabase.from",
+          "snippet": ".from('profiles')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.import.ts",
+          "line": 128,
+          "kind": "supabase.from",
+          "snippet": ".from('profiles')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/api.update.ts",
+          "line": 21,
+          "kind": "supabase.from",
+          "snippet": ".from('profiles')"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/inventory/deviceCatalog/api.import.ts",
+          "line": 183,
+          "kind": "supabase.from",
+          "snippet": ".from('profiles')"
         }
       ]
     },
@@ -701,6 +701,63 @@
       ]
     },
     {
+      "name": "v_org_id",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 14,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 374,
+          "kind": "raw.sql",
+          "snippet": "IF v_patient_org IS DISTINCT FROM v_org_id THEN"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 460,
+          "kind": "raw.sql",
+          "snippet": "IF v_meeting_org IS DISTINCT FROM v_org_id THEN"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 508,
+          "kind": "raw.sql",
+          "snippet": "IF v_meeting.org_id IS DISTINCT FROM v_org_id"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
+          "line": 509,
+          "kind": "raw.sql",
+          "snippet": "OR v_patient_org IS DISTINCT FROM v_org_id"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260603_fix_rls_recursion_and_profile_security_apply.sql",
+          "line": 39,
+          "kind": "raw.sql",
+          "snippet": "SELECT p.org_id INTO v_org_id"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
+          "line": 64,
+          "kind": "raw.sql",
+          "snippet": "SELECT p.org_id INTO v_org_id"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/inventory/resolve_inventory_import_row.rpc.sql",
+          "line": 46,
+          "kind": "raw.sql",
+          "snippet": "INTO v_org_id"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/inventory/update_inventory_item_details.rpc.sql",
+          "line": 87,
+          "kind": "raw.sql",
+          "snippet": "IF v_catalog_org IS DISTINCT FROM v_org_id THEN"
+        }
+      ]
+    },
+    {
       "name": "OF",
       "kinds": [
         "raw.sql"
@@ -812,63 +869,6 @@
           "line": 143,
           "kind": "raw.sql",
           "snippet": "UPDATE public.battery_prescription_deliveries"
-        }
-      ]
-    },
-    {
-      "name": "v_org_id",
-      "kinds": [
-        "raw.sql"
-      ],
-      "hitCount": 12,
-      "sample": [
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
-          "line": 374,
-          "kind": "raw.sql",
-          "snippet": "IF v_patient_org IS DISTINCT FROM v_org_id THEN"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
-          "line": 460,
-          "kind": "raw.sql",
-          "snippet": "IF v_meeting_org IS DISTINCT FROM v_org_id THEN"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
-          "line": 508,
-          "kind": "raw.sql",
-          "snippet": "IF v_meeting.org_id IS DISTINCT FROM v_org_id"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260525_task_security_satisfaction_prompts_apply.sql",
-          "line": 509,
-          "kind": "raw.sql",
-          "snippet": "OR v_patient_org IS DISTINCT FROM v_org_id"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/inventory/resolve_inventory_import_row.rpc.sql",
-          "line": 46,
-          "kind": "raw.sql",
-          "snippet": "INTO v_org_id"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/inventory/update_inventory_item_details.rpc.sql",
-          "line": 87,
-          "kind": "raw.sql",
-          "snippet": "IF v_catalog_org IS DISTINCT FROM v_org_id THEN"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
-          "line": 310,
-          "kind": "raw.sql",
-          "snippet": "IF v_patient_org IS DISTINCT FROM v_org_id THEN"
-        },
-        {
-          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/meetings/meeting_satisfaction_answers.sql",
-          "line": 418,
-          "kind": "raw.sql",
-          "snippet": "IF v_meeting_org IS DISTINCT FROM v_org_id THEN"
         }
       ]
     },
@@ -2872,19 +2872,19 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 200,
+          "line": 210,
           "kind": "raw.sql",
           "snippet": "IF (NEW.org_id IS DISTINCT FROM OLD.org_id) THEN"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 204,
+          "line": 214,
           "kind": "raw.sql",
           "snippet": "IF (NEW.role IS DISTINCT FROM OLD.role) THEN"
         },
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 208,
+          "line": 218,
           "kind": "raw.sql",
           "snippet": "IF (NEW.is_admin IS DISTINCT FROM OLD.is_admin) THEN"
         }
@@ -3473,6 +3473,27 @@
           "line": 575,
           "kind": "raw.sql",
           "snippet": "INTO v_average"
+        }
+      ]
+    },
+    {
+      "name": "v_role",
+      "kinds": [
+        "raw.sql"
+      ],
+      "hitCount": 2,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260603_fix_rls_recursion_and_profile_security_apply.sql",
+          "line": 57,
+          "kind": "raw.sql",
+          "snippet": "SELECT p.role INTO v_role"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
+          "line": 82,
+          "kind": "raw.sql",
+          "snippet": "SELECT p.role INTO v_role"
         }
       ]
     },
@@ -4376,7 +4397,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 151,
+          "line": 161,
           "kind": "raw.sql",
           "snippet": "-- Allow a user to update their own row (future: name/phone fields),"
         }
@@ -4391,7 +4412,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/core/profiles.sql",
-          "line": 238,
+          "line": 248,
           "kind": "raw.sql",
           "snippet": "-- org_id must come from user_metadata"
         }
@@ -4865,6 +4886,30 @@
   ],
   "rpcs": [
     {
+      "name": "get_org_profiles",
+      "hitCount": 3,
+      "sample": [
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/settings/UserProfilesCard.tsx",
+          "line": 22,
+          "kind": "supabase.rpc",
+          "snippet": "const { data, error } = await supabaseClient.rpc('get_org_profiles');"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/tasks/api.ts",
+          "line": 45,
+          "kind": "supabase.rpc",
+          "snippet": "const { data, error } = await supabaseClient.rpc('get_org_profiles');"
+        },
+        {
+          "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/DB/schema/_apply_history/20260603_fix_rls_recursion_and_profile_security_apply.sql",
+          "line": 120,
+          "kind": "supabase.rpc",
+          "snippet": "--  .from('profiles') → .rpc('get_org_profiles') değişikliği)"
+        }
+      ]
+    },
+    {
       "name": "soft_delete_patients",
       "hitCount": 2,
       "sample": [
@@ -5080,7 +5125,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/tasks/api.ts",
-          "line": 71,
+          "line": 69,
           "kind": "supabase.rpc",
           "snippet": "const { error } = await supabaseClient.rpc('create_task', {"
         }
@@ -5092,7 +5137,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/tasks/api.ts",
-          "line": 87,
+          "line": 85,
           "kind": "supabase.rpc",
           "snippet": ".rpc('update_task_status', {"
         }
@@ -5104,7 +5149,7 @@
       "sample": [
         {
           "file": "/home/runner/work/CRMCozumisitme2/CRMCozumisitme2/src/features/tasks/api.ts",
-          "line": 110,
+          "line": 108,
           "kind": "supabase.rpc",
           "snippet": "const { error } = await supabaseClient.rpc('update_task', {"
         }
